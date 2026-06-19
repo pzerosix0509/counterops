@@ -1,0 +1,400 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { orderInputSchema, paymentInputSchema, kitchenStatusSchema, cancelOrderItemSchema } from "@/lib/validation/schemas";
+import { actionFail, actionOk, type ActionResult } from "@/lib/utils/action-result";
+import { canCreateOrder, canPayOrder, canUpdateKitchen, requireRole } from "@/lib/auth/permissions";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { calculateTotals, newOrderNumber, classifyPaymentStatus } from "@/lib/calculations/orders";
+import { findShortages } from "@/lib/calculations/inventory";
+
+async function nextOrderSeq(admin: ReturnType<typeof createSupabaseAdminClient>, branchId: string): Promise<number> {
+  const { count } = await admin
+    .from("orders")
+    .select("id", { count: "exact", head: true })
+    .eq("branch_id", branchId);
+  return (count ?? 0) + 1;
+}
+
+export async function createOrUpdateOrder(
+  organizationId: string,
+  branchId: string,
+  input: unknown,
+  orderId: string | null
+): Promise<ActionResult<{ orderId: string; subtotal: number; total: number }>> {
+  const m = await requireRole(organizationId, canCreateOrder);
+  const parsed = orderInputSchema.safeParse(input);
+  if (!parsed.success) {
+    const fieldErrors: Record<string, string[]> = {};
+    for (const issue of parsed.error.issues) {
+      const key = String(issue.path[0] ?? "");
+      if (!fieldErrors[key]) fieldErrors[key] = [];
+      fieldErrors[key].push(issue.message);
+    }
+    return actionFail("VALIDATION_ERROR", "Vui lòng kiểm tra các trường", fieldErrors);
+  }
+  const admin = createSupabaseAdminClient();
+
+  const productIds = parsed.data.items.map((i) => i.productId);
+  const { data: products, error: prodErr } = await admin
+    .from("products")
+    .select("*")
+    .in("id", productIds)
+    .eq("organization_id", m.organization.id);
+  if (prodErr) return actionFail("INTERNAL_ERROR", "Không đọc được sản phẩm");
+  const productMap = new Map((products ?? []).map((p) => [p.id, p]));
+  for (const item of parsed.data.items) {
+    if (!productMap.has(item.productId)) {
+      return actionFail("VALIDATION_ERROR", `Món không tồn tại: ${item.productId}`);
+    }
+  }
+
+  const itemsForCalc = parsed.data.items.map((item) => {
+    const p = productMap.get(item.productId)!;
+    return {
+      productId: p.id,
+      productName: p.name,
+      unitPrice: p.sale_price,
+      costPrice: p.cost_price,
+      quantity: item.quantity,
+    };
+  });
+  const totals = calculateTotals(itemsForCalc, parsed.data.discountAmount, parsed.data.taxAmount, parsed.data.serviceFeeAmount);
+
+  if (orderId) {
+    const { data: existing } = await admin
+      .from("orders")
+      .select("*")
+      .eq("id", orderId)
+      .eq("organization_id", m.organization.id)
+      .maybeSingle();
+    if (!existing) return actionFail("NOT_FOUND", "Không tìm thấy đơn");
+    if (existing.status === "paid" || existing.status === "cancelled" || existing.status === "refunded") {
+      return actionFail("ORDER_LOCKED", "Đơn đã khoá, không thể chỉnh sửa.");
+    }
+    await admin.from("order_items").delete().eq("order_id", orderId);
+    const rows = parsed.data.items.map((item) => {
+      const p = productMap.get(item.productId)!;
+      return {
+        organization_id: m.organization.id,
+        branch_id: branchId,
+        order_id: orderId,
+        product_id: p.id,
+        product_name_snapshot: p.name,
+        unit_price_snapshot: p.sale_price,
+        cost_price_snapshot: p.cost_price,
+        quantity: item.quantity,
+        note: item.note ?? null,
+        kitchen_status: p.product_type === "prepared" ? "pending" : "not_required",
+      };
+    });
+    await admin.from("order_items").insert(rows);
+    await admin
+      .from("orders")
+      .update({
+        table_id: parsed.data.tableId ?? null,
+        sales_channel_id: parsed.data.salesChannelId ?? null,
+        order_type: parsed.data.orderType,
+        subtotal: totals.subtotal,
+        discount_amount: totals.discountAmount,
+        tax_amount: totals.taxAmount,
+        service_fee_amount: totals.serviceFeeAmount,
+        total_amount: totals.totalAmount,
+        status: "open",
+      })
+      .eq("id", orderId);
+    revalidatePath("/pos");
+    revalidatePath("/kitchen");
+    return actionOk({ orderId, subtotal: totals.subtotal, total: totals.totalAmount });
+  }
+
+  // create
+  const seq = await nextOrderSeq(admin, branchId);
+  const orderNumber = newOrderNumber(seq);
+  const { data: order, error: orderErr } = await admin
+    .from("orders")
+    .insert({
+      organization_id: m.organization.id,
+      branch_id: branchId,
+      order_number: orderNumber,
+      table_id: parsed.data.tableId ?? null,
+      sales_channel_id: parsed.data.salesChannelId ?? null,
+      order_type: parsed.data.orderType,
+      status: "open",
+      subtotal: totals.subtotal,
+      discount_amount: totals.discountAmount,
+      tax_amount: totals.taxAmount,
+      service_fee_amount: totals.serviceFeeAmount,
+      total_amount: totals.totalAmount,
+      paid_amount: 0,
+      debt_amount: totals.totalAmount,
+      opened_by: m.membership.user_id,
+    })
+    .select("id")
+    .single();
+  if (orderErr || !order) return actionFail("INTERNAL_ERROR", "Không tạo được đơn: " + (orderErr?.message ?? ""));
+
+  if (parsed.data.tableId) {
+    await admin.from("dining_tables").update({ status: "occupied" }).eq("id", parsed.data.tableId);
+  }
+
+  const rows = parsed.data.items.map((item) => {
+    const p = productMap.get(item.productId)!;
+    return {
+      organization_id: m.organization.id,
+      branch_id: branchId,
+      order_id: order.id,
+      product_id: p.id,
+      product_name_snapshot: p.name,
+      unit_price_snapshot: p.sale_price,
+      cost_price_snapshot: p.cost_price,
+      quantity: item.quantity,
+      note: item.note ?? null,
+      kitchen_status: p.product_type === "prepared" ? "pending" : "not_required",
+    };
+  });
+  await admin.from("order_items").insert(rows);
+
+  revalidatePath("/pos");
+  revalidatePath("/kitchen");
+  revalidatePath("/dashboard");
+  return actionOk({ orderId: order.id, subtotal: totals.subtotal, total: totals.totalAmount });
+}
+
+export async function payOrder(organizationId: string, input: unknown): Promise<ActionResult<{ orderId: string; status: string; total: number; paid: number; debt: number }>> {
+  const m = await requireRole(organizationId, canPayOrder);
+  const parsed = paymentInputSchema.safeParse(input);
+  if (!parsed.success) return actionFail("VALIDATION_ERROR", "Thiếu thông tin thanh toán");
+  const admin = createSupabaseAdminClient();
+
+  const { data: order } = await admin
+    .from("orders")
+    .select("*, items:order_items(*, product:products(*))")
+    .eq("id", parsed.data.orderId)
+    .eq("organization_id", m.organization.id)
+    .maybeSingle();
+  if (!order) return actionFail("NOT_FOUND", "Không tìm thấy đơn");
+  if (order.status === "paid") return actionFail("CONFLICT", "Đơn đã thanh toán");
+  if (order.status === "cancelled" || order.status === "refunded") {
+    return actionFail("ORDER_LOCKED", "Đơn đã đóng");
+  }
+
+  // Recalculate from items
+  const subtotal = (order.items ?? []).reduce(
+    (s: number, it: any) => s + Number(it.quantity) * it.unit_price_snapshot,
+    0
+  );
+  const total = Math.max(0, subtotal - (order.discount_amount ?? 0) + (order.tax_amount ?? 0) + (order.service_fee_amount ?? 0));
+  const paidTotal = parsed.data.payments.reduce((s, p) => s + p.amount, 0);
+  if (paidTotal <= 0) return actionFail("VALIDATION_ERROR", "Số tiền thanh toán phải lớn hơn 0");
+  if (paidTotal > total) return actionFail("VALIDATION_ERROR", `Số tiền thanh toán vượt quá tổng đơn (${total}).`);
+
+  // Stock check for regular sellable products (item_type = sellable_product) and recipe ingredients
+  const checks: { inventoryItemId: string; quantityAvailable: number; quantityNeeded: number }[] = [];
+  for (const it of order.items ?? []) {
+    const product = it.product;
+    if (!product) continue;
+    if (product.product_type === "regular") {
+      // For MVP: try to find an inventory item linked by code
+      const { data: link } = await admin
+        .from("inventory_items")
+        .select("id")
+        .eq("organization_id", m.organization.id)
+        .eq("item_type", "sellable_product")
+        .eq("code", product.code)
+        .maybeSingle();
+      if (link) {
+        const { data: balance } = await admin
+          .from("inventory_balances")
+          .select("quantity_on_hand")
+          .eq("branch_id", order.branch_id)
+          .eq("inventory_item_id", link.id)
+          .maybeSingle();
+        checks.push({
+          inventoryItemId: link.id,
+          quantityAvailable: Number(balance?.quantity_on_hand ?? 0),
+          quantityNeeded: Number(it.quantity),
+        });
+      }
+    } else {
+      // recipe-based deduction
+      const { data: recipe } = await admin
+        .from("recipes")
+        .select("id, recipe_items(*)")
+        .eq("product_id", product.id)
+        .eq("is_active", true)
+        .order("version", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      for (const ri of (recipe?.recipe_items ?? []) as any[]) {
+        const { data: balance } = await admin
+          .from("inventory_balances")
+          .select("quantity_on_hand")
+          .eq("branch_id", order.branch_id)
+          .eq("inventory_item_id", ri.inventory_item_id)
+          .maybeSingle();
+        checks.push({
+          inventoryItemId: ri.inventory_item_id,
+          quantityAvailable: Number(balance?.quantity_on_hand ?? 0),
+          quantityNeeded: Number(it.quantity) * Number(ri.quantity),
+        });
+      }
+    }
+  }
+  const shortages = findShortages(checks);
+  if (shortages.length > 0) {
+    return actionFail("INSUFFICIENT_STOCK", `Không đủ tồn kho cho ${shortages.length} nguyên liệu/hàng hoá.`);
+  }
+
+  // Insert payments + movements
+  const paymentRows = parsed.data.payments.map((p) => ({
+    organization_id: m.organization.id,
+    branch_id: order.branch_id,
+    order_id: order.id,
+    method: p.method,
+    amount: p.amount,
+    received_by: m.membership.user_id,
+    transaction_ref: p.transactionRef ?? null,
+  }));
+  await admin.from("payments").insert(paymentRows);
+
+  for (const c of checks) {
+    const { data: balance } = await admin
+      .from("inventory_balances")
+      .select("id, quantity_on_hand")
+      .eq("branch_id", order.branch_id)
+      .eq("inventory_item_id", c.inventoryItemId)
+      .maybeSingle();
+    if (!balance) continue;
+    const newQty = Number(balance.quantity_on_hand) - c.quantityNeeded;
+    await admin.from("inventory_balances").update({ quantity_on_hand: newQty }).eq("id", balance.id);
+    await admin.from("inventory_movements").insert({
+      organization_id: m.organization.id,
+      branch_id: order.branch_id,
+      inventory_item_id: c.inventoryItemId,
+      movement_type: "sale_deduction",
+      quantity_delta: -c.quantityNeeded,
+      reference_type: "order",
+      reference_id: order.id,
+      created_by: m.membership.user_id,
+    });
+  }
+
+  const newPaid = (order.paid_amount ?? 0) + paidTotal;
+  const status = classifyPaymentStatus(total, newPaid);
+  const debtAmount = Math.max(0, total - newPaid);
+
+  await admin
+    .from("orders")
+    .update({
+      paid_amount: newPaid,
+      debt_amount: debtAmount,
+      total_amount: total,
+      subtotal,
+      status,
+      closed_at: status === "paid" ? new Date().toISOString() : order.closed_at,
+      closed_by: status === "paid" ? m.membership.user_id : order.closed_by,
+    })
+    .eq("id", order.id);
+
+  if (status === "paid" && order.table_id) {
+    await admin.from("dining_tables").update({ status: "available" }).eq("id", order.table_id);
+  }
+
+  await admin.from("audit_logs").insert({
+    organization_id: m.organization.id,
+    branch_id: order.branch_id,
+    actor_user_id: m.membership.user_id,
+    action: "order.pay",
+    entity_type: "orders",
+    entity_id: order.id,
+    after: { paid: newPaid, total, status },
+  });
+
+  revalidatePath("/pos");
+  revalidatePath("/kitchen");
+  revalidatePath("/dashboard");
+  revalidatePath("/reports/end-of-day");
+  return actionOk({ orderId: order.id, status, total, paid: newPaid, debt: debtAmount });
+}
+
+export async function updateKitchenStatus(
+  organizationId: string,
+  orderItemId: string,
+  input: unknown
+): Promise<ActionResult<{ id: string; status: string }>> {
+  const m = await requireRole(organizationId, canUpdateKitchen);
+  const parsed = kitchenStatusSchema.safeParse(input);
+  if (!parsed.success) return actionFail("VALIDATION_ERROR", "Trạng thái không hợp lệ");
+  const admin = createSupabaseAdminClient();
+  const { data: item } = await admin
+    .from("order_items")
+    .select("id, kitchen_status, orders!inner(organization_id, branch_id, status)")
+    .eq("id", orderItemId)
+    .maybeSingle();
+  if (!item) return actionFail("NOT_FOUND", "Không tìm thấy món");
+  if ((item as any).orders.status === "paid" || (item as any).orders.status === "cancelled") {
+    return actionFail("ORDER_LOCKED", "Đơn đã đóng, không thể cập nhật bếp");
+  }
+  if (!canUpdateKitchen.includes(m.role) && parsed.data.status === "cancelled") {
+    return actionFail("FORBIDDEN", "Bạn không có quyền hủy món");
+  }
+  const { error } = await admin
+    .from("order_items")
+    .update({ kitchen_status: parsed.data.status })
+    .eq("id", orderItemId);
+  if (error) return actionFail("INTERNAL_ERROR", "Không cập nhật được trạng thái bếp");
+  revalidatePath("/kitchen");
+  revalidatePath("/pos");
+  return actionOk({ id: orderItemId, status: parsed.data.status });
+}
+
+export async function cancelOrderItem(organizationId: string, input: unknown): Promise<ActionResult<{ id: string }>> {
+  const m = await requireRole(organizationId, canPayOrder);
+  const parsed = cancelOrderItemSchema.safeParse(input);
+  if (!parsed.success) return actionFail("VALIDATION_ERROR", "Thiếu lý do hủy");
+  const admin = createSupabaseAdminClient();
+  const { data: item } = await admin
+    .from("order_items")
+    .select("id, order_id, quantity, unit_price_snapshot, orders!inner(organization_id, status)")
+    .eq("id", parsed.data.orderItemId)
+    .maybeSingle();
+  if (!item) return actionFail("NOT_FOUND", "Không tìm thấy món");
+  if ((item as any).orders.status === "paid") {
+    return actionFail("ORDER_LOCKED", "Đơn đã thanh toán, dùng luồng hoàn tiền.");
+  }
+  await admin
+    .from("order_items")
+    .update({
+      kitchen_status: "cancelled",
+      cancellation_stage: parsed.data.stage,
+      cancelled_by: m.membership.user_id,
+      cancelled_at: new Date().toISOString(),
+    })
+    .eq("id", parsed.data.orderItemId);
+  const { data: order } = await admin
+    .from("orders")
+    .select("subtotal, total_amount, discount_amount, tax_amount, service_fee_amount")
+    .eq("id", (item as any).order_id)
+    .maybeSingle();
+  if (order) {
+    const newSubtotal = (order.subtotal ?? 0) - (item as any).unit_price_snapshot * (item as any).quantity;
+    const newTotal = Math.max(0, newSubtotal - (order.discount_amount ?? 0) + (order.tax_amount ?? 0) + (order.service_fee_amount ?? 0));
+    await admin
+      .from("orders")
+      .update({ subtotal: newSubtotal, total_amount: newTotal })
+      .eq("id", (item as any).order_id);
+  }
+  await admin.from("audit_logs").insert({
+    organization_id: m.organization.id,
+    actor_user_id: m.membership.user_id,
+    action: "order_item.cancel",
+    entity_type: "order_items",
+    entity_id: parsed.data.orderItemId,
+    after: { reason: parsed.data.reason, stage: parsed.data.stage },
+  });
+  revalidatePath("/pos");
+  revalidatePath("/kitchen");
+  revalidatePath("/dashboard");
+  return actionOk({ id: parsed.data.orderItemId });
+}
