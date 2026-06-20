@@ -23,6 +23,7 @@ export interface Organization {
   business_type: string;
   timezone: string;
   currency: string;
+  allow_negative_inventory: boolean;
   created_at: string;
   updated_at: string;
 }

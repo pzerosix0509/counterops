@@ -69,6 +69,7 @@ create table if not exists public.organizations (
   business_type text not null default 'restaurant',
   timezone text not null default 'Asia/Bangkok',
   currency text not null default 'VND',
+  allow_negative_inventory boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

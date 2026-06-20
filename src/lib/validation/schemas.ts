@@ -132,3 +132,7 @@ export const eodInputSchema = z.object({
   branchId: z.string().uuid(),
   reportDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
 });
+
+export const inventorySettingsSchema = z.object({
+  allowNegativeInventory: z.boolean(),
+});

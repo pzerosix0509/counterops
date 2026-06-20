@@ -23,6 +23,7 @@ export function KitchenBoard({
   const [tab, setTab] = useState<"pending" | "cooking" | "ready">("pending");
   const [isPending, startTransition] = useTransition();
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const groups = useMemo(() => {
     const m = new Map<string, { orderNumber: string; tableName: string | null; openedAt: string; items: KitchenItemType[] }>();
@@ -43,9 +44,15 @@ export function KitchenBoard({
 
   function changeStatus(itemId: string, status: "cooking" | "ready" | "served") {
     if (!canUpdate) return;
+    setError(null);
     setBusyId(itemId);
     startTransition(async () => {
-      await updateKitchenStatus(organizationId, itemId, { status });
+      const result = await updateKitchenStatus(organizationId, itemId, { status });
+      if (!result.ok) {
+        setError(result.error.message);
+        setBusyId(null);
+        return;
+      }
       setBusyId(null);
       router.refresh();
     });
@@ -66,6 +73,7 @@ export function KitchenBoard({
           </TabsTrigger>
         </TabsList>
       </Tabs>
+      {error ? <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p> : null}
 
       {filtered.length === 0 ? (
         <EmptyState

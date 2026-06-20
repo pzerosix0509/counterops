@@ -51,9 +51,13 @@ interface OrderPayload {
 export function PosWorkspace(props: Props) {
   const router = useRouter();
   const { organizationId, branchId, products, categories, areas, tables, openByTable, channels, canPay, canCreate } = props;
+  const findChannelForOrderType = (type: "dine_in" | "takeaway") => {
+    const targetName = type === "dine_in" ? "tại quán" : "mang đi";
+    return channels.find((channel) => channel.name.toLowerCase() === targetName)?.id ?? channels[0]?.id ?? null;
+  };
   const [orderType, setOrderType] = useState<"dine_in" | "takeaway">("dine_in");
   const [tableId, setTableId] = useState<string | null>(null);
-  const [channelId, setChannelId] = useState<string | null>(channels[0]?.id ?? null);
+  const [channelId, setChannelId] = useState<string | null>(() => findChannelForOrderType("dine_in"));
   const [activeCategory, setActiveCategory] = useState<string>("all");
   const [search, setSearch] = useState("");
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -105,6 +109,12 @@ export function PosWorkspace(props: Props) {
       setActiveOrderId(null);
     }
   }, [tableId, openByTable]);
+
+  function changeOrderType(value: "dine_in" | "takeaway") {
+    setOrderType(value);
+    setChannelId(findChannelForOrderType(value));
+    if (value === "takeaway") setTableId(null);
+  }
 
   function addProduct(product: Product & { available: boolean }) {
     setCart((current) => {
@@ -261,7 +271,7 @@ export function PosWorkspace(props: Props) {
           <CardTitle className="text-sm">Chọn chế độ</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <Tabs value={orderType} onValueChange={(value) => setOrderType(value as "dine_in" | "takeaway")}>
+          <Tabs value={orderType} onValueChange={(value) => changeOrderType(value as "dine_in" | "takeaway")}>
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="dine_in">Tại quán</TabsTrigger>
               <TabsTrigger value="takeaway">Mang đi</TabsTrigger>

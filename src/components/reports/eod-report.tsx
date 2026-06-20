@@ -6,9 +6,11 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { ExcelDownloadButton } from "@/components/common/excel-import";
 import { formatVND } from "@/lib/date/ranges";
 import { formatDateTime } from "@/lib/utils/format";
 import { generateEndOfDayReport } from "@/server/actions/eod";
+import { exportEndOfDay } from "@/server/actions/excel";
 import type { EndOfDayReport } from "@/types/database";
 import type { EodComputation } from "@/server/queries/eod";
 
@@ -25,6 +27,7 @@ export function EodReport({
   organizationId,
   branchId,
   canGenerate,
+
   date,
   data,
   savedReport,
@@ -57,6 +60,7 @@ export function EodReport({
     });
   }
 
+
   return (
     <div className="space-y-4">
       <Card>
@@ -68,6 +72,10 @@ export function EodReport({
           <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
             <Input type="date" value={picked} onChange={(e) => setPicked(e.target.value)} className="w-44" />
             <Button variant="outline" onClick={onApply}>Áp dụng</Button>
+            <ExcelDownloadButton
+              action={() => exportEndOfDay(organizationId, branchId, picked)}
+              label="Xuất Excel"
+            />
             {canGenerate ? (
               <Button onClick={onGenerate} disabled={isPending}>
                 {isPending ? "Đang tạo..." : "Lưu báo cáo"}
@@ -120,7 +128,7 @@ export function EodReport({
           </CardContent>
         </Card>
         <Card>
-          <CardHeader><CardTitle className="text-sm">Thanh toán & hủy</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-sm">Thanh toán & huỷ</CardTitle></CardHeader>
           <CardContent className="space-y-1 text-sm">
             <div className="flex justify-between"><span>Tiền mặt</span><span>{formatVND(data.cashTotal)}</span></div>
             <div className="flex justify-between"><span>Chuyển khoản</span><span>{formatVND(data.bankTransferTotal)}</span></div>
@@ -128,8 +136,8 @@ export function EodReport({
             <div className="flex justify-between"><span>Ví điện tử</span><span>{formatVND(data.ewalletTotal)}</span></div>
             <div className="flex justify-between"><span>Ghi nợ (phương thức)</span><span>{formatVND(data.debtPayments)}</span></div>
             <div className="flex justify-between"><span>Khác</span><span>{formatVND(data.otherPayments)}</span></div>
-            <div className="mt-2 flex justify-between border-t pt-1"><span>Đơn bị hủy</span><Badge variant="warning">{data.cancelledOrders}</Badge></div>
-            <div className="flex justify-between"><span>Giá trị đơn bị hủy</span><span>{formatVND(data.cancelledAmount)}</span></div>
+            <div className="mt-2 flex justify-between border-t pt-1"><span>Đơn bị huỷ</span><Badge variant="warning">{data.cancelledOrders}</Badge></div>
+            <div className="flex justify-between"><span>Giá trị đơn bị huỷ</span><span>{formatVND(data.cancelledAmount)}</span></div>
           </CardContent>
         </Card>
       </div>

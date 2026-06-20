@@ -62,9 +62,9 @@ export async function getDashboardSummary(opts: {
 
   const [
     { data: todayPaid },
-    { data: todayCount },
-    { data: tableCount },
-    { data: occupied },
+    { count: todayCount },
+    { count: tableCount },
+    { count: occupied },
     { data: rangeOrders },
     { data: rangeItems },
     { data: cancelledItems },
@@ -95,7 +95,7 @@ export async function getDashboardSummary(opts: {
       .eq("status", "occupied"),
     supabase
       .from("orders")
-      .select("id, status, total_amount, paid_amount, opened_at, sales_channel_id, order_number")
+      .select("id, status, total_amount, paid_amount, opened_at, sales_channel_id, order_type, order_number")
       .eq("branch_id", branchId)
       .gte("opened_at", range.from.toISOString())
       .lte("opened_at", range.to.toISOString()),
@@ -122,9 +122,9 @@ export async function getDashboardSummary(opts: {
   ]);
 
   const revenueToday = (todayPaid ?? []).reduce((s, o) => s + (o.total_amount || 0), 0);
-  const ordersToday = todayCount?.length ?? 0;
-  const totalTables = tableCount?.length ?? 0;
-  const occupiedTables = occupied?.length ?? 0;
+  const ordersToday = todayCount ?? 0;
+  const totalTables = tableCount ?? 0;
+  const occupiedTables = occupied ?? 0;
   const selectedOrders = (rangeOrders ?? []).length;
   const selectedNetRevenue = (rangeOrders ?? [])
     .filter((o) => o.status === "paid")
@@ -191,16 +191,19 @@ export async function getDashboardSummary(opts: {
     .map(([categoryName, v]) => ({ categoryId: null, categoryName, revenue: v.revenue, orders: v.orders }))
     .sort((a, b) => b.revenue - a.revenue);
 
-  // Channel breakdown
-  const { data: channels } = await supabase
-    .from("sales_channels")
-    .select("id, name")
-    .eq("organization_id", organizationId);
-  const channelMap = new Map((channels ?? []).map((c) => [c.id, c.name]));
+  // Channel breakdown uses the actual order fulfillment type. The sales channel
+  // dropdown can drift from dine-in/takeaway, but order_type is the source of truth
+  // for "Tại quán", "Mang đi", "Giao hàng", and "Online" reporting.
+  const orderTypeLabel: Record<string, string> = {
+    dine_in: "Tại quán",
+    takeaway: "Mang đi",
+    delivery: "Giao hàng",
+    online: "Online",
+  };
   const chMap = new Map<string, { revenue: number; orders: number }>();
   for (const o of rangeOrders ?? []) {
     if (o.status !== "paid") continue;
-    const name = o.sales_channel_id ? channelMap.get(o.sales_channel_id) ?? "Khác" : "Mặc định";
+    const name = orderTypeLabel[o.order_type as string] ?? "Khác";
     const cur = chMap.get(name) ?? { revenue: 0, orders: 0 };
     cur.revenue += o.total_amount || 0;
     cur.orders += 1;

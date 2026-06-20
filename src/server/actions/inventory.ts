@@ -90,8 +90,11 @@ export async function createInventoryMovement(
   if (parsed.data.quantityDelta < 0) {
     const have = Number(balance?.quantity_on_hand ?? 0);
     const need = -parsed.data.quantityDelta;
-    if (have < need) {
-        return actionFail("INSUFFICIENT_STOCK", `Tồn kho không đủ (còn ${have}, cần ${need}).`);
+    if (!m.organization.allow_negative_inventory && have < need) {
+      return actionFail(
+        "INSUFFICIENT_STOCK",
+        `Tồn kho không đủ (còn ${have.toLocaleString("vi-VN")}, cần ${need.toLocaleString("vi-VN")}). Bật "Cho phép âm kho" trong Cài đặt nếu muốn vẫn ghi phiếu.`
+      );
     }
   }
 

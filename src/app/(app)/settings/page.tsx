@@ -2,6 +2,7 @@
 import { listCategories } from "@/server/queries/menu";
 import { listInventoryItems } from "@/server/queries/inventory";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { InventorySettingsForm } from "@/components/settings/inventory-settings-form";
 
 export const metadata = { title: "Cài đặt" };
 
@@ -44,6 +45,18 @@ export default async function SettingsPage() {
             <div className="flex justify-between"><span>Số nhóm món</span><span>{categories.length}</span></div>
             <div className="flex justify-between"><span>Số mặt hàng kho</span><span>{items.length}</span></div>
             <div className="flex justify-between"><span>Vai trò của bạn</span><span>{active.role}</span></div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">Kho hàng</CardTitle>
+            <CardDescription>Thiết lập kiểm soát tồn kho khi bán hàng và lập phiếu.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <InventorySettingsForm
+              organizationId={ctx.organizationId}
+              allowNegativeInventory={active.organization.allow_negative_inventory ?? false}
+            />
           </CardContent>
         </Card>
       </div>

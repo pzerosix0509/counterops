@@ -6,7 +6,6 @@ import { actionFail, actionOk, type ActionResult } from "@/lib/utils/action-resu
 import { canCreateOrder, canPayOrder, canUpdateKitchen, requireRole } from "@/lib/auth/permissions";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { calculateTotals, newOrderNumber, classifyPaymentStatus } from "@/lib/calculations/orders";
-import { findShortages } from "@/lib/calculations/inventory";
 
 async function nextOrderSeq(admin: ReturnType<typeof createSupabaseAdminClient>, branchId: string): Promise<number> {
   const { count } = await admin
@@ -189,61 +188,103 @@ export async function payOrder(organizationId: string, input: unknown): Promise<
   if (paidTotal <= 0) return actionFail("VALIDATION_ERROR", "Số tiền thanh toán phải lớn hơn 0");
   if (paidTotal > total) return actionFail("VALIDATION_ERROR", `Số tiền thanh toán vượt quá tổng đơn (${total}).`);
 
-  // Stock check for regular sellable products (item_type = sellable_product) and recipe ingredients
-  const checks: { inventoryItemId: string; quantityAvailable: number; quantityNeeded: number }[] = [];
-  for (const it of order.items ?? []) {
-    const product = it.product;
-    if (!product) continue;
-    if (product.product_type === "regular") {
-      // For MVP: try to find an inventory item linked by code
-      const { data: link } = await admin
-        .from("inventory_items")
-        .select("id")
-        .eq("organization_id", m.organization.id)
-        .eq("item_type", "sellable_product")
-        .eq("code", product.code)
-        .maybeSingle();
-      if (link) {
-        const { data: balance } = await admin
-          .from("inventory_balances")
-          .select("quantity_on_hand")
-          .eq("branch_id", order.branch_id)
-          .eq("inventory_item_id", link.id)
+  const { count: deductionCount } = await admin
+    .from("inventory_movements")
+    .select("id", { count: "exact", head: true })
+    .eq("branch_id", order.branch_id)
+    .eq("reference_type", "order")
+    .eq("reference_id", order.id)
+    .eq("movement_type", "sale_deduction");
+  const shouldDeductStock = (deductionCount ?? 0) === 0;
+
+  type StockCheck = {
+    inventoryItemId: string;
+    itemName: string;
+    unit: string;
+    quantityAvailable: number;
+    quantityNeeded: number;
+  };
+  const checkMap = new Map<string, StockCheck>();
+  const addCheck = (check: StockCheck) => {
+    const current = checkMap.get(check.inventoryItemId);
+    if (!current) {
+      checkMap.set(check.inventoryItemId, check);
+      return;
+    }
+    current.quantityNeeded += check.quantityNeeded;
+  };
+
+  if (shouldDeductStock) {
+    // Regular products deduct directly from a sellable inventory item with the same code.
+    // Prepared products deduct ingredients from the active recipe.
+    for (const it of order.items ?? []) {
+      const product = it.product;
+      if (!product) continue;
+      if (product.product_type === "regular") {
+        const { data: link } = await admin
+          .from("inventory_items")
+          .select("id, name, unit")
+          .eq("organization_id", m.organization.id)
+          .eq("item_type", "sellable_product")
+          .eq("code", product.code)
           .maybeSingle();
-        checks.push({
-          inventoryItemId: link.id,
-          quantityAvailable: Number(balance?.quantity_on_hand ?? 0),
-          quantityNeeded: Number(it.quantity),
-        });
-      }
-    } else {
-      // recipe-based deduction
-      const { data: recipe } = await admin
-        .from("recipes")
-        .select("id, recipe_items(*)")
-        .eq("product_id", product.id)
-        .eq("is_active", true)
-        .order("version", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      for (const ri of (recipe?.recipe_items ?? []) as any[]) {
-        const { data: balance } = await admin
-          .from("inventory_balances")
-          .select("quantity_on_hand")
-          .eq("branch_id", order.branch_id)
-          .eq("inventory_item_id", ri.inventory_item_id)
+        if (link) {
+          const { data: balance } = await admin
+            .from("inventory_balances")
+            .select("quantity_on_hand")
+            .eq("branch_id", order.branch_id)
+            .eq("inventory_item_id", link.id)
+            .maybeSingle();
+          addCheck({
+            inventoryItemId: link.id,
+            itemName: link.name,
+            unit: link.unit,
+            quantityAvailable: Number(balance?.quantity_on_hand ?? 0),
+            quantityNeeded: Number(it.quantity),
+          });
+        }
+      } else {
+        const { data: recipe } = await admin
+          .from("recipes")
+          .select("id, recipe_items(*, inventory_item:inventory_items(id, name, unit))")
+          .eq("product_id", product.id)
+          .eq("is_active", true)
+          .order("version", { ascending: false })
+          .limit(1)
           .maybeSingle();
-        checks.push({
-          inventoryItemId: ri.inventory_item_id,
-          quantityAvailable: Number(balance?.quantity_on_hand ?? 0),
-          quantityNeeded: Number(it.quantity) * Number(ri.quantity),
-        });
+        for (const ri of (recipe?.recipe_items ?? []) as any[]) {
+          const { data: balance } = await admin
+            .from("inventory_balances")
+            .select("quantity_on_hand")
+            .eq("branch_id", order.branch_id)
+            .eq("inventory_item_id", ri.inventory_item_id)
+            .maybeSingle();
+          addCheck({
+            inventoryItemId: ri.inventory_item_id,
+            itemName: ri.inventory_item?.name ?? "Hàng kho",
+            unit: ri.inventory_item?.unit ?? ri.unit ?? "",
+            quantityAvailable: Number(balance?.quantity_on_hand ?? 0),
+            quantityNeeded: Number(it.quantity) * Number(ri.quantity),
+          });
+        }
       }
     }
   }
-  const shortages = findShortages(checks);
-  if (shortages.length > 0) {
-    return actionFail("INSUFFICIENT_STOCK", `Không đủ tồn kho cho ${shortages.length} nguyên liệu/hàng hoá.`);
+
+  const checks = Array.from(checkMap.values());
+  const shortages = checks.filter((check) => check.quantityAvailable < check.quantityNeeded);
+  if (!m.organization.allow_negative_inventory && shortages.length > 0) {
+    const detail = shortages
+      .slice(0, 4)
+      .map((check) => {
+        const missing = check.quantityNeeded - check.quantityAvailable;
+        return `${check.itemName}: còn ${check.quantityAvailable.toLocaleString("vi-VN")} ${check.unit}, cần ${check.quantityNeeded.toLocaleString("vi-VN")} ${check.unit}, thiếu ${missing.toLocaleString("vi-VN")} ${check.unit}`;
+      })
+      .join("; ");
+    return actionFail(
+      "INSUFFICIENT_STOCK",
+      `Không đủ tồn kho. ${detail}${shortages.length > 4 ? `; và ${shortages.length - 4} mặt hàng khác` : ""}. Bật "Cho phép âm kho" trong Cài đặt nếu muốn vẫn thanh toán.`
+    );
   }
 
   // Insert payments + movements
@@ -265,9 +306,18 @@ export async function payOrder(organizationId: string, input: unknown): Promise<
       .eq("branch_id", order.branch_id)
       .eq("inventory_item_id", c.inventoryItemId)
       .maybeSingle();
-    if (!balance) continue;
-    const newQty = Number(balance.quantity_on_hand) - c.quantityNeeded;
-    await admin.from("inventory_balances").update({ quantity_on_hand: newQty }).eq("id", balance.id);
+    const newQty = Number(balance?.quantity_on_hand ?? 0) - c.quantityNeeded;
+    if (balance) {
+      await admin.from("inventory_balances").update({ quantity_on_hand: newQty }).eq("id", balance.id);
+    } else {
+      await admin.from("inventory_balances").insert({
+        organization_id: m.organization.id,
+        branch_id: order.branch_id,
+        inventory_item_id: c.inventoryItemId,
+        quantity_on_hand: newQty,
+        low_stock_threshold: 0,
+      });
+    }
     await admin.from("inventory_movements").insert({
       organization_id: m.organization.id,
       branch_id: order.branch_id,
@@ -333,7 +383,11 @@ export async function updateKitchenStatus(
     .eq("id", orderItemId)
     .maybeSingle();
   if (!item) return actionFail("NOT_FOUND", "Không tìm thấy món");
-  if ((item as any).orders.status === "paid" || (item as any).orders.status === "cancelled") {
+  const order = (item as any).orders;
+  if (order.organization_id !== m.organization.id) {
+    return actionFail("FORBIDDEN", "Bạn không có quyền cập nhật món này");
+  }
+  if (order.status === "cancelled" || order.status === "refunded") {
     return actionFail("ORDER_LOCKED", "Đơn đã đóng, không thể cập nhật bếp");
   }
   if (!canUpdateKitchen.includes(m.role) && parsed.data.status === "cancelled") {

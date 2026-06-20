@@ -1,7 +1,7 @@
 ﻿"use client";
 import { useState, useTransition, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Search } from "lucide-react";
+import { Plus, Search, FileUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,9 +12,19 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { createCategory, createProduct, toggleProductActive } from "@/server/actions/menu";
+import {
+  commitProductImport,
+  downloadProductTemplate,
+  exportMenu,
+  previewProductImport,
+} from "@/server/actions/excel";
+import { ExcelImportDialog, ExcelDownloadButton } from "@/components/common/excel-import";
 import { formatVND } from "@/lib/date/ranges";
 import type { MenuCategory, Product } from "@/types/database";
 import { EmptyState } from "@/components/common/states";
+import {
+  PRODUCT_IMPORT_COLUMNS,
+} from "@/lib/validation/excel-schemas";
 
 const MENU_TYPE_LABEL: Record<string, string> = {
   food: "Đồ ăn",
@@ -44,6 +54,7 @@ export function MenuManager({
   const router = useRouter();
   const [query, setQuery] = useState(initialQuery);
   const [open, setOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -109,99 +120,122 @@ export function MenuManager({
           </div>
           <Button type="submit" variant="outline">Lọc</Button>
         </form>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {canManage ? (
             <>
               <Button variant="outline" onClick={onAddCategory}>
                 <Plus className="h-4 w-4" /> Nhóm món
               </Button>
-              <Dialog open={open} onOpenChange={setOpen}>
-                <DialogTrigger asChild>
-                  <Button>
-                    <Plus className="h-4 w-4" /> Thêm món
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="max-w-lg">
-                  <DialogHeader>
-                    <DialogTitle>Thêm món mới</DialogTitle>
-                    <DialogDescription>Điền thông tin cơ bản, có thể bổ sung công thức sau.</DialogDescription>
-                  </DialogHeader>
-                  <form className="space-y-3" onSubmit={onCreateProduct}>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1.5">
-                        <Label htmlFor="name">Tên món</Label>
-                        <Input id="name" name="name" required />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label htmlFor="code">Mã món</Label>
-                        <Input id="code" name="code" required />
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1.5">
-                        <Label htmlFor="categoryId">Nhóm món</Label>
-                        <Select name="categoryId" defaultValue={categories[0]?.id ?? ""}>
-                          <SelectTrigger><SelectValue placeholder="Chọn nhóm" /></SelectTrigger>
-                          <SelectContent>
-                            {categories.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label htmlFor="unit">Đơn vị</Label>
-                        <Input id="unit" name="unit" defaultValue="phần" required />
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1.5">
-                        <Label htmlFor="menuType">Loại thực đơn</Label>
-                        <Select name="menuType" defaultValue="food">
-                          <SelectTrigger><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="food">Đồ ăn</SelectItem>
-                            <SelectItem value="drink">Đồ uống</SelectItem>
-                            <SelectItem value="service">Dịch vụ</SelectItem>
-                            <SelectItem value="other">Khác</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label htmlFor="productType">Loại sản phẩm</Label>
-                        <Select name="productType" defaultValue="regular">
-                          <SelectTrigger><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="regular">Món thường</SelectItem>
-                            <SelectItem value="prepared">Món chế biến</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1.5">
-                        <Label htmlFor="costPrice">Giá vốn (đ)</Label>
-                        <Input id="costPrice" name="costPrice" type="number" min="0" step="1000" defaultValue={0} required />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label htmlFor="salePrice">Giá bán (đ)</Label>
-                        <Input id="salePrice" name="salePrice" type="number" min="0" step="1000" defaultValue={0} required />
-                      </div>
+              <Button variant="outline" onClick={() => setImportOpen(true)}>
+                <FileUp className="h-4 w-4" /> Import Excel
+              </Button>
+            </>
+          ) : null}
+          <ExcelDownloadButton
+            action={() => exportMenu(organizationId, query || undefined)}
+            label="Xuất Excel"
+          />
+          {canManage ? (
+            <Dialog open={open} onOpenChange={setOpen}>
+              <DialogTrigger asChild>
+                <Button>
+                  <Plus className="h-4 w-4" /> Thêm món
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-lg">
+                <DialogHeader>
+                  <DialogTitle>Thêm món mới</DialogTitle>
+                  <DialogDescription>Điền thông tin cơ bản, có thể bổ sung công thức sau.</DialogDescription>
+                </DialogHeader>
+                <form className="space-y-3" onSubmit={onCreateProduct}>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="name">Tên món</Label>
+                      <Input id="name" name="name" required />
                     </div>
                     <div className="space-y-1.5">
-                      <Label htmlFor="description">Mô tả</Label>
-                      <Textarea id="description" name="description" rows={2} />
+                      <Label htmlFor="code">Mã món</Label>
+                      <Input id="code" name="code" required />
                     </div>
-                    {error ? <p className="text-sm text-destructive">{error}</p> : null}
-                    <DialogFooter>
-                      <Button type="button" variant="ghost" onClick={() => setOpen(false)}>Huỷ</Button>
-                      <Button type="submit" disabled={isPending}>{isPending ? "Đang lưu..." : "Lưu món"}</Button>
-                    </DialogFooter>
-                  </form>
-                </DialogContent>
-              </Dialog>
-            </>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="categoryId">Nhóm món</Label>
+                      <Select name="categoryId" defaultValue={categories[0]?.id ?? ""}>
+                        <SelectTrigger><SelectValue placeholder="Chọn nhóm" /></SelectTrigger>
+                        <SelectContent>
+                          {categories.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="unit">Đơn vị</Label>
+                      <Input id="unit" name="unit" defaultValue="phần" required />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="menuType">Loại thực đơn</Label>
+                      <Select name="menuType" defaultValue="food">
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="food">Đồ ăn</SelectItem>
+                          <SelectItem value="drink">Đồ uống</SelectItem>
+                          <SelectItem value="service">Dịch vụ</SelectItem>
+                          <SelectItem value="other">Khác</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="productType">Loại sản phẩm</Label>
+                      <Select name="productType" defaultValue="regular">
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="regular">Món thường</SelectItem>
+                          <SelectItem value="prepared">Món chế biến</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="costPrice">Giá vốn (đ)</Label>
+                      <Input id="costPrice" name="costPrice" type="number" min="0" step="1000" defaultValue={0} required />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="salePrice">Giá bán (đ)</Label>
+                      <Input id="salePrice" name="salePrice" type="number" min="0" step="1000" defaultValue={0} required />
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="description">Mô tả</Label>
+                    <Textarea id="description" name="description" rows={2} />
+                  </div>
+                  {error ? <p className="text-sm text-destructive">{error}</p> : null}
+                  <DialogFooter>
+                    <Button type="button" variant="ghost" onClick={() => setOpen(false)}>Huỷ</Button>
+                    <Button type="submit" disabled={isPending}>{isPending ? "Đang lưu..." : "Lưu món"}</Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
           ) : null}
         </div>
       </div>
+
+      {canManage ? (
+        <ExcelImportDialog
+          open={importOpen}
+          onOpenChange={setImportOpen}
+          entityLabel="thực đơn"
+          columns={PRODUCT_IMPORT_COLUMNS.map((c) => ({ key: c.key, header: c.header }))}
+          previewAction={(payload) => previewProductImport(organizationId, payload)}
+          commitAction={(preview) => commitProductImport(organizationId, preview)}
+          templateAction={() => downloadProductTemplate(organizationId)}
+          onCommitted={() => router.refresh()}
+          successLabel="Ghi thực đơn"
+        />
+      ) : null}
 
       <Card>
         <CardHeader>
@@ -276,3 +310,4 @@ export function MenuManager({
     </div>
   );
 }
+
