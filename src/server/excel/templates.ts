@@ -103,8 +103,9 @@ export async function buildInventoryItemTemplate(): Promise<Buffer> {
   addInstructionsSheet(wb, [
     "Import inventory items (Inventory).",
     "- 'Mã hàng' (code) is the unique business key. Existing items have their name, unit, and cost price updated.",
-    "- 'Loai' accepts: " + INVENTORY_TYPE_VALUES.join(", ") + ".",
-    "- 'Tồn đầu' and 'Định mức thấp' only apply when the item is new; existing items keep their current stock and threshold.",
+    "- 'Loại' accepts: " + INVENTORY_TYPE_VALUES.join(", ") + ".",
+    "- 'Số lượng' sets the current stock quantity for the branch. Existing items update their stock to this value.",
+    "- 'Định mức thấp' sets or updates the low-stock threshold for the branch.",
   ]);
   return workbookToBuffer(wb);
 }

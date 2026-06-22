@@ -41,7 +41,7 @@ const INVENTORY_HEADERS = [
   "Giá vốn (đ)",
   "Mô tả",
   "Ảnh (URL)",
-  "Tồn đầu",
+  "Số lượng",
   "Định mức thấp",
 ];
 

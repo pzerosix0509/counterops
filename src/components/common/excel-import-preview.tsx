@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useRef, useState, useTransition } from "react";
 import { FileUp, Download } from "lucide-react";
@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import type { ActionResult } from "@/lib/utils/action-result";
+import { notifyError, notifySuccess } from "@/hooks/use-notify";
 
 export interface ImportPreviewRow {
   rowNumber: number;
@@ -55,7 +56,7 @@ export function ExcelImportDialog(props: ExcelImportDialogProps) {
     commitAction,
     templateAction,
     onCommitted,
-    successLabel = "Import thành công",
+    successLabel = "Import th�nh c�ng",
   } = props;
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isPending, startTransition] = useTransition();
@@ -82,9 +83,11 @@ export function ExcelImportDialog(props: ExcelImportDialogProps) {
       setTemplatePending(false);
       if (!res.ok) {
         setErrorMessage(res.error.message);
+        notifyError('T?i t?p m?u th?t b?i', res.error.message);
         return;
       }
       downloadBase64(res.data.base64, res.data.fileName, res.data.mime);
+      notifySuccess('�� t?i t?p m?u', res.data.fileName);
     });
   }
 
@@ -98,13 +101,15 @@ export function ExcelImportDialog(props: ExcelImportDialogProps) {
       if (!res.ok) {
         setPhase("error");
         setErrorMessage(res.error.message);
+        notifyError("Kh�ng xem tru?c du?c t?p", res.error.message);
         return;
       }
       setPreview(res.data);
       setPhase("preview");
     } catch (e) {
       setPhase("error");
-      setErrorMessage(e instanceof Error ? e.message : "Đã xảy ra lỗi khi đọc tệp.");
+      setErrorMessage(e instanceof Error ? e.message : "�� x?y ra l?i khi d?c t?p.");
+      notifyError("Kh�ng d?c du?c t?p", e instanceof Error ? e.message : undefined);
     }
   }
 
@@ -117,9 +122,11 @@ export function ExcelImportDialog(props: ExcelImportDialogProps) {
       if (!res.ok) {
         setPhase("error");
         setErrorMessage(res.error.message);
+        notifyError("Import th?t b?i", res.error.message);
         return;
       }
       setPhase("done");
+      notifySuccess("Import th�nh c�ng", `�� ghi ${preview.validCount} d�ng.`);
       onCommitted?.();
     });
   }
@@ -139,9 +146,9 @@ export function ExcelImportDialog(props: ExcelImportDialogProps) {
     >
       <DialogContent className="max-w-3xl">
         <DialogHeader>
-          <DialogTitle>Import {entityLabel} từ Excel</DialogTitle>
+          <DialogTitle>Import {entityLabel} t? Excel</DialogTitle>
           <DialogDescription>
-            Tải tệp mẫu, điền dữ liệu rồi tải lên. Hệ thống xem trước các dòng hợp lệ trước khi ghi vào cơ sở dữ liệu.
+            T?i t?p m?u, di?n d? li?u r?i t?i l�n. H? th?ng xem tru?c c�c d�ng h?p l? tru?c khi ghi v�o co s? d? li?u.
           </DialogDescription>
         </DialogHeader>
 
@@ -158,17 +165,17 @@ export function ExcelImportDialog(props: ExcelImportDialogProps) {
           />
           <div className="flex flex-wrap items-center gap-2">
             <Button variant="outline" onClick={onTemplate} disabled={templatePending || isPending}>
-              <Download className="h-4 w-4" /> Tải tệp mẫu
+              <Download className="h-4 w-4" /> T?i t?p m?u
             </Button>
             <Button onClick={onPick} disabled={phase === "previewing" || phase === "committing"}>
-              <FileUp className="h-4 w-4" /> Chọn tệp .xlsx
+              <FileUp className="h-4 w-4" /> Ch?n t?p .xlsx
             </Button>
           </div>
           {preview ? (
             <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-              <Badge variant="success">{preview.validCount} hợp lệ</Badge>
+              <Badge variant="success">{preview.validCount} h?p l?</Badge>
               {preview.errorCount > 0 ? (
-                <Badge variant="danger">{preview.errorCount} lỗi</Badge>
+                <Badge variant="danger">{preview.errorCount} l?i</Badge>
               ) : null}
               <span>{preview.fileName}</span>
             </div>
@@ -186,12 +193,12 @@ export function ExcelImportDialog(props: ExcelImportDialogProps) {
             {preview.errors.length > 0 ? (
               <div className="space-y-2">
                 <p className="text-sm font-medium text-destructive">
-                  {preview.errors.length} dòng cần sửa lại
+                  {preview.errors.length} d�ng c?n s?a l?i
                 </p>
                 <div className="space-y-2">
                   {preview.errors.map((err) => (
                     <div key={err.rowNumber} className="rounded-md border border-rose-200 bg-rose-50 p-2 text-xs">
-                      <p className="font-semibold">Dòng {err.rowNumber}</p>
+                      <p className="font-semibold">D�ng {err.rowNumber}</p>
                       <ul className="ml-4 list-disc">
                         {err.issues.map((iss, idx) => (
                           <li key={idx}>
@@ -207,7 +214,7 @@ export function ExcelImportDialog(props: ExcelImportDialogProps) {
 
             {preview.cleaned.length > 0 ? (
               <div>
-                <p className="mb-1 text-sm font-medium">Sẽ ghi {preview.cleaned.length} dòng</p>
+                <p className="mb-1 text-sm font-medium">S? ghi {preview.cleaned.length} d�ng</p>
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -232,7 +239,7 @@ export function ExcelImportDialog(props: ExcelImportDialogProps) {
                 </Table>
                 {preview.cleaned.length > 50 ? (
                   <p className="mt-2 text-xs text-muted-foreground">
-                    Hiển thị 50 dòng đầu trong tổng số {preview.cleaned.length}.
+                    Hi?n th? 50 d�ng d?u trong t?ng s? {preview.cleaned.length}.
                   </p>
                 ) : null}
               </div>
@@ -240,24 +247,24 @@ export function ExcelImportDialog(props: ExcelImportDialogProps) {
           </div>
         ) : (
           <p className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
-            Chưa có tệp nào được chọn. Tải tệp mẫu, điền dữ liệu rồi chọn tệp để xem trước.
+            Chua c� t?p n�o du?c ch?n. T?i t?p m?u, di?n d? li?u r?i ch?n t?p d? xem tru?c.
           </p>
         )}
 
         <DialogFooter>
           <Button variant="ghost" onClick={close} disabled={isPending}>
-            {phase === "done" ? "Đóng" : "Huỷ"}
+            {phase === "done" ? "��ng" : "Hu?"}
           </Button>
           <Button
             onClick={onCommit}
             disabled={!preview || preview.validCount === 0 || isPending || phase === "done"}
           >
-            {phase === "committing" ? "Đang ghi..." : successLabel}
+            {phase === "committing" ? "�ang ghi..." : successLabel}
           </Button>
         </DialogFooter>
         {phase === "done" ? (
           <p className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">
-            {successLabel}. Bạn có thể đóng hộp thoại.
+            {successLabel}. B?n c� th? d�ng h?p tho?i.
           </p>
         ) : null}
       </DialogContent>
@@ -266,8 +273,8 @@ export function ExcelImportDialog(props: ExcelImportDialogProps) {
 }
 
 function formatCell(value: unknown): string {
-  if (value === null || value === undefined || value === "") return "—";
-  if (typeof value === "boolean") return value ? "Có" : "Không";
+  if (value === null || value === undefined || value === "") return "�";
+  if (typeof value === "boolean") return value ? "C�" : "Kh�ng";
   if (typeof value === "number") return value.toString();
   return String(value);
 }

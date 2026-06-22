@@ -7,6 +7,8 @@ import { canCreateOrder, canPayOrder, canUpdateKitchen, requireRole } from "@/li
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { calculateTotals, newOrderNumber, classifyPaymentStatus } from "@/lib/calculations/orders";
 
+const OPEN_ORDER_STATUSES = ["draft", "open", "sent_to_kitchen", "partially_paid"] as const;
+
 async function nextOrderSeq(admin: ReturnType<typeof createSupabaseAdminClient>, branchId: string): Promise<number> {
   const { count } = await admin
     .from("orders")
@@ -71,6 +73,19 @@ export async function createOrUpdateOrder(
     if (existing.status === "paid" || existing.status === "cancelled" || existing.status === "refunded") {
       return actionFail("ORDER_LOCKED", "Đơn đã khoá, không thể chỉnh sửa.");
     }
+    if (parsed.data.tableId && parsed.data.tableId !== existing.table_id) {
+      const { data: tableOrder } = await admin
+        .from("orders")
+        .select("id, order_number")
+        .eq("branch_id", branchId)
+        .eq("table_id", parsed.data.tableId)
+        .in("status", [...OPEN_ORDER_STATUSES])
+        .neq("id", orderId)
+        .maybeSingle();
+      if (tableOrder) {
+        return actionFail("TABLE_OCCUPIED", `Bàn đã có khách (${tableOrder.order_number}). Vui lòng chọn đúng đơn trên bàn để cập nhật hoặc thanh toán.`);
+      }
+    }
     await admin.from("order_items").delete().eq("order_id", orderId);
     const rows = parsed.data.items.map((item) => {
       const p = productMap.get(item.productId)!;
@@ -102,12 +117,42 @@ export async function createOrUpdateOrder(
         status: "open",
       })
       .eq("id", orderId);
+    if (existing.table_id && existing.table_id !== parsed.data.tableId) {
+      const { data: otherOpenOrder } = await admin
+        .from("orders")
+        .select("id")
+        .eq("branch_id", branchId)
+        .eq("table_id", existing.table_id)
+        .in("status", [...OPEN_ORDER_STATUSES])
+        .neq("id", orderId)
+        .maybeSingle();
+      if (!otherOpenOrder) {
+        await admin.from("dining_tables").update({ status: "available" }).eq("id", existing.table_id);
+      }
+    }
+    if (parsed.data.tableId) {
+      await admin.from("dining_tables").update({ status: "occupied" }).eq("id", parsed.data.tableId);
+    }
     revalidatePath("/pos");
+    revalidatePath("/tables");
     revalidatePath("/kitchen");
     return actionOk({ orderId, subtotal: totals.subtotal, total: totals.totalAmount });
   }
 
   // create
+  if (parsed.data.tableId) {
+    const { data: tableOrder } = await admin
+      .from("orders")
+      .select("id, order_number")
+      .eq("branch_id", branchId)
+      .eq("table_id", parsed.data.tableId)
+      .in("status", [...OPEN_ORDER_STATUSES])
+      .maybeSingle();
+    if (tableOrder) {
+      return actionFail("TABLE_OCCUPIED", `Bàn đã có khách (${tableOrder.order_number}). Vui lòng chọn đúng đơn trên bàn để cập nhật hoặc thanh toán.`);
+    }
+  }
+
   const seq = await nextOrderSeq(admin, branchId);
   const orderNumber = newOrderNumber(seq);
   const { data: order, error: orderErr } = await admin
@@ -155,6 +200,7 @@ export async function createOrUpdateOrder(
   await admin.from("order_items").insert(rows);
 
   revalidatePath("/pos");
+  revalidatePath("/tables");
   revalidatePath("/kitchen");
   revalidatePath("/dashboard");
   return actionOk({ orderId: order.id, subtotal: totals.subtotal, total: totals.totalAmount });
@@ -348,7 +394,7 @@ export async function payOrder(organizationId: string, input: unknown): Promise<
     .eq("id", order.id);
 
   if (status === "paid" && order.table_id) {
-    await admin.from("dining_tables").update({ status: "available" }).eq("id", order.table_id);
+    await admin.from("dining_tables").update({ status: "occupied" }).eq("id", order.table_id);
   }
 
   await admin.from("audit_logs").insert({
@@ -362,6 +408,7 @@ export async function payOrder(organizationId: string, input: unknown): Promise<
   });
 
   revalidatePath("/pos");
+  revalidatePath("/tables");
   revalidatePath("/kitchen");
   revalidatePath("/dashboard");
   revalidatePath("/reports/end-of-day");
@@ -379,7 +426,7 @@ export async function updateKitchenStatus(
   const admin = createSupabaseAdminClient();
   const { data: item } = await admin
     .from("order_items")
-    .select("id, kitchen_status, orders!inner(organization_id, branch_id, status)")
+    .select("id, order_id, kitchen_status, orders!inner(organization_id, branch_id, status, table_id)")
     .eq("id", orderItemId)
     .maybeSingle();
   if (!item) return actionFail("NOT_FOUND", "Không tìm thấy món");
@@ -398,8 +445,19 @@ export async function updateKitchenStatus(
     .update({ kitchen_status: parsed.data.status })
     .eq("id", orderItemId);
   if (error) return actionFail("INTERNAL_ERROR", "Không cập nhật được trạng thái bếp");
+  if (parsed.data.status === "served" && order.status === "paid" && order.table_id) {
+    const { count } = await admin
+      .from("order_items")
+      .select("id", { count: "exact", head: true })
+      .eq("order_id", (item as any).order_id)
+      .in("kitchen_status", ["pending", "cooking", "ready"]);
+    if ((count ?? 0) === 0) {
+      await admin.from("dining_tables").update({ status: "available" }).eq("id", order.table_id);
+    }
+  }
   revalidatePath("/kitchen");
   revalidatePath("/pos");
+  revalidatePath("/tables");
   return actionOk({ id: orderItemId, status: parsed.data.status });
 }
 

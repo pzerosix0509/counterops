@@ -11,6 +11,7 @@ import { formatVND } from "@/lib/date/ranges";
 import { formatDateTime } from "@/lib/utils/format";
 import { generateEndOfDayReport } from "@/server/actions/eod";
 import { exportEndOfDay } from "@/server/actions/excel";
+import { notifyError, notifySuccess } from "@/hooks/use-notify";
 import type { EndOfDayReport } from "@/types/database";
 import type { EodComputation } from "@/server/queries/eod";
 
@@ -54,9 +55,11 @@ export function EodReport({
       const res = await generateEndOfDayReport(organizationId, { branchId, reportDate: picked });
       if (!res.ok) {
         setError(res.error.message);
+        notifyError("Không thể lưu báo cáo", res.error.message);
         return;
       }
       router.refresh();
+      notifySuccess("Đã lưu báo cáo cuối ngày");
     });
   }
 

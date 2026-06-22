@@ -12,23 +12,18 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EmptyState } from "@/components/common/states";
+import { notifyError, notifySuccess } from "@/hooks/use-notify";
 import { ExcelDownloadButton, ExcelImportDialog } from "@/components/common/excel-import";
 import { formatVND } from "@/lib/date/ranges";
 import { formatDateTime } from "@/lib/utils/format";
 import { createInventoryItem, createInventoryMovement } from "@/server/actions/inventory";
 import {
   commitInventoryItemImport,
-  commitInventoryMovementImport,
   downloadInventoryItemTemplate,
-  downloadInventoryMovementTemplate,
   exportInventory,
   previewInventoryItemImport,
-  previewInventoryMovementImport,
 } from "@/server/actions/excel";
-import {
-  INVENTORY_ITEM_IMPORT_COLUMNS,
-  INVENTORY_MOVEMENT_IMPORT_COLUMNS,
-} from "@/lib/validation/excel-schemas";
+import { INVENTORY_ITEM_IMPORT_COLUMNS } from "@/lib/validation/excel-schemas";
 import type { InventoryItem, InventoryBalance, InventoryMovement } from "@/types/database";
 
 const ITEM_TYPE_LABEL: Record<string, string> = {
@@ -40,12 +35,27 @@ const ITEM_TYPE_LABEL: Record<string, string> = {
 
 type MovementIntent = {
   itemId: string;
-  defaultType: "purchase" | "adjustment" | "waste" | "return";
-  defaultDirection: "in" | "out";
+  defaultKind: MovementKind;
   showForm: boolean;
 };
 
-type ImportMode = "items" | "movements" | null;
+type MovementKind = "purchase" | "stock_out";
+type ImportMode = "items" | null;
+
+const MOVEMENT_KIND_OPTIONS: Array<{ value: MovementKind; label: string; movementType: "purchase" | "adjustment"; direction: "in" | "out" }> = [
+  { value: "purchase", label: "Nhập hàng", movementType: "purchase", direction: "in" },
+  { value: "stock_out", label: "Xuất hàng", movementType: "adjustment", direction: "out" },
+];
+
+const MOVEMENT_TYPE_LABEL: Record<string, string> = {
+  purchase: "Nhập hàng",
+  sale_deduction: "Bán hàng",
+  adjustment: "Xuất hàng",
+  transfer_in: "Chuyển kho vào",
+  transfer_out: "Xuất hàng",
+  waste: "Xuất hàng",
+  return: "Xuất hàng",
+};
 
 export function InventoryManager({
   organizationId,
@@ -97,10 +107,12 @@ export function InventoryManager({
       const res = await createInventoryItem(organizationId, branchId, payload);
       if (!res.ok) {
         setError(res.error.message);
+        notifyError("Thêm hàng hóa thất bại", res.error.message);
         return;
       }
       setOpenItem(false);
       router.refresh();
+      notifySuccess("Đã thêm hàng hóa");
     });
   }
 
@@ -108,26 +120,28 @@ export function InventoryManager({
     e.preventDefault();
     setError(null);
     const f = new FormData(e.currentTarget);
-    const movementType = String(f.get("movementType") || "purchase") as "purchase" | "adjustment" | "waste" | "return" | "transfer_in" | "transfer_out";
-    const direction = String(f.get("direction") || "in");
+    const movementKind = String(f.get("movementKind") || "purchase") as MovementKind;
+    const movement = MOVEMENT_KIND_OPTIONS.find((option) => option.value === movementKind) ?? MOVEMENT_KIND_OPTIONS[0];
     const quantity = Number(f.get("quantity") || 0);
-    const quantityDelta = direction === "out" ? -Math.abs(quantity) : Math.abs(quantity);
+    const quantityDelta = movement.direction === "out" ? -Math.abs(quantity) : Math.abs(quantity);
     const payload = {
       branchId,
       inventoryItemId: itemId,
-      movementType,
+      movementType: movement.movementType,
       quantityDelta,
-      unitCost: Number(f.get("unitCost") || 0),
+      unitCost: 0,
       note: String(f.get("note") || "") || null,
     };
     startTransition(async () => {
       const res = await createInventoryMovement(organizationId, payload);
       if (!res.ok) {
         setError(res.error.message);
+        notifyError("Không thể ghi phiếu kho", res.error.message);
         return;
       }
       setMovementIntent(null);
       router.refresh();
+      notifySuccess("Đã ghi phiếu kho");
     });
   }
 
@@ -155,6 +169,7 @@ export function InventoryManager({
 
   const activeMovementItem = movementIntent ? items.find((item) => item.id === movementIntent.itemId) : null;
   const activeMovementId = movementIntent?.itemId ?? null;
+  const activeBalance = activeMovementId ? balanceMap.get(activeMovementId) : null;
 
   return (
     <div className="space-y-4">
@@ -175,9 +190,6 @@ export function InventoryManager({
             <>
               <Button variant="outline" onClick={() => setImportMode("items")}>
                 <FileUp className="h-4 w-4" /> Import hàng kho
-              </Button>
-              <Button variant="outline" onClick={() => setImportMode("movements")}>
-                <FileUp className="h-4 w-4" /> Import phiếu kho
               </Button>
               <Dialog open={openItem} onOpenChange={setOpenItem}>
                 <DialogTrigger asChild>
@@ -225,7 +237,7 @@ export function InventoryManager({
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1.5">
-                        <Label htmlFor="initialQuantity">Tồn đầu</Label>
+                        <Label htmlFor="initialQuantity">Số lượng ban đầu</Label>
                         <Input id="initialQuantity" name="initialQuantity" type="number" min="0" step="0.1" defaultValue={0} />
                       </div>
                       <div className="space-y-1.5">
@@ -263,20 +275,6 @@ export function InventoryManager({
           successLabel="Ghi hàng hoá"
         />
       ) : null}
-      {canManage ? (
-        <ExcelImportDialog
-          open={importMode === "movements"}
-          onOpenChange={(open) => !open && setImportMode(null)}
-          entityLabel="phiếu kho"
-          columns={INVENTORY_MOVEMENT_IMPORT_COLUMNS.map((c) => ({ key: c.key, header: c.header }))}
-          previewAction={(payload) => previewInventoryMovementImport(organizationId, branchId, payload)}
-          commitAction={(preview) => commitInventoryMovementImport(organizationId, branchId, preview)}
-          templateAction={() => downloadInventoryMovementTemplate(organizationId)}
-          onCommitted={() => router.refresh()}
-          successLabel="Ghi phiếu kho"
-        />
-      ) : null}
-
       <Card>
         <CardHeader>
           <CardTitle className="text-sm">Danh sách hàng ({items.length})</CardTitle>
@@ -351,9 +349,9 @@ export function InventoryManager({
                             size="sm"
                             variant="outline"
                             className="shrink-0"
-                            onClick={() => openMovement({ itemId: it.id, defaultType: "purchase", defaultDirection: "in", showForm: true })}
+                            onClick={() => openMovement({ itemId: it.id, defaultKind: "purchase", showForm: true })}
                           >
-                            <Plus className="h-3.5 w-3.5" /> Nhập
+                            <Plus className="h-3.5 w-3.5" /> Nhập / xuất
                           </Button>
                         ) : null}
                       </TableCell>
@@ -363,7 +361,7 @@ export function InventoryManager({
                             size="sm"
                             variant="ghost"
                             className="shrink-0"
-                            onClick={() => openMovement({ itemId: it.id, defaultType: "purchase", defaultDirection: "in", showForm: false })}
+                            onClick={() => openMovement({ itemId: it.id, defaultKind: "purchase", showForm: false })}
                           >
                             <History className="h-3.5 w-3.5" /> Lịch sử
                           </Button>
@@ -388,28 +386,28 @@ export function InventoryManager({
             </DialogDescription>
           </DialogHeader>
           {movementIntent && movementIntent.showForm && canManage ? (
-            <form className="mb-4 grid grid-cols-2 gap-2 text-sm" onSubmit={(e) => onCreateMovement(movementIntent.itemId, e)}>
-              <Select name="movementType" defaultValue={movementIntent.defaultType}>
+            <form className="mb-4 grid grid-cols-1 gap-3 text-sm sm:grid-cols-[1.4fr_1fr]" onSubmit={(e) => onCreateMovement(movementIntent.itemId, e)}>
+              <div className="space-y-1">
+                <Label>Loại phiếu</Label>
+                <Select name="movementKind" defaultValue={movementIntent.defaultKind}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="purchase">Nhập hàng</SelectItem>
-                  <SelectItem value="adjustment">Điều chỉnh</SelectItem>
-                  <SelectItem value="waste">Xuất huỷ</SelectItem>
-                  <SelectItem value="return">Trả hàng</SelectItem>
+                  {MOVEMENT_KIND_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
-              <Select name="direction" defaultValue={movementIntent.defaultDirection}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="in">Tăng (+)</SelectItem>
-                  <SelectItem value="out">Giảm (-)</SelectItem>
-                </SelectContent>
-              </Select>
-              <Input name="quantity" type="number" step="0.1" min="0" placeholder="Số lượng" required />
-              <Input name="unitCost" type="number" min="0" step="100" placeholder="Đơn giá" defaultValue={0} />
-              <Input name="note" placeholder="Ghi chú" className="col-span-2" />
-              {error ? <p className="col-span-2 text-sm text-destructive">{error}</p> : null}
-              <Button type="submit" disabled={isPending} className="col-span-2">{isPending ? "Đang lưu..." : "Lưu phiếu"}</Button>
+              </div>
+              <div className="space-y-1">
+                <Label>Số lượng ({activeMovementItem?.unit ?? ""})</Label>
+                <Input name="quantity" type="number" step="0.1" min="0" placeholder="Số lượng" defaultValue={1} required />
+              </div>
+              <Input name="note" placeholder="Ghi chú" className="sm:col-span-2" />
+              <p className="text-xs text-muted-foreground sm:col-span-2">
+                Tồn hiện tại: {(Number(activeBalance?.quantity_on_hand ?? 0)).toLocaleString("vi-VN")} {activeMovementItem?.unit ?? ""}
+              </p>
+              {error ? <p className="text-sm text-destructive sm:col-span-2">{error}</p> : null}
+              <Button type="submit" disabled={isPending} className="sm:col-span-2">{isPending ? "Đang lưu..." : "Lưu phiếu"}</Button>
             </form>
           ) : null}
           <div className="max-h-80 overflow-auto rounded-md border">
@@ -429,8 +427,16 @@ export function InventoryManager({
                   {movements[activeMovementId].map((mv) => (
                     <TableRow key={mv.id}>
                       <TableCell className="text-xs">{formatDateTime(mv.created_at)}</TableCell>
-                      <TableCell className="text-xs">{mv.movement_type}</TableCell>
-                      <TableCell className="text-right text-xs">{mv.quantity_delta}</TableCell>
+                      <TableCell className="text-xs">
+                        {mv.movement_type === "adjustment"
+                          ? Number(mv.quantity_delta) >= 0
+                            ? "Nhập hàng"
+                            : "Xuất hàng"
+                          : MOVEMENT_TYPE_LABEL[mv.movement_type] ?? mv.movement_type}
+                      </TableCell>
+                      <TableCell className={Number(mv.quantity_delta) < 0 ? "text-right text-xs text-rose-600" : "text-right text-xs text-emerald-700"}>
+                        {Number(mv.quantity_delta) > 0 ? "+" : ""}{Number(mv.quantity_delta).toLocaleString("vi-VN")}
+                      </TableCell>
                       <TableCell className="text-xs">{mv.note ?? ""}</TableCell>
                     </TableRow>
                   ))}

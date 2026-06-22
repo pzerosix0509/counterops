@@ -1,4 +1,5 @@
-import { redirect } from "next/navigation";
+﻿import { redirect } from "next/navigation";
+import { Toaster } from "sonner";
 import { Sidebar } from "@/components/app-shell/sidebar";
 import { Topbar } from "@/components/app-shell/topbar";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -51,6 +52,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           role={active.role as MembershipRole}
         />
         <main className="flex-1 px-4 py-4 md:px-6 md:py-6">{children}</main>
+        <Toaster richColors closeButton position="top-right" />
       </div>
     </div>
   );

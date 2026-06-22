@@ -42,13 +42,17 @@ Stack hiện tại:
   - Import Excel.
   - Xuất Excel.
   - Tải file mẫu trong dialog import.
+- UI Excel đã nối ở trang Kho hàng:
+  - Import hàng kho.
+  - Xuất Excel.
+- UI Excel đã nối ở Báo cáo cuối ngày:
+  - Xuất Excel.
+- Realtime đã nối cho POS/Bếp qua Supabase Realtime publication.
+- Hệ thống toast/notification đã nối cho các thao tác chính.
 
 ### Đang Hoàn Thiện
 
-- UI Import/Export Excel cho Kho hàng chưa nối đầy đủ, dù server action và Excel pipeline đã có.
-- UI Export Excel cho Báo cáo cuối ngày chưa nối đầy đủ, dù server action đã có.
 - Template/export Excel hiện ưu tiên header ASCII không dấu để tránh lỗi tương thích Excel cũ; có thể polish lại sang tiếng Việt có dấu.
-- Realtime cho POS/Bếp chưa bật, hiện dùng `router.refresh()` sau thao tác.
 - Upload ảnh món/hàng kho chưa kết nối Supabase Storage.
 - Chưa có module nhân sự, khách hàng/CRM, công nợ nâng cao, AI assistant.
 
@@ -233,13 +237,13 @@ npm run build
 - Lập phiếu nhập/xuất/điều chỉnh.
 - Xem lịch sử kho.
 - Chặn hoặc cho phép âm kho theo setting.
-- Server action Excel cho kho đã có, UI đang cần hoàn thiện.
+- Import/Export Excel đã nối vào UI.
 
 ### Báo Cáo
 
 - Dashboard theo khoảng thời gian: hôm nay, hôm qua, 7 ngày, tháng này, tháng trước.
 - Báo cáo cuối ngày theo ngày.
-- Server action export Excel cho báo cáo đã có, UI đang cần hoàn thiện.
+- Export Excel báo cáo cuối ngày đã nối vào UI.
 
 ## Excel Import/Export
 
@@ -338,20 +342,19 @@ npm run test
 
 Ưu tiên cao:
 
-1. Nối UI Import/Export Excel cho Kho hàng.
-2. Nối UI Export Excel cho Báo cáo cuối ngày.
-3. Polish template Excel sang tiếng Việt có dấu.
-4. Khôi phục và hoàn thiện layout bảng kho: trạng thái, thao tác, lịch sử.
+1. Manual test toàn bộ flow Excel trên Supabase thật: tải mẫu, import preview, commit, export.
+2. Manual test flow POS thanh toán trước -> Bếp realtime -> Đã phục vụ -> bàn về trống.
+3. Polish template Excel sang tiếng Việt có dấu đầy đủ trong cả instruction sheet.
+4. Kiểm tra lại layout bảng kho trên nhiều kích thước màn hình.
 5. Thêm integration test hoặc manual test checklist cho flow import/commit với Supabase thật.
 
 Ưu tiên tiếp theo:
 
-1. Supabase Realtime cho POS/Bếp.
-2. Upload ảnh món/hàng kho qua Supabase Storage.
-3. Hoàn tiền / trả hàng / công nợ nâng cao.
-4. Quản lý nhân sự và ca làm.
-5. Khách hàng/CRM.
-6. AI assistant cho báo cáo và gợi ý vận hành.
+1. Upload ảnh món/hàng kho qua Supabase Storage.
+2. Hoàn tiền / trả hàng / công nợ nâng cao.
+3. Quản lý nhân sự và ca làm.
+4. Khách hàng/CRM.
+5. AI assistant cho báo cáo và gợi ý vận hành.
 
 ## Deploy
 

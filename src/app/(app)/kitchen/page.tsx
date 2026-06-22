@@ -13,10 +13,11 @@ export default async function KitchenPage() {
     <div className="space-y-3">
       <div>
         <h1 className="text-xl font-semibold tracking-tight">Màn hình bếp</h1>
-        <p className="text-sm text-muted-foreground">Theo dõi món chờ chế biến, đang làm, đã xong.</p>
+        <p className="text-sm text-muted-foreground">Theo dõi món đã thanh toán, chờ chế biến và sẵn sàng phục vụ.</p>
       </div>
       <KitchenBoard
         organizationId={ctx.organizationId}
+        branchId={ctx.branchId}
         items={items}
         canUpdate={canUpdateKitchen.includes(active.role)}
       />

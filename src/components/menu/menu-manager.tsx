@@ -22,6 +22,7 @@ import { ExcelImportDialog, ExcelDownloadButton } from "@/components/common/exce
 import { formatVND } from "@/lib/date/ranges";
 import type { MenuCategory, Product } from "@/types/database";
 import { EmptyState } from "@/components/common/states";
+import { notifyError, notifySuccess } from "@/hooks/use-notify";
 import {
   PRODUCT_IMPORT_COLUMNS,
 } from "@/lib/validation/excel-schemas";
@@ -85,10 +86,12 @@ export function MenuManager({
       const res = await createProduct(organizationId, payload);
       if (!res.ok) {
         setError(res.error.message);
+        notifyError("Thêm món thất bại", res.error.message);
         return;
       }
       setOpen(false);
       router.refresh();
+      notifySuccess("Đã thêm món");
     });
   }
 
@@ -97,14 +100,24 @@ export function MenuManager({
     if (!name) return;
     startTransition(async () => {
       const res = await createCategory(organizationId, { name, sortOrder: 0 });
-      if (res.ok) router.refresh();
+      if (!res.ok) {
+        notifyError("Thêm nhóm món thất bại", res.error.message);
+        return;
+      }
+      router.refresh();
+      notifySuccess("Đã thêm nhóm món");
     });
   }
 
   function onToggleActive(productId: string, current: boolean) {
     startTransition(async () => {
-      await toggleProductActive(organizationId, productId, !current);
+      const res = await toggleProductActive(organizationId, productId, !current);
+      if (!res.ok) {
+        notifyError("Không thể cập nhật món", res.error.message);
+        return;
+      }
       router.refresh();
+      notifySuccess(current ? "Đã ngừng bán" : "Đã bật bán");
     });
   }
 

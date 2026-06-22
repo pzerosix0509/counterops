@@ -287,6 +287,8 @@ export async function commitInventoryItems(
     const data = row.data;
     const existingItem = existingByCode.get(data.code);
     if (existingItem) {
+      const quantity = Number(data.initialQuantity ?? 0);
+      const threshold = Number(data.lowStockThreshold ?? 0);
       const { error } = await admin
         .from("inventory_items")
         .update({
@@ -301,6 +303,13 @@ export async function commitInventoryItems(
       if (error) {
         return actionFail("INTERNAL_ERROR", `Không cập nhật được hàng ${data.code}: ${error.message}`);
       }
+      await admin.from("inventory_balances").upsert({
+        organization_id: organizationId,
+        branch_id: branchId,
+        inventory_item_id: existingItem.id,
+        quantity_on_hand: quantity,
+        low_stock_threshold: threshold,
+      }, { onConflict: "branch_id,inventory_item_id" });
       updated += 1;
       continue;
     }

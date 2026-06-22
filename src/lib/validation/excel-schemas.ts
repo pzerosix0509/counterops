@@ -174,7 +174,7 @@ export const INVENTORY_ITEM_IMPORT_COLUMNS = [
   { key: "costPrice", header: "Giá vốn (đ)" },
   { key: "description", header: "Mô tả" },
   { key: "imageUrl", header: "Ảnh (URL)" },
-  { key: "initialQuantity", header: "Tồn đầu" },
+  { key: "initialQuantity", header: "Số lượng" },
   { key: "lowStockThreshold", header: "Định mức thấp" },
 ] as const;
 

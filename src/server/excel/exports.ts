@@ -97,7 +97,7 @@ export async function buildInventoryExport(args: {
   const headers = [
     "Mã hàng",
     "Tên hàng",
-    "Loai",
+    "Loại",
     "Đơn vị",
     "Giá vốn",
     "Tồn hiện tại",
@@ -113,7 +113,7 @@ export async function buildInventoryExport(args: {
     const qty = b ? Number(b.quantity_on_hand) : 0;
     const low = b ? Number(b.low_stock_threshold) : 0;
     const high = b ? (b.high_stock_threshold == null ? "" : Number(b.high_stock_threshold)) : "";
-    let status = "On";
+    let status = "Ổn";
     if (qty < 0) status = "Âm kho";
     else if (qty === 0) status = "Hết hàng";
     else if (low > 0 && qty <= low) status = "Sắp hết";

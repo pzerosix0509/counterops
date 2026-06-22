@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ChefHat, CreditCard, Minus, Plus, Receipt, Search, ShoppingCart, X } from "lucide-react";
+import { CreditCard, Minus, Plus, Receipt, Search, ShoppingCart, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -13,7 +13,9 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { createOrUpdateOrder, payOrder } from "@/server/actions/orders";
 import { formatVND } from "@/lib/date/ranges";
 import { cn } from "@/lib/utils/format";
-import type { Area, DiningTable, MenuCategory, Order, Product, SalesChannel } from "@/types/database";
+import { useBranchRealtime } from "@/hooks/use-branch-realtime";
+import { notifyError, notifySuccess } from "@/hooks/use-notify";
+import type { Area, DiningTable, MenuCategory, Order, OrderItem, Product, SalesChannel } from "@/types/database";
 
 interface CartItem {
   productId: string;
@@ -33,7 +35,7 @@ interface Props {
   categories: MenuCategory[];
   areas: Area[];
   tables: DiningTable[];
-  openByTable: Record<string, Order>;
+  openByTable: Record<string, Order & { items: OrderItem[] }>;
   channels: SalesChannel[];
 }
 
@@ -75,6 +77,14 @@ export function PosWorkspace(props: Props) {
     { method: "cash", amount: 0 },
   ]);
 
+  const realtime = useBranchRealtime({
+    branchId,
+    organizationId,
+    onChange: () => router.refresh(),
+  });
+
+  const productById = useMemo(() => new Map(products.map((product) => [product.id, product])), [products]);
+
   const filteredProducts = useMemo(() => {
     return products.filter((p) => {
       if (!p.available) return false;
@@ -105,10 +115,25 @@ export function PosWorkspace(props: Props) {
       setDiscount(existing.discount_amount ?? 0);
       setTax(existing.tax_amount ?? 0);
       setServiceFee(existing.service_fee_amount ?? 0);
+      setCart(
+        (existing.items ?? [])
+          .filter((item) => item.product_id)
+          .map((item) => {
+            const product = productById.get(item.product_id!);
+            return {
+              productId: item.product_id!,
+              productName: item.product_name_snapshot,
+              unitPrice: item.unit_price_snapshot,
+              quantity: Number(item.quantity),
+              note: item.note ?? "",
+              productType: product?.product_type ?? "regular",
+            };
+          })
+      );
     } else {
-      setActiveOrderId(null);
+      if (cart.length === 0) setActiveOrderId(null);
     }
-  }, [tableId, openByTable]);
+  }, [tableId, openByTable, productById, cart.length]);
 
   function changeOrderType(value: "dine_in" | "takeaway") {
     setOrderType(value);
@@ -180,10 +205,12 @@ export function PosWorkspace(props: Props) {
   function buildOrderPayload(): OrderPayload | null {
     if (cart.length === 0) {
       setError("Đơn hàng phải có ít nhất 1 món.");
+      notifyError("Giỏ hàng trống", "Vui lòng thêm ít nhất 1 món trước khi lưu đơn.");
       return null;
     }
     if (orderType === "dine_in" && !tableId) {
       setError("Vui lòng chọn bàn cho đơn tại quán.");
+      notifyError("Chưa chọn bàn", "Vui lòng chọn bàn cho đơn tại quán trước khi tiếp tục.");
       return null;
     }
 
@@ -199,9 +226,10 @@ export function PosWorkspace(props: Props) {
     };
   }
 
-  async function persistOrder(): Promise<string | null> {
+  async function persistOrder(options: { quiet?: boolean } = {}): Promise<string | null> {
     if (!canCreate) {
       setError("Bạn không có quyền tạo hoặc cập nhật đơn.");
+      notifyError("Không có quyền", "Tài khoản không có quyền tạo hoặc cập nhật đơn.");
       return null;
     }
     const payload = buildOrderPayload();
@@ -211,10 +239,12 @@ export function PosWorkspace(props: Props) {
     const result = await createOrUpdateOrder(organizationId, branchId, payload, activeOrderId);
     if (!result.ok) {
       setError(result.error.message);
+      notifyError(activeOrderId ? "Không thể cập nhật đơn" : "Không thể lưu đơn", result.error.message);
       return null;
     }
     setActiveOrderId(result.data.orderId);
     router.refresh();
+    if (!options.quiet) notifySuccess(activeOrderId ? "Đã cập nhật đơn" : "Đã lưu đơn");
     return result.data.orderId;
   }
 
@@ -235,7 +265,7 @@ export function PosWorkspace(props: Props) {
   function submitPay() {
     setError(null);
     startTransition(async () => {
-      const orderId = await persistOrder();
+      const orderId = await persistOrder({ quiet: true });
       if (!orderId) return;
 
       const result = await payOrder(organizationId, {
@@ -244,25 +274,21 @@ export function PosWorkspace(props: Props) {
       });
       if (!result.ok) {
         setError(result.error.message);
+        notifyError("Thanh toán thất bại", result.error.message);
         return;
       }
       setPayOpen(false);
       openNewOrder();
       router.refresh();
+      notifySuccess("Thanh toán thành công");
     });
-  }
-
-  function sendToKitchen() {
-    if (!activeOrderId) {
-      saveOrder();
-      return;
-    }
-    router.refresh();
   }
 
   const tableGroups = useMemo(() => {
     return areas.map((area) => ({ area, tables: tablesByArea.get(area.id) ?? [] }));
   }, [areas, tablesByArea]);
+  const selectedTableOrder = tableId ? openByTable[tableId] : null;
+  const isSelectedPaidOrder = selectedTableOrder?.status === "paid";
 
   return (
     <div className="grid grid-cols-1 gap-3 lg:grid-cols-[260px_1fr_320px]">
@@ -391,7 +417,7 @@ export function PosWorkspace(props: Props) {
 
       <Card className="lg:flex lg:max-h-[calc(100vh-160px)] lg:flex-col lg:overflow-hidden">
         <CardHeader>
-          <CardTitle className="text-sm">Đơn hiện tại {activeOrderId ? "- đã lưu" : "- chưa lưu"}</CardTitle>
+          <CardTitle className="text-sm">Đơn hiện tại {isSelectedPaidOrder ? "- đã thanh toán" : activeOrderId ? "- đã lưu" : "- chưa lưu"}{" "}{realtime.isSubscribed ? <span className="ml-2 text-xs font-normal text-muted-foreground">{realtime.hasPendingChange ? "Đang đồng bộ..." : "Đã đồng bộ"}</span> : null}</CardTitle>
         </CardHeader>
         <CardContent className="flex-1 space-y-3 overflow-auto">
           {cart.length === 0 ? (
@@ -459,14 +485,11 @@ export function PosWorkspace(props: Props) {
           </div>
           {error ? <p className="mt-1 text-xs text-destructive">{error}</p> : null}
           <div className="mt-3 flex flex-col gap-2">
-            <Button onClick={saveOrder} disabled={!canCreate || isPending} className="w-full">
+            <Button onClick={saveOrder} disabled={!canCreate || isPending || isSelectedPaidOrder} className="w-full">
               <ShoppingCart className="h-4 w-4" /> {activeOrderId ? "Cập nhật đơn" : "Lưu đơn"}
             </Button>
-            <Button onClick={openPay} disabled={!canPay || isPending || cart.length === 0} variant="default" className="w-full">
+            <Button onClick={openPay} disabled={!canPay || isPending || cart.length === 0 || isSelectedPaidOrder} variant="default" className="w-full">
               <CreditCard className="h-4 w-4" /> Thanh toán
-            </Button>
-            <Button onClick={sendToKitchen} disabled={isPending || !activeOrderId} variant="outline" className="w-full">
-              <ChefHat className="h-4 w-4" /> Gửi bếp các món chế biến
             </Button>
           </div>
         </div>
