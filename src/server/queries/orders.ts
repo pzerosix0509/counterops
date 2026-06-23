@@ -28,13 +28,15 @@ export async function listProductsForPos(organizationId: string, branchId: strin
   });
 }
 
-export async function listSalesChannels(organizationId: string): Promise<SalesChannel[]> {
+export async function listSalesChannels(organizationId: string, opts: { includeInactive?: boolean } = {}): Promise<SalesChannel[]> {
   const supabase = createSupabaseServerClient();
-  const { data, error } = await supabase
+  let query = supabase
     .from("sales_channels")
     .select("*")
-    .eq("organization_id", organizationId)
-    .eq("is_active", true)
+    .eq("organization_id", organizationId);
+  if (!opts.includeInactive) query = query.eq("is_active", true);
+  const { data, error } = await query
+    .order("sort_order", { ascending: true })
     .order("name");
   if (error) throw new Error(error.message);
   return data ?? [];

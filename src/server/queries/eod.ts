@@ -1,12 +1,18 @@
 ﻿import "server-only";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import type { EndOfDayReport, Order, Payment } from "@/types/database";
+import { calculateProfitTotals } from "@/lib/calculations/orders";
+import type { EndOfDayReport, Order, OrderItem, Payment } from "@/types/database";
 
 export interface EodComputation {
   totalOrders: number;
   grossSales: number;
   discounts: number;
   netRevenue: number;
+  costOfGoods: number;
+  grossProfit: number;
+  grossMarginPercent: number;
+  channelFees: number;
+  netProfit: number;
   tax: number;
   serviceFee: number;
   totalPaid: number;
@@ -26,6 +32,10 @@ export interface EodComputation {
     openedAt: string;
     closedAt: string | null;
     total: number;
+    costOfGoods: number;
+    grossProfit: number;
+    channelFee: number;
+    netProfit: number;
     payments: Array<{ method: string; amount: number }>;
   }>;
 }
@@ -38,7 +48,7 @@ export async function computeEod(branchId: string, reportDate: string): Promise<
   const [{ data: orders }, { data: cancelled }] = await Promise.all([
     supabase
       .from("orders")
-      .select("*, payments(*), dining_tables(name)")
+      .select("*, payments(*), items:order_items(*), dining_tables(name)")
       .eq("branch_id", branchId)
       .gte("opened_at", start.toISOString())
       .lte("opened_at", end.toISOString())
@@ -52,13 +62,35 @@ export async function computeEod(branchId: string, reportDate: string): Promise<
       .lte("opened_at", end.toISOString()),
   ]);
 
-  const allOrders = (orders ?? []) as Array<Order & { payments: Payment[]; dining_tables: { name: string } | null }>;
+  const allOrders = (orders ?? []) as Array<Order & { payments: Payment[]; items: OrderItem[]; dining_tables: { name: string } | null }>;
   const paid = allOrders.filter((o) => o.status === "paid" || o.status === "partially_paid");
   const gross = paid.reduce((s, o) => s + (o.subtotal ?? 0), 0);
   const discounts = paid.reduce((s, o) => s + (o.discount_amount ?? 0), 0);
   const tax = paid.reduce((s, o) => s + (o.tax_amount ?? 0), 0);
   const serviceFee = paid.reduce((s, o) => s + (o.service_fee_amount ?? 0), 0);
   const netRevenue = Math.max(0, gross - discounts + tax + serviceFee);
+  const profitTotals = calculateProfitTotals(
+    paid.flatMap((o) =>
+      (o.items ?? []).map((item) => ({
+        costPrice: Number(item.cost_price_snapshot ?? 0),
+        quantity: Number(item.quantity ?? 0),
+      }))
+    ),
+    netRevenue
+  );
+  const organizationId = paid[0]?.organization_id ?? allOrders[0]?.organization_id ?? null;
+  const { data: channels } = organizationId
+    ? await supabase
+        .from("sales_channels")
+        .select("id, platform_fee_percent")
+        .eq("organization_id", organizationId)
+    : { data: [] };
+  const channelFeePercent = new Map((channels ?? []).map((channel) => [channel.id, Number(channel.platform_fee_percent ?? 0)]));
+  const getOrderChannelFee = (order: Order) => {
+    const feePercent = order.sales_channel_id ? channelFeePercent.get(order.sales_channel_id) ?? 0 : 0;
+    return Math.round(Number(order.total_amount ?? 0) * (feePercent / 100));
+  };
+  const channelFees = paid.reduce((sum, order) => sum + getOrderChannelFee(order), 0);
   const payments = paid.flatMap((o) => o.payments ?? []);
   const totalPaid = payments.reduce((s, p) => s + p.amount, 0);
   const cashTotal = payments.filter((p) => p.method === "cash").reduce((s, p) => s + p.amount, 0);
@@ -76,6 +108,11 @@ export async function computeEod(branchId: string, reportDate: string): Promise<
     grossSales: gross,
     discounts,
     netRevenue,
+    costOfGoods: profitTotals.costOfGoods,
+    grossProfit: profitTotals.grossProfit,
+    grossMarginPercent: profitTotals.grossMarginPercent,
+    channelFees,
+    netProfit: profitTotals.grossProfit - channelFees,
     tax,
     serviceFee,
     totalPaid,
@@ -88,15 +125,28 @@ export async function computeEod(branchId: string, reportDate: string): Promise<
     otherPayments,
     cancelledOrders,
     cancelledAmount,
-    orders: paid.map((o) => ({
-      id: o.id,
-      orderNumber: o.order_number,
-      tableName: o.dining_tables?.name ?? null,
-      openedAt: o.opened_at,
-      closedAt: o.closed_at,
-      total: o.total_amount,
-      payments: (o.payments ?? []).map((p) => ({ method: p.method, amount: p.amount })),
-    })),
+    orders: paid.map((o) => {
+      const orderCost = Math.round(
+        (o.items ?? []).reduce(
+          (sum, item) => sum + Number(item.cost_price_snapshot ?? 0) * Number(item.quantity ?? 0),
+          0
+        )
+      );
+      const channelFee = getOrderChannelFee(o);
+      return {
+        id: o.id,
+        orderNumber: o.order_number,
+        tableName: o.dining_tables?.name ?? null,
+        openedAt: o.opened_at,
+        closedAt: o.closed_at,
+        total: o.total_amount,
+        costOfGoods: orderCost,
+        grossProfit: o.total_amount - orderCost,
+        channelFee,
+        netProfit: o.total_amount - orderCost - channelFee,
+        payments: (o.payments ?? []).map((p) => ({ method: p.method, amount: p.amount })),
+      };
+    }),
   };
 }
 

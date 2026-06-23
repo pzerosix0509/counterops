@@ -1,5 +1,6 @@
-﻿import { requireActiveContext, canManageInventory, getActiveMembership } from "@/lib/auth/permissions";
+import { requireActiveContext, canManageInventory, getActiveMembership } from "@/lib/auth/permissions";
 import { listInventoryItems, listInventoryBalances } from "@/server/queries/inventory";
+import { getOperationalSettings } from "@/server/queries/settings";
 import { InventoryManager } from "@/components/inventory/inventory-manager";
 
 export const metadata = { title: "Kho hàng" };
@@ -12,9 +13,10 @@ export default async function InventoryPage({ searchParams }: PageProps) {
   const active = await getActiveMembership();
   if (!active) return null;
   const ctx = await requireActiveContext();
-  const [items, balances] = await Promise.all([
+  const [items, balances, settings] = await Promise.all([
     listInventoryItems(ctx.organizationId, searchParams.q || undefined),
     listInventoryBalances(ctx.organizationId, ctx.branchId),
+    getOperationalSettings(ctx.organizationId),
   ]);
   return (
     <div className="space-y-4">
@@ -29,6 +31,8 @@ export default async function InventoryPage({ searchParams }: PageProps) {
         items={items}
         balances={balances}
         initialQuery={searchParams.q ?? ""}
+        defaultLowStockThreshold={settings.defaultLowStockThreshold}
+        lowStockAlertEnabled={settings.lowStockAlertEnabled}
       />
     </div>
   );

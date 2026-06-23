@@ -15,6 +15,7 @@ import { formatVND } from "@/lib/date/ranges";
 import { cn } from "@/lib/utils/format";
 import { useBranchRealtime } from "@/hooks/use-branch-realtime";
 import { notifyError, notifySuccess } from "@/hooks/use-notify";
+import type { OperationalSettings } from "@/lib/settings/operational";
 import type { Area, DiningTable, MenuCategory, Order, OrderItem, Product, SalesChannel } from "@/types/database";
 
 interface CartItem {
@@ -37,6 +38,7 @@ interface Props {
   tables: DiningTable[];
   openByTable: Record<string, Order & { items: OrderItem[] }>;
   channels: SalesChannel[];
+  settings: OperationalSettings;
 }
 
 interface OrderPayload {
@@ -52,14 +54,29 @@ interface OrderPayload {
 
 export function PosWorkspace(props: Props) {
   const router = useRouter();
-  const { organizationId, branchId, products, categories, areas, tables, openByTable, channels, canPay, canCreate } = props;
+  const { organizationId, branchId, products, categories, areas, tables, openByTable, channels, canPay, canCreate, settings } = props;
+  const normalizeChannelName = (name: string) =>
+    name
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/đ/g, "d")
+      .replace(/Đ/g, "d")
+      .toLowerCase()
+      .trim();
+  const isSystemChannel = (channel: SalesChannel) =>
+    ["tai quan", "mang di", "online"].includes(normalizeChannelName(channel.name));
+  const isDineInChannel = (channel: SalesChannel) => normalizeChannelName(channel.name) === "tai quan";
+  const takeawayChannels = channels.filter((channel) => !isSystemChannel(channel));
   const findChannelForOrderType = (type: "dine_in" | "takeaway") => {
-    const targetName = type === "dine_in" ? "tại quán" : "mang đi";
-    return channels.find((channel) => channel.name.toLowerCase() === targetName)?.id ?? channels[0]?.id ?? null;
+    if (type === "dine_in") return channels.find(isDineInChannel)?.id ?? null;
+    if (settings.defaultTakeawayChannelId && takeawayChannels.some((channel) => channel.id === settings.defaultTakeawayChannelId)) {
+      return settings.defaultTakeawayChannelId;
+    }
+    return takeawayChannels[0]?.id ?? null;
   };
-  const [orderType, setOrderType] = useState<"dine_in" | "takeaway">("dine_in");
+  const [orderType, setOrderType] = useState<"dine_in" | "takeaway">(settings.defaultOrderType);
   const [tableId, setTableId] = useState<string | null>(null);
-  const [channelId, setChannelId] = useState<string | null>(() => findChannelForOrderType("dine_in"));
+  const [channelId, setChannelId] = useState<string | null>(() => findChannelForOrderType(settings.defaultOrderType));
   const [activeCategory, setActiveCategory] = useState<string>("all");
   const [search, setSearch] = useState("");
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -73,8 +90,8 @@ export function PosWorkspace(props: Props) {
   const [noteItemIdx, setNoteItemIdx] = useState<number | null>(null);
   const [noteText, setNoteText] = useState("");
 
-  const [paymentLines, setPaymentLines] = useState<{ method: "cash" | "bank_transfer" | "card" | "ewallet" | "debt"; amount: number }[]>([
-    { method: "cash", amount: 0 },
+  const [paymentLines, setPaymentLines] = useState<{ method: "cash" | "bank_transfer" | "card" | "ewallet" | "debt" | "other"; amount: number }[]>([
+    { method: settings.defaultPaymentMethod, amount: 0 },
   ]);
 
   const realtime = useBranchRealtime({
@@ -258,7 +275,7 @@ export function PosWorkspace(props: Props) {
     const payload = buildOrderPayload();
     if (!payload) return;
     setError(null);
-    setPaymentLines([{ method: "cash", amount: total }]);
+    setPaymentLines([{ method: settings.defaultPaymentMethod, amount: total }]);
     setPayOpen(true);
   }
 
@@ -304,27 +321,29 @@ export function PosWorkspace(props: Props) {
             </TabsList>
           </Tabs>
 
-          <div className="space-y-1">
-            <label className="text-xs font-medium">Kênh bán</label>
-            <Select value={channelId ?? ""} onValueChange={setChannelId}>
-              <SelectTrigger>
-                <SelectValue placeholder="Chọn kênh" />
-              </SelectTrigger>
-              <SelectContent>
-                {channels.map((channel) => (
-                  <SelectItem key={channel.id} value={channel.id}>
-                    {channel.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {orderType === "takeaway" ? (
+            <div className="space-y-1">
+              <label className="text-xs font-medium">Kênh bán</label>
+              <Select value={channelId ?? ""} onValueChange={setChannelId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="GrabFood, ShopeeFood..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {takeawayChannels.map((channel) => (
+                    <SelectItem key={channel.id} value={channel.id}>
+                      {channel.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {takeawayChannels.length === 0 ? (
+                <p className="text-xs text-muted-foreground">Chưa có kênh mang đi. Hãy thêm GrabFood, ShopeeFood... trong dữ liệu kênh bán.</p>
+              ) : null}
+            </div>
+          ) : null}
 
           {orderType === "dine_in" ? (
             <div className="space-y-2">
-              <Button size="sm" variant="outline" className="w-full" onClick={openNewOrder}>
-                <Plus className="h-3.5 w-3.5" /> Đơn mới
-              </Button>
               <div className="space-y-1">
                 {tableGroups.map((group) => (
                   <div key={group.area.id} className="space-y-1">
@@ -462,7 +481,17 @@ export function PosWorkspace(props: Props) {
           <div className="grid grid-cols-3 gap-2">
             <div>
               <label className="text-xs text-muted-foreground">Giảm giá</label>
-              <Input type="number" min="0" value={discount} onChange={(event) => setDiscount(Math.max(0, Number(event.target.value) || 0))} />
+              <Input
+                type="number"
+                min="0"
+                value={discount}
+                disabled={!settings.discountsEnabled}
+                onChange={(event) => {
+                  const raw = Math.max(0, Number(event.target.value) || 0);
+                  const maxDiscount = Math.round(subtotal * (settings.maxDiscountPercent / 100));
+                  setDiscount(Math.min(raw, maxDiscount));
+                }}
+              />
             </div>
             <div>
               <label className="text-xs text-muted-foreground">Thuế</label>
@@ -485,9 +514,11 @@ export function PosWorkspace(props: Props) {
           </div>
           {error ? <p className="mt-1 text-xs text-destructive">{error}</p> : null}
           <div className="mt-3 flex flex-col gap-2">
-            <Button onClick={saveOrder} disabled={!canCreate || isPending || isSelectedPaidOrder} className="w-full">
-              <ShoppingCart className="h-4 w-4" /> {activeOrderId ? "Cập nhật đơn" : "Lưu đơn"}
-            </Button>
+            {settings.allowUnpaidOrders ? (
+              <Button onClick={saveOrder} disabled={!canCreate || isPending || isSelectedPaidOrder} className="w-full">
+                <ShoppingCart className="h-4 w-4" /> {activeOrderId ? "Cập nhật đơn" : "Lưu đơn"}
+              </Button>
+            ) : null}
             <Button onClick={openPay} disabled={!canPay || isPending || cart.length === 0 || isSelectedPaidOrder} variant="default" className="w-full">
               <CreditCard className="h-4 w-4" /> Thanh toán
             </Button>
@@ -537,6 +568,7 @@ export function PosWorkspace(props: Props) {
                     <SelectItem value="card">Thẻ</SelectItem>
                     <SelectItem value="ewallet">Ví điện tử</SelectItem>
                     <SelectItem value="debt">Ghi nợ</SelectItem>
+                    <SelectItem value="other">Khác</SelectItem>
                   </SelectContent>
                 </Select>
                 <Input
@@ -554,7 +586,7 @@ export function PosWorkspace(props: Props) {
                 </Button>
               </div>
             ))}
-            <Button variant="outline" size="sm" onClick={() => setPaymentLines((current) => [...current, { method: "cash", amount: 0 }])}>
+            <Button variant="outline" size="sm" onClick={() => setPaymentLines((current) => [...current, { method: settings.defaultPaymentMethod, amount: 0 }])}>
               <Plus className="h-3.5 w-3.5" /> Thêm hình thức
             </Button>
           </div>

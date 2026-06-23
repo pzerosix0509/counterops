@@ -100,7 +100,7 @@ export function EodReport({
         </Card>
       ) : null}
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-8">
         <Card>
           <CardHeader className="pb-1"><CardTitle className="text-xs text-muted-foreground">Tổng đơn đã thanh toán</CardTitle></CardHeader>
           <CardContent><p className="text-lg font-semibold">{data.totalOrders.toLocaleString("vi-VN")}</p></CardContent>
@@ -108,6 +108,22 @@ export function EodReport({
         <Card>
           <CardHeader className="pb-1"><CardTitle className="text-xs text-muted-foreground">Doanh thu thuần</CardTitle></CardHeader>
           <CardContent><p className="text-lg font-semibold">{formatVND(data.netRevenue)}</p></CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-1"><CardTitle className="text-xs text-muted-foreground">Giá vốn</CardTitle></CardHeader>
+          <CardContent><p className="text-lg font-semibold">{formatVND(data.costOfGoods)}</p></CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-1"><CardTitle className="text-xs text-muted-foreground">Lãi/Lỗ gộp</CardTitle></CardHeader>
+          <CardContent><p className="text-lg font-semibold">{formatVND(data.grossProfit)}</p></CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-1"><CardTitle className="text-xs text-muted-foreground">Phí kênh bán</CardTitle></CardHeader>
+          <CardContent><p className="text-lg font-semibold">{formatVND(data.channelFees)}</p></CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-1"><CardTitle className="text-xs text-muted-foreground">Lãi/Lỗ sau phí</CardTitle></CardHeader>
+          <CardContent><p className="text-lg font-semibold">{formatVND(data.netProfit)}</p></CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-1"><CardTitle className="text-xs text-muted-foreground">Tổng thanh toán</CardTitle></CardHeader>
@@ -128,6 +144,11 @@ export function EodReport({
             <div className="flex justify-between"><span>Thuế</span><span>{formatVND(data.tax)}</span></div>
             <div className="flex justify-between"><span>Phí dịch vụ</span><span>{formatVND(data.serviceFee)}</span></div>
             <div className="flex justify-between border-t pt-1 font-semibold"><span>Doanh thu</span><span>{formatVND(data.netRevenue)}</span></div>
+            <div className="flex justify-between"><span>Giá vốn hàng bán</span><span>-{formatVND(data.costOfGoods)}</span></div>
+            <div className="flex justify-between font-semibold"><span>Lãi/Lỗ gộp</span><span>{formatVND(data.grossProfit)}</span></div>
+            <div className="flex justify-between"><span>Phí kênh bán</span><span>-{formatVND(data.channelFees)}</span></div>
+            <div className="flex justify-between font-semibold"><span>Lãi/Lỗ sau phí</span><span>{formatVND(data.netProfit)}</span></div>
+            <div className="flex justify-between text-muted-foreground"><span>Biên lãi gộp</span><span>{data.grossMarginPercent}%</span></div>
           </CardContent>
         </Card>
         <Card>
@@ -165,6 +186,10 @@ export function EodReport({
                   <TableHead>Đóng</TableHead>
                   <TableHead>Thanh toán</TableHead>
                   <TableHead className="text-right">Tổng</TableHead>
+                  <TableHead className="text-right">Giá vốn</TableHead>
+                  <TableHead className="text-right">Lãi/Lỗ</TableHead>
+                  <TableHead className="text-right">Phí kênh</TableHead>
+                  <TableHead className="text-right">Sau phí</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -178,6 +203,10 @@ export function EodReport({
                       {o.payments.map((p) => `${METHOD_LABEL[p.method] ?? p.method}: ${formatVND(p.amount)}`).join(", ") || "—"}
                     </TableCell>
                     <TableCell className="text-right font-medium">{formatVND(o.total)}</TableCell>
+                    <TableCell className="text-right">{formatVND(o.costOfGoods)}</TableCell>
+                    <TableCell className="text-right font-medium">{formatVND(o.grossProfit)}</TableCell>
+                    <TableCell className="text-right">{formatVND(o.channelFee)}</TableCell>
+                    <TableCell className="text-right font-medium">{formatVND(o.netProfit)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

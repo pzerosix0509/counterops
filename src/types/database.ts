@@ -27,6 +27,32 @@ export interface Organization {
   created_at: string;
   updated_at: string;
 }
+export interface OrganizationSettings {
+  organization_id: string;
+  inventory_deduction_timing: "payment" | "kitchen_start";
+  low_stock_alert_enabled: boolean;
+  default_low_stock_threshold: number;
+  default_order_type: "dine_in" | "takeaway";
+  default_takeaway_channel_id: string | null;
+  allow_unpaid_orders: boolean;
+  discounts_enabled: boolean;
+  max_discount_percent: number;
+  default_payment_method: PaymentMethod;
+  kitchen_sound_enabled: boolean;
+  auto_send_to_kitchen_on_payment: boolean;
+  show_regular_items_in_kitchen: boolean;
+  auto_mark_served_on_ready: boolean;
+  business_day_start_time: string;
+  include_service_fee_in_revenue: boolean;
+  auto_generate_eod: boolean;
+  receipt_store_name: string | null;
+  receipt_address: string | null;
+  receipt_phone: string | null;
+  receipt_logo_url: string | null;
+  receipt_footer: string;
+  created_at: string;
+  updated_at: string;
+}
 export interface Branch {
   id: string;
   organization_id: string;
@@ -166,6 +192,8 @@ export interface SalesChannel {
   name: string;
   type: string;
   is_active: boolean;
+  platform_fee_percent: number;
+  sort_order: number;
 }
 export interface Area {
   id: string;
@@ -287,6 +315,26 @@ export interface AuditLog {
   after: Json | null;
   created_at: string;
 }
+export interface AiDocument {
+  id: string;
+  organization_id: string;
+  branch_id: string | null;
+  title: string;
+  file_name: string;
+  mime_type: string | null;
+  source_type: string;
+  uploaded_by: string | null;
+  created_at: string;
+}
+export interface AiDocumentChunk {
+  id: string;
+  organization_id: string;
+  branch_id: string | null;
+  document_id: string;
+  chunk_index: number;
+  content: string;
+  created_at: string;
+}
 
 // Helper to make a Supabase-style table descriptor.
 type TableDescriptor<Row> = {
@@ -300,6 +348,7 @@ export interface Database {
   public: {
     Tables: {
       organizations: TableDescriptor<Organization>;
+      organization_settings: TableDescriptor<OrganizationSettings>;
       branches: TableDescriptor<Branch>;
       profiles: TableDescriptor<Profile>;
       memberships: TableDescriptor<Membership>;
@@ -323,12 +372,44 @@ export interface Database {
       payments: TableDescriptor<Payment>;
       end_of_day_reports: TableDescriptor<EndOfDayReport>;
       audit_logs: TableDescriptor<AuditLog>;
+      ai_documents: TableDescriptor<AiDocument>;
+      ai_document_chunks: TableDescriptor<AiDocumentChunk>;
     };
     Views: Record<string, never>;
     Functions: {
       is_org_member: { Args: { p_org_id: string }; Returns: boolean };
       has_org_role: { Args: { p_org_id: string; allowed_roles: string[] }; Returns: boolean };
       has_branch_access: { Args: { p_org_id: string; p_branch_id: string }; Returns: boolean };
+      ai_sales_summary: {
+        Args: { p_org_id: string; p_branch_id: string; p_from: string; p_to: string };
+        Returns: {
+          total_orders: number;
+          net_revenue: number;
+          cost_of_goods: number;
+          gross_profit: number;
+          channel_fees: number;
+          net_profit: number;
+        }[];
+      };
+      ai_top_products: {
+        Args: { p_org_id: string; p_branch_id: string; p_from: string; p_to: string; p_limit?: number };
+        Returns: {
+          product_name: string;
+          quantity: number;
+          revenue: number;
+          cost_of_goods: number;
+          gross_profit: number;
+        }[];
+      };
+      ai_channel_summary: {
+        Args: { p_org_id: string; p_branch_id: string; p_from: string; p_to: string };
+        Returns: {
+          channel_name: string;
+          orders: number;
+          revenue: number;
+          channel_fees: number;
+        }[];
+      };
     };
     Enums: {
       membership_role: MembershipRole;

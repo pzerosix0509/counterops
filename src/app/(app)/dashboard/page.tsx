@@ -1,5 +1,5 @@
 ﻿import Link from "next/link";
-import { ShoppingBag, Receipt, Table2, TrendingUp, Calendar } from "lucide-react";
+import { ShoppingBag, Receipt, Table2, TrendingUp, Calendar, WalletCards, BadgePercent } from "lucide-react";
 import { requireActiveContext, canViewReports, getActiveMembership } from "@/lib/auth/permissions";
 import { getDashboardSummary } from "@/server/queries/dashboard";
 import { parseDateRangeSearchParams, type DateRangePreset, formatVND } from "@/lib/date/ranges";
@@ -48,6 +48,10 @@ export default async function DashboardPage({ searchParams }: PageProps) {
     { label: "Đơn hàng hôm nay", value: summary.ordersToday.toLocaleString("vi-VN"), icon: ShoppingBag },
     { label: "Bàn đang dùng", value: `${summary.occupiedTables}/${summary.totalTables}`, icon: Table2 },
     { label: "Doanh thu thuần (kỳ)", value: formatVND(summary.selectedNetRevenue), icon: Receipt },
+    { label: "Giá vốn hàng bán", value: formatVND(summary.selectedCostOfGoods), icon: WalletCards },
+    { label: "Lãi/Lỗ gộp", value: `${formatVND(summary.selectedGrossProfit)} (${summary.selectedGrossMarginPercent}%)`, icon: BadgePercent },
+    { label: "Phí kênh bán", value: formatVND(summary.selectedChannelFees), icon: Receipt },
+    { label: "Lãi/Lỗ sau phí", value: formatVND(summary.selectedNetProfit), icon: TrendingUp },
   ];
 
   return (
@@ -73,7 +77,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
         </TabsList>
       </Tabs>
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-8">
         {cards.map((c) => {
           const Icon = c.icon;
           return (
@@ -168,6 +172,8 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                   <TableHead>Sản phẩm</TableHead>
                   <TableHead className="text-right">Số lượng</TableHead>
                   <TableHead className="text-right">Doanh thu</TableHead>
+                  <TableHead className="text-right">Giá vốn</TableHead>
+                  <TableHead className="text-right">Lãi/Lỗ</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -176,6 +182,8 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                     <TableCell className="font-medium">{p.name}</TableCell>
                     <TableCell className="text-right">{p.quantity.toLocaleString("vi-VN")}</TableCell>
                     <TableCell className="text-right">{formatVND(p.revenue)}</TableCell>
+                    <TableCell className="text-right">{formatVND(p.costOfGoods)}</TableCell>
+                    <TableCell className="text-right font-medium">{formatVND(p.grossProfit)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

@@ -21,11 +21,15 @@ export function KitchenBoard({
   branchId,
   items,
   canUpdate,
+  soundEnabled,
+  autoMarkServedOnReady,
 }: {
   organizationId: string;
   branchId: string;
   items: KitchenItemType[];
   canUpdate: boolean;
+  soundEnabled: boolean;
+  autoMarkServedOnReady: boolean;
 }) {
   const router = useRouter();
   const [tab, setTab] = useState<KitchenTab>("pending");
@@ -54,9 +58,9 @@ export function KitchenBoard({
     seenItemIdsRef.current = activeIds;
     if (addedCount > 0) {
       notifyInfo("Có món mới vào bếp", `${addedCount} món vừa được thanh toán.`);
-      playKitchenTone();
+      if (soundEnabled) playKitchenTone();
     }
-  }, [items]);
+  }, [items, soundEnabled]);
 
   const groups = useMemo(() => {
     const m = new Map<
@@ -101,10 +105,11 @@ export function KitchenBoard({
 
   function changeStatus(itemId: string, status: "ready" | "served") {
     if (!canUpdate) return;
+    const nextStatus = status === "ready" && autoMarkServedOnReady ? "served" : status;
     setError(null);
     setBusyId(itemId);
     startTransition(async () => {
-      const result = await updateKitchenStatus(organizationId, itemId, { status });
+      const result = await updateKitchenStatus(organizationId, itemId, { status: nextStatus });
       if (!result.ok) {
         setError(result.error.message);
         setBusyId(null);
@@ -113,7 +118,7 @@ export function KitchenBoard({
       }
       setBusyId(null);
       router.refresh();
-      notifySuccess(status === "ready" ? "Đã đánh dấu sẵn sàng" : "Đã phục vụ");
+      notifySuccess(nextStatus === "ready" ? "Đã đánh dấu sẵn sàng" : "Đã phục vụ");
     });
   }
 

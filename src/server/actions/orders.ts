@@ -17,6 +17,48 @@ async function nextOrderSeq(admin: ReturnType<typeof createSupabaseAdminClient>,
   return (count ?? 0) + 1;
 }
 
+async function loadProductCostSnapshots(
+  admin: ReturnType<typeof createSupabaseAdminClient>,
+  organizationId: string,
+  products: Map<string, any>
+): Promise<Map<string, number>> {
+  const costs = new Map<string, number>();
+  const productList = Array.from(products.values());
+  for (const product of productList) {
+    costs.set(product.id, Number(product.cost_price ?? 0));
+  }
+
+  const preparedIds = productList
+    .filter((product) => product.product_type === "prepared")
+    .map((product) => product.id);
+  if (preparedIds.length === 0) return costs;
+
+  const { data: recipes } = await admin
+    .from("recipes")
+    .select("id, product_id, version, recipe_items(quantity, estimated_cost, inventory_item:inventory_items(cost_price))")
+    .eq("organization_id", organizationId)
+    .eq("is_active", true)
+    .in("product_id", preparedIds)
+    .order("version", { ascending: false });
+
+  const latestRecipeByProduct = new Map<string, any>();
+  for (const recipe of recipes ?? []) {
+    if (!latestRecipeByProduct.has(recipe.product_id)) {
+      latestRecipeByProduct.set(recipe.product_id, recipe);
+    }
+  }
+
+  for (const [productId, recipe] of Array.from(latestRecipeByProduct.entries())) {
+    const recipeCost = (recipe.recipe_items ?? []).reduce((sum: number, item: any) => {
+      const unitCost = Number(item.inventory_item?.cost_price ?? item.estimated_cost ?? 0);
+      return sum + Number(item.quantity ?? 0) * unitCost;
+    }, 0);
+    costs.set(productId, Math.round(recipeCost));
+  }
+
+  return costs;
+}
+
 export async function createOrUpdateOrder(
   organizationId: string,
   branchId: string,
@@ -49,6 +91,7 @@ export async function createOrUpdateOrder(
       return actionFail("VALIDATION_ERROR", `Món không tồn tại: ${item.productId}`);
     }
   }
+  const productCostMap = await loadProductCostSnapshots(admin, m.organization.id, productMap);
 
   const itemsForCalc = parsed.data.items.map((item) => {
     const p = productMap.get(item.productId)!;
@@ -56,7 +99,7 @@ export async function createOrUpdateOrder(
       productId: p.id,
       productName: p.name,
       unitPrice: p.sale_price,
-      costPrice: p.cost_price,
+      costPrice: productCostMap.get(p.id) ?? Number(p.cost_price ?? 0),
       quantity: item.quantity,
     };
   });
@@ -96,7 +139,7 @@ export async function createOrUpdateOrder(
         product_id: p.id,
         product_name_snapshot: p.name,
         unit_price_snapshot: p.sale_price,
-        cost_price_snapshot: p.cost_price,
+        cost_price_snapshot: productCostMap.get(p.id) ?? Number(p.cost_price ?? 0),
         quantity: item.quantity,
         note: item.note ?? null,
         kitchen_status: p.product_type === "prepared" ? "pending" : "not_required",
@@ -191,7 +234,7 @@ export async function createOrUpdateOrder(
       product_id: p.id,
       product_name_snapshot: p.name,
       unit_price_snapshot: p.sale_price,
-      cost_price_snapshot: p.cost_price,
+      cost_price_snapshot: productCostMap.get(p.id) ?? Number(p.cost_price ?? 0),
       quantity: item.quantity,
       note: item.note ?? null,
       kitchen_status: p.product_type === "prepared" ? "pending" : "not_required",

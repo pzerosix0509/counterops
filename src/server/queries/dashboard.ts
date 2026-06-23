@@ -1,6 +1,7 @@
 import "server-only";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { DateRange } from "@/lib/date/ranges";
+import { calculateProfitTotals } from "@/lib/calculations/orders";
 
 export interface DashboardSummary {
   revenueToday: number;
@@ -8,6 +9,11 @@ export interface DashboardSummary {
   occupiedTables: number;
   totalTables: number;
   selectedNetRevenue: number;
+  selectedCostOfGoods: number;
+  selectedGrossProfit: number;
+  selectedGrossMarginPercent: number;
+  selectedChannelFees: number;
+  selectedNetProfit: number;
   selectedOrders: number;
   paidOrders: number;
   averageItemValue: number;
@@ -21,7 +27,7 @@ export interface DashboardSummary {
   revenueTrend: { bucket: string; revenue: number; orders: number }[];
   menuBreakdown: { categoryId: string | null; categoryName: string; revenue: number; orders: number }[];
   channelBreakdown: { channelId: string | null; channelName: string; revenue: number; orders: number }[];
-  topProducts: { productId: string | null; name: string; quantity: number; revenue: number }[];
+  topProducts: { productId: string | null; name: string; quantity: number; revenue: number; costOfGoods: number; grossProfit: number }[];
 }
 
 const EMPTY: DashboardSummary = {
@@ -30,6 +36,11 @@ const EMPTY: DashboardSummary = {
   occupiedTables: 0,
   totalTables: 0,
   selectedNetRevenue: 0,
+  selectedCostOfGoods: 0,
+  selectedGrossProfit: 0,
+  selectedGrossMarginPercent: 0,
+  selectedChannelFees: 0,
+  selectedNetProfit: 0,
   selectedOrders: 0,
   paidOrders: 0,
   averageItemValue: 0,
@@ -101,7 +112,7 @@ export async function getDashboardSummary(opts: {
       .lte("opened_at", range.to.toISOString()),
     supabase
       .from("order_items")
-      .select("id, product_id, product_name_snapshot, unit_price_snapshot, quantity, kitchen_status, order_id, orders!inner(branch_id, opened_at, status, sales_channel_id)")
+      .select("id, product_id, product_name_snapshot, unit_price_snapshot, cost_price_snapshot, quantity, kitchen_status, order_id, orders!inner(branch_id, opened_at, status, sales_channel_id)")
       .eq("branch_id", branchId)
       .gte("orders.opened_at", range.from.toISOString())
       .lte("orders.opened_at", range.to.toISOString()),
@@ -133,6 +144,10 @@ export async function getDashboardSummary(opts: {
 
   const allItems = (rangeItems ?? []).filter((it: any) => it.orders?.status === "paid");
   const totalItemRevenue = allItems.reduce((s, it) => s + it.unit_price_snapshot * it.quantity, 0);
+  const profitTotals = calculateProfitTotals(
+    allItems.map((it: any) => ({ costPrice: Number(it.cost_price_snapshot ?? 0), quantity: Number(it.quantity ?? 0) })),
+    selectedNetRevenue
+  );
   const totalItemQty = allItems.reduce((s, it) => s + Number(it.quantity), 0);
   const averageItemValue = totalItemQty > 0 ? Math.round(totalItemRevenue / totalItemQty) : 0;
   // foodItems aggregated for average calculations (reserved for future menu_type breakdown)
@@ -175,8 +190,22 @@ export async function getDashboardSummary(opts: {
     .from("products")
     .select("id, category_id, menu_type")
     .eq("organization_id", organizationId);
+  const { data: channels } = await supabase
+    .from("sales_channels")
+    .select("id, platform_fee_percent")
+    .eq("organization_id", organizationId);
   const catMap = new Map((categories ?? []).map((c) => [c.id, c.name]));
   const productMeta = new Map((products ?? []).map((p) => [p.id, p]));
+  const channelFeePercent = new Map((channels ?? []).map((channel) => [channel.id, Number(channel.platform_fee_percent ?? 0)]));
+  const selectedChannelFees = Math.round(
+    (rangeOrders ?? [])
+      .filter((o) => o.status === "paid")
+      .reduce((sum, order) => {
+        const feePercent = order.sales_channel_id ? channelFeePercent.get(order.sales_channel_id) ?? 0 : 0;
+        return sum + Number(order.total_amount ?? 0) * (feePercent / 100);
+      }, 0)
+  );
+  const selectedNetProfit = profitTotals.grossProfit - selectedChannelFees;
   const menuMap = new Map<string, { revenue: number; orders: number }>();
   for (const it of allItems) {
     const meta = it.product_id ? productMeta.get(it.product_id) : null;
@@ -214,16 +243,24 @@ export async function getDashboardSummary(opts: {
     .sort((a, b) => b.revenue - a.revenue);
 
   // Top products
-  const productMap = new Map<string, { quantity: number; revenue: number; name: string }>();
+  const productMap = new Map<string, { quantity: number; revenue: number; costOfGoods: number; name: string }>();
   for (const it of allItems) {
     const key = it.product_id ?? it.product_name_snapshot;
-    const cur = productMap.get(key) ?? { quantity: 0, revenue: 0, name: it.product_name_snapshot };
+    const cur = productMap.get(key) ?? { quantity: 0, revenue: 0, costOfGoods: 0, name: it.product_name_snapshot };
     cur.quantity += Number(it.quantity);
     cur.revenue += it.unit_price_snapshot * it.quantity;
+    cur.costOfGoods += Number(it.cost_price_snapshot ?? 0) * Number(it.quantity);
     productMap.set(key, cur);
   }
   const topProducts = Array.from(productMap.values())
-    .map((p, idx) => ({ productId: idx.toString(), name: p.name, quantity: p.quantity, revenue: p.revenue }))
+    .map((p, idx) => ({
+      productId: idx.toString(),
+      name: p.name,
+      quantity: p.quantity,
+      revenue: p.revenue,
+      costOfGoods: Math.round(p.costOfGoods),
+      grossProfit: p.revenue - Math.round(p.costOfGoods),
+    }))
     .sort((a, b) => b.revenue - a.revenue)
     .slice(0, 10);
 
@@ -233,6 +270,11 @@ export async function getDashboardSummary(opts: {
     occupiedTables,
     totalTables,
     selectedNetRevenue,
+    selectedCostOfGoods: profitTotals.costOfGoods,
+    selectedGrossProfit: profitTotals.grossProfit,
+    selectedGrossMarginPercent: profitTotals.grossMarginPercent,
+    selectedChannelFees,
+    selectedNetProfit,
     selectedOrders,
     paidOrders,
     averageItemValue,

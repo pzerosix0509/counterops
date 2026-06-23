@@ -2,6 +2,7 @@
 import { listAreas, listOpenOrdersByTable, listTables } from "@/server/queries/tables";
 import { listProductsForPos, listSalesChannels } from "@/server/queries/orders";
 import { listCategories } from "@/server/queries/menu";
+import { getOperationalSettings } from "@/server/queries/settings";
 import { PosWorkspace } from "@/components/pos/pos-workspace";
 
 export const metadata = { title: "Bán hàng" };
@@ -10,13 +11,14 @@ export default async function PosPage() {
   const active = await getActiveMembership();
   if (!active) return null;
   const ctx = await requireActiveContext();
-  const [products, channels, areas, tables, openByTable, categories] = await Promise.all([
+  const [products, channels, areas, tables, openByTable, categories, settings] = await Promise.all([
     listProductsForPos(ctx.organizationId, ctx.branchId),
     listSalesChannels(ctx.organizationId),
     listAreas(ctx.branchId),
     listTables(ctx.branchId),
     listOpenOrdersByTable(ctx.branchId),
     listCategories(ctx.organizationId),
+    getOperationalSettings(ctx.organizationId),
   ]);
   return (
     <div className="space-y-3">
@@ -35,6 +37,7 @@ export default async function PosPage() {
         tables={tables}
         openByTable={openByTable}
         channels={channels}
+        settings={settings}
       />
     </div>
   );
