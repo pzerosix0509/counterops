@@ -136,3 +136,37 @@ export const eodInputSchema = z.object({
 export const inventorySettingsSchema = z.object({
   allowNegativeInventory: z.boolean(),
 });
+
+export const operationalSettingsSchema = z.object({
+  allowNegativeInventory: z.boolean(),
+  inventoryDeductionTiming: z.enum(["payment", "kitchen_start"]),
+  lowStockAlertEnabled: z.boolean(),
+  defaultLowStockThreshold: z.number().min(0),
+  defaultOrderType: z.enum(["dine_in", "takeaway"]),
+  defaultTakeawayChannelId: z.string().uuid().nullable().optional(),
+  allowUnpaidOrders: z.boolean(),
+  discountsEnabled: z.boolean(),
+  maxDiscountPercent: z.number().min(0).max(100),
+  defaultPaymentMethod: z.enum(["cash", "bank_transfer", "card", "ewallet", "debt", "other"]),
+  kitchenSoundEnabled: z.boolean(),
+  autoSendToKitchenOnPayment: z.boolean(),
+  showRegularItemsInKitchen: z.boolean(),
+  autoMarkServedOnReady: z.boolean(),
+  businessDayStartTime: z.string().regex(/^\d{2}:\d{2}$/),
+  includeServiceFeeInRevenue: z.boolean(),
+  autoGenerateEod: z.boolean(),
+  receiptStoreName: z.string().trim().max(120).nullable().optional(),
+  receiptAddress: z.string().trim().max(240).nullable().optional(),
+  receiptPhone: z.string().trim().max(40).nullable().optional(),
+  receiptLogoUrl: z.string().trim().url().nullable().optional().or(z.literal("")),
+  receiptFooter: z.string().trim().max(240),
+  salesChannels: z.array(z.object({
+    id: z.string().uuid().optional(),
+    name: z.string().trim().min(1),
+    type: z.string().trim().min(1),
+    isActive: z.boolean(),
+    platformFeePercent: z.number().min(0).max(100),
+    sortOrder: z.number().int().default(0),
+  })),
+});
+export type OperationalSettingsInput = z.infer<typeof operationalSettingsSchema>;

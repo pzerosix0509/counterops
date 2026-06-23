@@ -16,6 +16,13 @@ export interface OrderTotals {
   totalAmount: number;
 }
 
+export interface ProfitTotals {
+  revenue: number;
+  costOfGoods: number;
+  grossProfit: number;
+  grossMarginPercent: number;
+}
+
 export interface PaymentLine {
   method: "cash" | "bank_transfer" | "card" | "ewallet" | "debt" | "other";
   amount: number;
@@ -24,6 +31,20 @@ export interface PaymentLine {
 
 export function calculateSubtotal(items: OrderItemInput[]): number {
   return items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
+}
+
+export function calculateCostOfGoods(items: Pick<OrderItemInput, "costPrice" | "quantity">[]): number {
+  return Math.round(items.reduce((sum, item) => sum + item.costPrice * item.quantity, 0));
+}
+
+export function calculateProfitTotals(
+  items: Pick<OrderItemInput, "costPrice" | "quantity">[],
+  revenue: number
+): ProfitTotals {
+  const costOfGoods = calculateCostOfGoods(items);
+  const grossProfit = revenue - costOfGoods;
+  const grossMarginPercent = revenue > 0 ? Math.round((grossProfit / revenue) * 1000) / 10 : 0;
+  return { revenue, costOfGoods, grossProfit, grossMarginPercent };
 }
 
 export function calculateTotals(

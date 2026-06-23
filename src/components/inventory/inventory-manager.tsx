@@ -64,6 +64,8 @@ export function InventoryManager({
   items,
   balances,
   initialQuery,
+  defaultLowStockThreshold,
+  lowStockAlertEnabled,
 }: {
   organizationId: string;
   branchId: string;
@@ -71,6 +73,8 @@ export function InventoryManager({
   items: InventoryItem[];
   balances: InventoryBalance[];
   initialQuery: string;
+  defaultLowStockThreshold: number;
+  lowStockAlertEnabled: boolean;
 }) {
   const router = useRouter();
   const [query, setQuery] = useState(initialQuery);
@@ -200,7 +204,9 @@ export function InventoryManager({
                 <DialogContent>
                   <DialogHeader>
                     <DialogTitle>Thêm hàng hoá</DialogTitle>
-                    <DialogDescription>Tạo hàng mới trong kho, có thể nhập tồn ban đầu.</DialogDescription>
+                    <DialogDescription>
+                      Tạo hàng mới trong kho. Nếu đang có sẵn hàng, nhập số tồn hiện có để khởi tạo kho.
+                    </DialogDescription>
                   </DialogHeader>
                   <form className="space-y-3" onSubmit={onCreateItem}>
                     <div className="grid grid-cols-2 gap-3">
@@ -237,12 +243,34 @@ export function InventoryManager({
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1.5">
-                        <Label htmlFor="initialQuantity">Số lượng ban đầu</Label>
-                        <Input id="initialQuantity" name="initialQuantity" type="number" min="0" step="0.1" defaultValue={0} />
+                        <Label htmlFor="initialQuantity">Tồn kho ban đầu</Label>
+                        <Input
+                          id="initialQuantity"
+                          name="initialQuantity"
+                          type="number"
+                          min="0"
+                          step="0.1"
+                          defaultValue={0}
+                          aria-describedby="initialQuantityHint"
+                        />
+                        <p id="initialQuantityHint" className="text-xs text-muted-foreground">
+                          Số lượng đang có trong kho lúc tạo hàng. Để 0 nếu chưa có tồn.
+                        </p>
                       </div>
                       <div className="space-y-1.5">
-                        <Label htmlFor="lowStockThreshold">Định mức thấp</Label>
-                        <Input id="lowStockThreshold" name="lowStockThreshold" type="number" min="0" step="0.1" defaultValue={0} />
+                        <Label htmlFor="lowStockThreshold">Ngưỡng cảnh báo sắp hết</Label>
+                        <Input
+                          id="lowStockThreshold"
+                          name="lowStockThreshold"
+                          type="number"
+                          min="0"
+                          step="0.1"
+                          defaultValue={defaultLowStockThreshold}
+                          aria-describedby="lowStockThresholdHint"
+                        />
+                        <p id="lowStockThresholdHint" className="text-xs text-muted-foreground">
+                          Khi tồn kho nhỏ hơn hoặc bằng số này, hệ thống báo “Sắp hết”.
+                        </p>
                       </div>
                     </div>
                     <div className="space-y-1.5">
@@ -314,7 +342,7 @@ export function InventoryManager({
                   const low = Number(b?.low_stock_threshold ?? 0);
                   const isNegative = qty < 0;
                   const isOut = qty === 0;
-                  const isLow = !isNegative && !isOut && low > 0 && qty <= low;
+                  const isLow = lowStockAlertEnabled && !isNegative && !isOut && low > 0 && qty <= low;
                   return (
                     <TableRow key={it.id}>
                       <TableCell className="px-3 font-mono text-xs">
@@ -330,7 +358,7 @@ export function InventoryManager({
                       <TableCell className="px-3 text-right">{formatVND(it.cost_price)}</TableCell>
                       <TableCell className="px-3 text-right">
                         <div className="font-medium">{qty.toLocaleString("vi-VN")}</div>
-                        <div className="text-xs text-muted-foreground">Min {low || "—"}</div>
+                        <div className="text-xs text-muted-foreground">Cảnh báo ≤ {low || "—"}</div>
                       </TableCell>
                       <TableCell className="px-3 text-center">
                         {isNegative ? (

@@ -1,7 +1,18 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, ShoppingCart, ChefHat, Table2, UtensilsCrossed, Boxes, FileBarChart, Settings, Sparkles } from "lucide-react";
+import {
+  LayoutDashboard,
+  ShoppingCart,
+  ChefHat,
+  Table2,
+  UtensilsCrossed,
+  Boxes,
+  FileBarChart,
+  Settings,
+  Sparkles,
+  Bot,
+} from "lucide-react";
 import { cn } from "@/lib/utils/format";
 import type { MembershipRole } from "@/types/database";
 
@@ -20,6 +31,7 @@ const ITEMS: NavItem[] = [
   { href: "/menu", label: "Thực đơn", icon: UtensilsCrossed, allowed: ["owner", "admin", "manager", "cashier", "reception", "kitchen"] },
   { href: "/inventory", label: "Kho hàng", icon: Boxes, allowed: ["owner", "admin", "manager", "cashier"] },
   { href: "/reports/end-of-day", label: "Báo cáo", icon: FileBarChart, allowed: ["owner", "admin", "manager", "cashier"] },
+  { href: "/ai", label: "AI trợ lý", icon: Bot, allowed: ["owner", "admin", "manager", "cashier"] },
   { href: "/settings", label: "Cài đặt", icon: Settings, allowed: ["owner", "admin", "manager"] },
 ];
 

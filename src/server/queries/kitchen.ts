@@ -11,13 +11,18 @@ export interface KitchenItem {
   paidAt: string | null;
 }
 
-export async function listKitchenItems(branchId: string, statuses: KitchenStatus[]): Promise<KitchenItem[]> {
+export async function listKitchenItems(
+  branchId: string,
+  statuses: KitchenStatus[],
+  opts: { includeRegular?: boolean } = {}
+): Promise<KitchenItem[]> {
   const supabase = createSupabaseServerClient();
+  const statusList = opts.includeRegular ? Array.from(new Set([...statuses, "not_required" as KitchenStatus])) : statuses;
   const { data, error } = await supabase
     .from("order_items")
     .select("*, orders!inner(order_number, opened_at, closed_at, status, table_id, order_type, dining_tables(name))")
     .eq("branch_id", branchId)
-    .in("kitchen_status", statuses)
+    .in("kitchen_status", statusList)
     .order("created_at");
   if (error) throw new Error(error.message);
   return (data ?? [])

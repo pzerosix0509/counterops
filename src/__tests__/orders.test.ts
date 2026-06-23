@@ -1,6 +1,8 @@
 ﻿import { describe, it, expect } from "vitest";
 import {
   calculateSubtotal,
+  calculateCostOfGoods,
+  calculateProfitTotals,
   calculateTotals,
   totalPaidAmount,
   classifyPaymentStatus,
@@ -29,6 +31,28 @@ describe("order calculations", () => {
     );
     expect(totals.subtotal).toBe(70000);
     expect(totals.totalAmount).toBe(70000 - 5000 + 3000 + 2000);
+  });
+
+  it("calculates cost of goods from line cost snapshots", () => {
+    expect(
+      calculateCostOfGoods([
+        { costPrice: 12000, quantity: 2 },
+        { costPrice: 4000, quantity: 1 },
+      ])
+    ).toBe(28000);
+  });
+
+  it("calculates profit and gross margin", () => {
+    const profit = calculateProfitTotals(
+      [
+        { costPrice: 12000, quantity: 2 },
+        { costPrice: 4000, quantity: 1 },
+      ],
+      70000
+    );
+    expect(profit.costOfGoods).toBe(28000);
+    expect(profit.grossProfit).toBe(42000);
+    expect(profit.grossMarginPercent).toBe(60);
   });
 
   it("never produces a negative total", () => {

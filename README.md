@@ -10,6 +10,7 @@ Stack hiện tại:
 - Supabase Auth + Postgres + RLS
 - Server Actions cho các thao tác nghiệp vụ
 - ExcelJS cho import/export Excel
+- AI provider qua API server-side: NVIDIA NIM / MiniMax-compatible / OpenAI
 - Vitest cho unit tests
 
 ## Trạng Thái Hiện Tại
@@ -49,12 +50,18 @@ Stack hiện tại:
   - Xuất Excel.
 - Realtime đã nối cho POS/Bếp qua Supabase Realtime publication.
 - Hệ thống toast/notification đã nối cho các thao tác chính.
+- AI trợ lý MVP:
+  - Upload tài liệu text/Markdown/CSV/JSON và tự chia đoạn.
+  - Hỏi đáp dữ liệu bán hàng/kênh bán/lãi lỗ bằng analytics RPC.
+  - Hỗ trợ provider NVIDIA NIM (`minimaxai/minimax-m3`), MiniMax-compatible endpoint và OpenAI.
+  - Hiển thị biểu đồ, nguồn trích dẫn, nguồn dữ liệu dạng metric/table và fallback nội bộ khi provider lỗi hoặc chưa cấu hình.
 
 ### Đang Hoàn Thiện
 
 - Template/export Excel hiện ưu tiên header ASCII không dấu để tránh lỗi tương thích Excel cũ; có thể polish lại sang tiếng Việt có dấu.
 - Upload ảnh món/hàng kho chưa kết nối Supabase Storage.
-- Chưa có module nhân sự, khách hàng/CRM, công nợ nâng cao, AI assistant.
+- Tìm kiếm tài liệu AI hiện là keyword search; semantic search bằng embedding/pgvector là bước nâng cấp tiếp theo.
+- Chưa có module nhân sự, khách hàng/CRM, công nợ nâng cao.
 
 ## Cấu Trúc Chính
 
@@ -65,6 +72,7 @@ src/
       login/
       onboarding/
     (app)/
+      ai/
       dashboard/
       pos/
       kitchen/
@@ -73,7 +81,9 @@ src/
       inventory/
       reports/end-of-day/
       settings/
-    api/inventory/movements/
+    api/
+      ai/chat/
+      inventory/movements/
 
   components/
     app-shell/
@@ -82,6 +92,7 @@ src/
       excel-import-preview.tsx
       excel-import.tsx
       states.tsx
+    ai/
     dashboard/
     inventory/
     kitchen/
@@ -95,6 +106,7 @@ src/
   lib/
     auth/permissions.ts
     calculations/
+    ai/
     date/ranges.ts
     excel/workbook.ts
     supabase/
@@ -104,6 +116,7 @@ src/
   server/
     actions/
       eod.ts
+      ai-documents.ts
       excel.ts
       inventory.ts
       menu.ts
@@ -116,8 +129,12 @@ src/
       imports.ts
       templates.ts
     queries/
+      ai.ts
+      settings.ts
 
-  types/database.ts
+  types/
+    ai.ts
+    database.ts
 
 supabase/
   migrations/
@@ -147,9 +164,27 @@ Tạo `.env.local`:
 NEXT_PUBLIC_SUPABASE_URL=...
 NEXT_PUBLIC_SUPABASE_ANON_KEY=...
 SUPABASE_SERVICE_ROLE_KEY=...
+
+# AI provider. Use one of: nvidia, minimax, openai
+AI_PROVIDER=nvidia
+
+# NVIDIA NIM / Integrate API for MiniMax M3
+NVIDIA_API_KEY=...
+NVIDIA_BASE_URL=https://integrate.api.nvidia.com/v1
+NVIDIA_MODEL=minimaxai/minimax-m3
+
+# Alternative: MiniMax/OpenAI-compatible endpoint
+MINIMAX_API_KEY=...
+MINIMAX_BASE_URL=https://api.minimax.io/v1
+MINIMAX_MODEL=MiniMax-M3
+
+# Alternative: OpenAI Responses API
+OPENAI_API_KEY=...
+OPENAI_MODEL=gpt-4.1-mini
 ```
 
 Lưu ý: `SUPABASE_SERVICE_ROLE_KEY` chỉ được dùng server-side. Không thêm prefix `NEXT_PUBLIC_`.
+`OPENAI_API_KEY`, `NVIDIA_API_KEY` hoặc `MINIMAX_API_KEY` là tùy chọn; nếu chưa có, trang AI vẫn trả lời bằng fallback dựa trên dữ liệu nội bộ.
 
 ### 3. Chạy migration
 
@@ -161,12 +196,19 @@ supabase/migrations/0002_fix_has_org_role.sql
 supabase/migrations/0003_recover_memberships.sql
 supabase/migrations/0004_add_order_items_created_at.sql
 supabase/migrations/0005_add_inventory_settings.sql
+supabase/migrations/0006_add_realtime_publication.sql
+supabase/migrations/0007_add_default_takeaway_channels.sql
+supabase/migrations/0008_add_operational_settings.sql
+supabase/migrations/0009_add_ai_assistant.sql
 ```
 
 Migration quan trọng gần đây:
 
 - `0004_add_order_items_created_at.sql`: thêm `created_at` cho `order_items`.
 - `0005_add_inventory_settings.sql`: thêm `organizations.allow_negative_inventory`.
+- `0006_add_realtime_publication.sql`: bật publication cho POS/Bếp realtime.
+- `0008_add_operational_settings.sql`: thêm nhóm setting vận hành/kho/bếp/POS.
+- `0009_add_ai_assistant.sql`: thêm bảng tài liệu AI, chunk tài liệu và RPC analytics scoped theo organization/branch.
 
 ### 4. Tạo user và dữ liệu demo
 
@@ -302,6 +344,7 @@ Lưu ý kỹ thuật:
 | Thực đơn | Có | Có | Có | Xem | Xem | Xem | Không |
 | Kho | Có | Có | Có | Xem | Không | Không | Không |
 | Báo cáo | Có | Có | Có | Xem | Không | Không | Không |
+| AI trợ lý | Có | Có | Có | Có | Không | Không | Không |
 | Cài đặt | Có | Có | Có | Không | Không | Không | Không |
 
 Các quyền chính nằm trong:
@@ -331,6 +374,7 @@ Test hiện có:
 - Excel parser.
 - Excel export.
 - Excel commit.
+- AI document chunking/search utilities.
 
 Chạy:
 
@@ -342,19 +386,19 @@ npm run test
 
 Ưu tiên cao:
 
-1. Manual test toàn bộ flow Excel trên Supabase thật: tải mẫu, import preview, commit, export.
-2. Manual test flow POS thanh toán trước -> Bếp realtime -> Đã phục vụ -> bàn về trống.
-3. Polish template Excel sang tiếng Việt có dấu đầy đủ trong cả instruction sheet.
-4. Kiểm tra lại layout bảng kho trên nhiều kích thước màn hình.
-5. Thêm integration test hoặc manual test checklist cho flow import/commit với Supabase thật.
+1. Manual test AI với provider thật: NVIDIA/MiniMax/OpenAI, fallback reason, nguồn trích dẫn, upload tài liệu.
+2. Thêm semantic search cho tài liệu AI bằng embedding + Supabase pgvector.
+3. Thiết kế AI dashboard spec renderer để AI tạo dashboard bằng JSON an toàn thay vì HTML raw.
+4. Manual test toàn bộ flow Excel trên Supabase thật: tải mẫu, import preview, commit, export.
+5. Manual test flow POS thanh toán trước -> Bếp realtime -> Đã phục vụ -> bàn về trống.
 
 Ưu tiên tiếp theo:
 
-1. Upload ảnh món/hàng kho qua Supabase Storage.
-2. Hoàn tiền / trả hàng / công nợ nâng cao.
-3. Quản lý nhân sự và ca làm.
-4. Khách hàng/CRM.
-5. AI assistant cho báo cáo và gợi ý vận hành.
+1. Polish template Excel sang tiếng Việt có dấu đầy đủ trong cả instruction sheet.
+2. Upload ảnh món/hàng kho qua Supabase Storage.
+3. Hoàn tiền / trả hàng / công nợ nâng cao.
+4. Quản lý nhân sự và ca làm.
+5. Khách hàng/CRM.
 
 ## Deploy
 
@@ -376,3 +420,5 @@ Checklist:
 - Supabase RLS: https://supabase.com/docs/guides/database/postgres/row-level-security
 - shadcn/ui: https://ui.shadcn.com/docs
 - ExcelJS: https://github.com/exceljs/exceljs
+- OpenAI Responses API: https://platform.openai.com/docs/guides/text?api-mode=responses
+- NVIDIA Integrate API: https://integrate.api.nvidia.com

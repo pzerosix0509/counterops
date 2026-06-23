@@ -1,8 +1,10 @@
 ﻿import { requireActiveContext, canManageMenu, getActiveMembership } from "@/lib/auth/permissions";
 import { listCategories } from "@/server/queries/menu";
 import { listInventoryItems } from "@/server/queries/inventory";
+import { listSalesChannels } from "@/server/queries/orders";
+import { getOperationalSettings } from "@/server/queries/settings";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { InventorySettingsForm } from "@/components/settings/inventory-settings-form";
+import { OperationalSettingsForm } from "@/components/settings/operational-settings-form";
 
 export const metadata = { title: "Cài đặt" };
 
@@ -13,15 +15,17 @@ export default async function SettingsPage() {
     return <div className="rounded-md border bg-card p-6 text-sm">Bạn không có quyền truy cập cài đặt.</div>;
   }
   const ctx = await requireActiveContext();
-  const [categories, items] = await Promise.all([
+  const [categories, items, channels, settings] = await Promise.all([
     listCategories(ctx.organizationId),
     listInventoryItems(ctx.organizationId),
+    listSalesChannels(ctx.organizationId, { includeInactive: true }),
+    getOperationalSettings(ctx.organizationId),
   ]);
   return (
     <div className="space-y-4">
       <div>
         <h1 className="text-xl font-semibold tracking-tight">Cài đặt</h1>
-        <p className="text-sm text-muted-foreground">Xem nhanh các thiết lập hiện tại của cửa hàng.</p>
+        <p className="text-sm text-muted-foreground">Quản lý thiết lập vận hành cho bán hàng, kho, bếp, báo cáo và hóa đơn.</p>
       </div>
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <Card>
@@ -47,19 +51,13 @@ export default async function SettingsPage() {
             <div className="flex justify-between"><span>Vai trò của bạn</span><span>{active.role}</span></div>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">Kho hàng</CardTitle>
-            <CardDescription>Thiết lập kiểm soát tồn kho khi bán hàng và lập phiếu.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <InventorySettingsForm
-              organizationId={ctx.organizationId}
-              allowNegativeInventory={active.organization.allow_negative_inventory ?? false}
-            />
-          </CardContent>
-        </Card>
       </div>
+      <OperationalSettingsForm
+        organizationId={ctx.organizationId}
+        allowNegativeInventory={active.organization.allow_negative_inventory ?? false}
+        settings={settings}
+        channels={channels}
+      />
     </div>
   );
 }

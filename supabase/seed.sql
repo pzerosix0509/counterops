@@ -36,9 +36,12 @@ begin
   insert into public.sales_channels (organization_id, name, type, is_active)
   select v_organization_id, c.name, c.type, true
   from (values
-    ('Tại quán'::text, 'direct'::text),
-    ('Mang đi'::text,  'direct'::text),
-    ('Online'::text,   'online'::text)
+    ('Tại quán'::text,    'direct'::text),
+    ('Mang đi'::text,     'direct'::text),
+    ('GrabFood'::text,    'delivery'::text),
+    ('ShopeeFood'::text,  'delivery'::text),
+    ('BeFood'::text,      'delivery'::text),
+    ('Online'::text,      'online'::text)
   ) as c(name, type)
   where not exists (
     select 1 from public.sales_channels s
