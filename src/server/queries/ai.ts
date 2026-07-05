@@ -1,8 +1,114 @@
 import "server-only";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { embedText, vectorToSql } from "@/lib/ai/embeddings";
 import { extractSearchTerms } from "@/lib/ai/chunk";
-import type { AiAnalyticsContext, AiChartSpec, AiSource } from "@/types/ai";
-import type { AiDocument } from "@/types/database";
+import type { AiSource } from "@/types/ai";
+import type { AiDashboardTemplate, AiDocument } from "@/types/database";
+
+interface AiDocumentCandidate {
+  id: string;
+  document_id: string;
+  title?: string | null;
+  file_name?: string | null;
+  chunk_index: number;
+  content: string;
+  similarity?: number | null;
+  fusion_score?: number | null;
+  keyword_rank?: number | null;
+  semantic_rank?: number | null;
+}
+
+function normalizeSearchText(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("vi")
+    .replace(/đ/g, "d");
+}
+
+export function extractDocumentIdentifiers(value: string) {
+  const matches = value.match(/\b(?=[A-Z0-9_-]{5,}\b)(?=[A-Z0-9_-]*[A-Z])(?=[A-Z0-9_-]*\d)[A-Z0-9]+(?:[-_][A-Z0-9]+)+\b/gi);
+  return Array.from(new Set(
+    (matches ?? [])
+      .map((item) => normalizeSearchText(item).trim())
+      .filter(Boolean),
+  ));
+}
+
+export function expandAiDocumentQuery(question: string) {
+  const normalized = normalizeSearchText(question);
+  const expansions: string[] = [];
+  const synonymGroups = [
+    { triggers: ["kho", "ton kho"], terms: ["nguyên liệu", "kiểm kê", "nhập hàng"] },
+    { triggers: ["nhap hang", "phieu nhap"], terms: ["nhà cung cấp", "tồn kho"] },
+    { triggers: ["huy", "hao hut"], terms: ["xuất hủy", "thất thoát"] },
+    { triggers: ["quy trinh", "huong dan"], terms: ["quy định", "thao tác"] },
+  ];
+  for (const group of synonymGroups) {
+    if (group.triggers.some((trigger) => normalized.includes(trigger))) {
+      expansions.push(...group.terms);
+    }
+  }
+  return [question.trim(), ...Array.from(new Set(expansions))].filter(Boolean).join(" ");
+}
+
+export function rerankAiDocumentCandidates(
+  rows: AiDocumentCandidate[],
+  question: string,
+  limit = 6,
+) {
+  const terms = extractSearchTerms(question);
+  const identifiers = extractDocumentIdentifiers(question);
+  const normalizedQuestion = normalizeSearchText(question).trim();
+  const scored = rows
+    .map((row) => {
+      const haystack = normalizeSearchText(`${row.title ?? ""} ${row.file_name ?? ""} ${row.content ?? ""}`);
+      const termCoverage = terms.length > 0
+        ? terms.filter((term) => haystack.includes(term)).length / terms.length
+        : 0;
+      const identifierCoverage = identifiers.length > 0
+        ? identifiers.filter((identifier) => haystack.includes(identifier)).length / identifiers.length
+        : 1;
+      const exactPhrase = normalizedQuestion.length >= 8 && haystack.includes(normalizedQuestion) ? 1 : 0;
+      const similarity = Number(row.similarity ?? 0);
+      return {
+        ...row,
+        termCoverage,
+        identifierCoverage,
+        rerankScore:
+          Number(row.fusion_score ?? 0)
+          + identifierCoverage * 0.08
+          + termCoverage * 0.025
+          + exactPhrase * 0.03
+          + similarity * 0.01,
+      };
+    })
+    .filter((row) =>
+      row.identifierCoverage >= 1
+      && (
+        row.termCoverage > 0
+        || Number(row.similarity ?? 0) >= 0.2
+        || row.keyword_rank != null
+      ),
+    )
+    .sort((left, right) => right.rerankScore - left.rerankScore);
+
+  const selected: typeof scored = [];
+  const chunksPerDocument = new Map<string, number>();
+  while (scored.length > 0 && selected.length < limit) {
+    scored.sort((left, right) => {
+      const leftPenalty = (chunksPerDocument.get(left.document_id) ?? 0) * 0.015;
+      const rightPenalty = (chunksPerDocument.get(right.document_id) ?? 0) * 0.015;
+      return (right.rerankScore - rightPenalty) - (left.rerankScore - leftPenalty);
+    });
+    const next = scored.shift();
+    if (!next) break;
+    if ((chunksPerDocument.get(next.document_id) ?? 0) >= 2) continue;
+    selected.push(next);
+    chunksPerDocument.set(next.document_id, (chunksPerDocument.get(next.document_id) ?? 0) + 1);
+  }
+  return selected;
+}
 
 export async function listAiDocuments(organizationId: string): Promise<AiDocument[]> {
   const supabase = createSupabaseServerClient();
@@ -16,130 +122,107 @@ export async function listAiDocuments(organizationId: string): Promise<AiDocumen
   return data ?? [];
 }
 
-export async function searchAiDocumentChunks(organizationId: string, question: string): Promise<AiSource[]> {
+export async function listAiDashboardTemplates(organizationId: string): Promise<AiDashboardTemplate[]> {
+  const supabase = createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("ai_dashboard_templates")
+    .select("*")
+    .eq("organization_id", organizationId)
+    .order("created_at", { ascending: false })
+    .limit(12);
+  if (error) return [];
+  return data ?? [];
+}
+
+async function keywordSearchAiDocumentChunks(
+  organizationId: string,
+  question: string,
+  limit: number,
+): Promise<AiSource[]> {
   const supabase = createSupabaseServerClient();
   const terms = extractSearchTerms(question);
+  const identifiers = extractDocumentIdentifiers(question);
   if (terms.length === 0) return [];
   const orFilter = terms.map((term) => `content.ilike.%${term}%`).join(",");
   const { data, error } = await supabase
     .from("ai_document_chunks")
-    .select("id, chunk_index, content, ai_documents!inner(title, file_name)")
+    .select("id, document_id, chunk_index, content, ai_documents!inner(title, file_name)")
     .eq("organization_id", organizationId)
     .or(orFilter)
-    .limit(6);
+    .limit(limit);
   if (error) return [];
-  return (data ?? []).map((row: any) => ({
+  return (data ?? [])
+    .filter((row: any) => {
+      if (identifiers.length === 0) return true;
+      const haystack = normalizeSearchText(`${row.ai_documents?.title ?? ""} ${row.ai_documents?.file_name ?? ""} ${row.content ?? ""}`);
+      return identifiers.every((identifier) => haystack.includes(identifier));
+    })
+    .map((row: any) => ({
     id: row.id,
     type: "document",
     label: row.ai_documents?.title ?? row.ai_documents?.file_name ?? "Tài liệu",
-    detail: `Đoạn ${Number(row.chunk_index) + 1}`,
-    excerpt: String(row.content ?? "").slice(0, 420),
+    detail: `Keyword · Đoạn ${Number(row.chunk_index) + 1}`,
+    excerpt: String(row.content ?? "").slice(0, 900),
+    meta: {
+      search: "keyword",
+      documentId: row.document_id,
+      chunkId: row.id,
+      chunkIndex: Number(row.chunk_index),
+    },
   }));
 }
 
-export function inferAiDateRange(question: string, now = new Date()) {
-  const q = question.toLowerCase();
-  const start = new Date(now);
-  const end = new Date(now);
-  end.setHours(23, 59, 59, 999);
-
-  if (q.includes("tháng này") || q.includes("this month")) {
-    start.setDate(1);
-    start.setHours(0, 0, 0, 0);
-    return { from: start.toISOString(), to: end.toISOString(), label: "Tháng này" };
-  }
-  if (q.includes("hôm nay") || q.includes("today")) {
-    start.setHours(0, 0, 0, 0);
-    return { from: start.toISOString(), to: end.toISOString(), label: "Hôm nay" };
-  }
-  if (q.includes("hôm qua") || q.includes("yesterday")) {
-    start.setDate(start.getDate() - 1);
-    start.setHours(0, 0, 0, 0);
-    end.setDate(end.getDate() - 1);
-    end.setHours(23, 59, 59, 999);
-    return { from: start.toISOString(), to: end.toISOString(), label: "Hôm qua" };
-  }
-  start.setDate(start.getDate() - 6);
-  start.setHours(0, 0, 0, 0);
-  return { from: start.toISOString(), to: end.toISOString(), label: "7 ngày qua" };
-}
-
-export async function getAiAnalyticsContext(args: {
-  organizationId: string;
-  branchId: string;
-  question: string;
-}): Promise<AiAnalyticsContext> {
+export async function searchAiDocumentChunks(
+  organizationId: string,
+  branchId: string,
+  question: string,
+  limit = 6,
+): Promise<AiSource[]> {
+  const embedding = await embedText(question).catch(() => null);
   const supabase = createSupabaseServerClient();
-  const range = inferAiDateRange(args.question);
-  const [{ data: sales }, { data: products }, { data: channels }] = await Promise.all([
-    supabase.rpc("ai_sales_summary", {
-      p_org_id: args.organizationId,
-      p_branch_id: args.branchId,
-      p_from: range.from,
-      p_to: range.to,
-    }),
-    supabase.rpc("ai_top_products", {
-      p_org_id: args.organizationId,
-      p_branch_id: args.branchId,
-      p_from: range.from,
-      p_to: range.to,
-      p_limit: 10,
-    }),
-    supabase.rpc("ai_channel_summary", {
-      p_org_id: args.organizationId,
-      p_branch_id: args.branchId,
-      p_from: range.from,
-      p_to: range.to,
-    }),
-  ]);
-  return {
-    range,
-    salesSummary: (sales?.[0] as AiAnalyticsContext["salesSummary"]) ?? null,
-    topProducts: (products ?? []) as AiAnalyticsContext["topProducts"],
-    channelSummary: (channels ?? []) as AiAnalyticsContext["channelSummary"],
-  };
-}
+  const expandedQuery = expandAiDocumentQuery(question);
+  const candidateCount = Math.min(Math.max(limit * 4, 12), 40);
+  const { data, error } = await supabase.rpc("hybrid_search_ai_document_chunks", {
+    p_org_id: organizationId,
+    p_branch_id: branchId,
+    p_query_text: expandedQuery,
+    p_query_embedding: embedding ? vectorToSql(embedding.vector) : null,
+    p_match_count: candidateCount,
+    p_full_text_weight: 1.1,
+    p_semantic_weight: 1,
+    p_rrf_k: 50,
+  });
 
-export function buildChartForQuestion(question: string, analytics: AiAnalyticsContext): AiChartSpec | null {
-  const q = question.toLowerCase();
-  if ((q.includes("kênh") || q.includes("channel")) && analytics.channelSummary.length > 0) {
-    return {
-      type: "bar",
-      title: `Doanh thu theo kênh bán - ${analytics.range.label}`,
-      xKey: "channel",
-      yKey: "revenue",
-      data: analytics.channelSummary.map((row) => ({
-        channel: row.channel_name,
-        revenue: Number(row.revenue),
-        fees: Number(row.channel_fees),
-      })),
-    };
+  if (!error && data && data.length > 0) {
+    const reranked = rerankAiDocumentCandidates(
+      data as AiDocumentCandidate[],
+      question,
+      limit,
+    );
+
+    return reranked.map((row) => ({
+      id: row.id,
+      type: "document",
+      label: row.title ?? row.file_name ?? "Tài liệu",
+      detail: `Hybrid${row.similarity == null ? "" : ` ${(Number(row.similarity) * 100).toFixed(0)}%`} · Đoạn ${Number(row.chunk_index) + 1}`,
+      excerpt: String(row.content ?? "").slice(0, 900),
+      meta: {
+        search: "hybrid",
+        rpc: "hybrid_search_ai_document_chunks",
+        expandedQuery,
+        candidateCount: data.length,
+        embeddingModel: embedding?.model ?? null,
+        similarity: row.similarity == null ? null : Number(row.similarity),
+        fusionScore: Number(row.fusion_score),
+        rerankScore: row.rerankScore,
+        keywordRank: row.keyword_rank,
+        semanticRank: row.semantic_rank,
+        documentId: row.document_id,
+        chunkId: row.id,
+        chunkIndex: Number(row.chunk_index),
+      },
+    }));
   }
-  if ((q.includes("món") || q.includes("sản phẩm") || q.includes("top") || q.includes("product")) && analytics.topProducts.length > 0) {
-    return {
-      type: "bar",
-      title: `Top món theo doanh thu - ${analytics.range.label}`,
-      xKey: "product",
-      yKey: "revenue",
-      data: analytics.topProducts.slice(0, 8).map((row) => ({
-        product: row.product_name,
-        revenue: Number(row.revenue),
-        profit: Number(row.gross_profit),
-      })),
-    };
-  }
-  if (analytics.salesSummary) {
-    return {
-      type: "bar",
-      title: `Doanh thu, giá vốn, lợi nhuận - ${analytics.range.label}`,
-      xKey: "metric",
-      yKey: "value",
-      data: [
-        { metric: "Doanh thu", value: Number(analytics.salesSummary.net_revenue) },
-        { metric: "Giá vốn", value: Number(analytics.salesSummary.cost_of_goods) },
-        { metric: "Lãi sau phí", value: Number(analytics.salesSummary.net_profit) },
-      ],
-    };
-  }
-  return null;
+
+  return keywordSearchAiDocumentChunks(organizationId, expandedQuery, limit);
 }
