@@ -5,6 +5,7 @@ import { inventoryItemSchema, inventoryMovementSchema } from "@/lib/validation/s
 import { actionFail, actionOk, type ActionResult } from "@/lib/utils/action-result";
 import { canManageInventory, requireRole } from "@/lib/auth/permissions";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { clearAiToolCache } from "@/server/ai/cache";
 
 export async function createInventoryItem(
   organizationId: string,
@@ -68,6 +69,7 @@ export async function createInventoryItem(
     });
   }
   revalidatePath("/inventory");
+  clearAiToolCache();
   return actionOk({ id: item.id });
 }
 
@@ -141,5 +143,6 @@ export async function createInventoryMovement(
   });
 
   revalidatePath("/inventory");
+  clearAiToolCache();
   return actionOk({ id: mv.id });
 }
