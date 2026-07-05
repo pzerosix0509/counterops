@@ -333,7 +333,86 @@ export interface AiDocumentChunk {
   document_id: string;
   chunk_index: number;
   content: string;
+  embedding: unknown | null;
+  embedding_model: string | null;
   created_at: string;
+}
+export interface AiDashboardTemplate {
+  id: string;
+  organization_id: string;
+  branch_id: string | null;
+  name: string;
+  description: string | null;
+  prompt: string;
+  spec: Json;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+export interface AiChatSession {
+  id: string;
+  organization_id: string;
+  branch_id: string;
+  user_id: string;
+  title: string;
+  mode: "chat" | "dashboard";
+  memory_summary: string | null;
+  message_count: number;
+  last_message_at: string;
+  archived_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+export interface AiChatMessage {
+  id: string;
+  organization_id: string;
+  branch_id: string;
+  session_id: string;
+  role: "user" | "assistant" | "system";
+  content: string;
+  response_json: Json | null;
+  tool_calls: Json;
+  sources: Json;
+  model_used: string | null;
+  client_request_id: string | null;
+  created_at: string;
+}
+export interface AiRun {
+  id: string;
+  organization_id: string;
+  branch_id: string;
+  user_id: string;
+  session_id: string | null;
+  assistant_message_id: string | null;
+  mode: "chat" | "dashboard";
+  provider: string | null;
+  model: string | null;
+  status: "success" | "fallback" | "error";
+  intent: string | null;
+  response_mode: string | null;
+  confidence_score: number | null;
+  telemetry: Json;
+  tool_calls: Json;
+  source_count: number;
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+  estimated_cost_usd: number | null;
+  latency_ms: number;
+  fallback_reason: string | null;
+  error_message: string | null;
+  created_at: string;
+}
+export interface AiMessageFeedback {
+  id: string;
+  organization_id: string;
+  branch_id: string;
+  message_id: string;
+  user_id: string;
+  rating: -1 | 1;
+  comment: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 // Helper to make a Supabase-style table descriptor.
@@ -374,6 +453,11 @@ export interface Database {
       audit_logs: TableDescriptor<AuditLog>;
       ai_documents: TableDescriptor<AiDocument>;
       ai_document_chunks: TableDescriptor<AiDocumentChunk>;
+      ai_dashboard_templates: TableDescriptor<AiDashboardTemplate>;
+      ai_chat_sessions: TableDescriptor<AiChatSession>;
+      ai_chat_messages: TableDescriptor<AiChatMessage>;
+      ai_runs: TableDescriptor<AiRun>;
+      ai_message_feedback: TableDescriptor<AiMessageFeedback>;
     };
     Views: Record<string, never>;
     Functions: {
@@ -401,16 +485,118 @@ export interface Database {
           gross_profit: number;
         }[];
       };
-      ai_channel_summary: {
-        Args: { p_org_id: string; p_branch_id: string; p_from: string; p_to: string };
-        Returns: {
-          channel_name: string;
-          orders: number;
-          revenue: number;
-          channel_fees: number;
-        }[];
+        ai_channel_summary: {
+          Args: { p_org_id: string; p_branch_id: string; p_from: string; p_to: string };
+          Returns: {
+            channel_name: string;
+            orders: number;
+            revenue: number;
+            channel_fees: number;
+          }[];
+        };
+        match_ai_document_chunks: {
+          Args: {
+            p_org_id: string;
+            p_branch_id: string | null;
+            p_query_embedding: unknown;
+            p_match_count?: number;
+            p_match_threshold?: number;
+          };
+          Returns: {
+            id: string;
+            document_id: string;
+            title: string;
+            file_name: string;
+            chunk_index: number;
+            content: string;
+            similarity: number;
+          }[];
+        };
+        hybrid_search_ai_document_chunks: {
+          Args: {
+            p_org_id: string;
+            p_branch_id: string;
+            p_query_text: string;
+            p_query_embedding: unknown | null;
+            p_match_count?: number;
+            p_full_text_weight?: number;
+            p_semantic_weight?: number;
+            p_rrf_k?: number;
+          };
+          Returns: {
+            id: string;
+            document_id: string;
+            title: string;
+            file_name: string;
+            chunk_index: number;
+            content: string;
+            similarity: number | null;
+            fusion_score: number;
+            keyword_rank: number | null;
+            semantic_rank: number | null;
+          }[];
+        };
+        ai_sales_timeseries: {
+          Args: {
+            p_org_id: string;
+            p_branch_id: string;
+            p_from: string;
+            p_to: string;
+            p_granularity?: string;
+            p_timezone?: string;
+          };
+          Returns: {
+            period_start: string;
+            total_orders: number;
+            net_revenue: number;
+            cost_of_goods: number;
+            gross_profit: number;
+            channel_fees: number;
+            net_profit: number;
+          }[];
+        };
+        ai_category_summary: {
+          Args: {
+            p_org_id: string;
+            p_branch_id: string;
+            p_from: string;
+            p_to: string;
+            p_limit?: number;
+          };
+          Returns: {
+            category_id: string | null;
+            category_name: string;
+            quantity: number;
+            revenue: number;
+            cost_of_goods: number;
+            gross_profit: number;
+          }[];
+        };
+        ai_period_comparison: {
+          Args: { p_org_id: string; p_branch_id: string; p_from: string; p_to: string };
+          Returns: {
+            current_orders: number;
+            previous_orders: number;
+            orders_delta_percent: number | null;
+            current_revenue: number;
+            previous_revenue: number;
+            revenue_delta_percent: number | null;
+            current_profit: number;
+            previous_profit: number;
+            profit_delta_percent: number | null;
+          }[];
+        };
+        ai_usage_summary: {
+          Args: { p_org_id: string; p_branch_id: string; p_from: string; p_to: string };
+          Returns: {
+            total_runs: number;
+            total_tokens: number;
+            estimated_cost_usd: number;
+            fallback_runs: number;
+            average_latency_ms: number;
+          }[];
+        };
       };
-    };
     Enums: {
       membership_role: MembershipRole;
       membership_status: MembershipStatus;
