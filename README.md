@@ -50,17 +50,31 @@ Stack hiện tại:
   - Xuất Excel.
 - Realtime đã nối cho POS/Bếp qua Supabase Realtime publication.
 - Hệ thống toast/notification đã nối cho các thao tác chính.
-- AI trợ lý MVP:
+- AI trợ lý phân tích dữ liệu:
   - Upload tài liệu text/Markdown/CSV/JSON và tự chia đoạn.
-  - Hỏi đáp dữ liệu bán hàng/kênh bán/lãi lỗ bằng analytics RPC.
+  - Hybrid search tài liệu bằng full-text search + pgvector + Reciprocal Rank Fusion, sau đó rerank theo độ phủ từ khóa.
+  - Semantic metrics layer định nghĩa thống nhất doanh thu, giá vốn, lợi nhuận, phí kênh và số đơn.
+  - Governed tool planner chỉ gọi các analytics RPC trong allowlist; model không được chạy SQL tùy ý.
+  - Analytics theo tổng kỳ, chuỗi thời gian, món, nhóm món, kênh bán, kỳ so sánh và cảnh báo tồn kho.
   - Hỗ trợ provider NVIDIA NIM (`minimaxai/minimax-m3`), MiniMax-compatible endpoint và OpenAI.
-  - Hiển thị biểu đồ, nguồn trích dẫn, nguồn dữ liệu dạng metric/table và fallback nội bộ khi provider lỗi hoặc chưa cấu hình.
+  - Lưu session/message và conversation memory theo từng người dùng, tổ chức và chi nhánh.
+  - Hiển thị biểu đồ, nguồn trích dẫn, tool/RPC, dữ liệu gốc và fallback nội bộ khi provider lỗi.
+  - Dashboard Builder Mode: AI trả dashboard spec được kiểm tra bằng strict Zod schema rồi render bằng component an toàn.
+  - Lưu dashboard template và drill-down nguồn dữ liệu để xem RPC/query, metadata và dữ liệu gốc.
+  - Lưu run telemetry: provider/model, tool calls, token usage, latency, fallback và chi phí ước tính.
+  - Thu thập đánh giá tốt/chưa tốt theo từng câu trả lời.
+  - Timeout, circuit breaker và provider failover ngăn model lỗi giữ request quá lâu.
+  - Progress streaming hiển thị các bước planner, truy vấn, đánh giá, sinh câu trả lời và lưu hội thoại.
+  - Intent planner chọn deterministic response, fast model hoặc quality model theo độ phức tạp.
+  - RPC cache tách biệt theo organization/branch và được xóa sau thanh toán hoặc biến động kho.
+  - Data-quality guardrails, confidence score và anomaly detection đi kèm từng câu trả lời.
+  - Golden-question evaluation suite gồm 26 tình huống, kiểm tra intent, tool, khoảng thời gian và model tier.
 
 ### Đang Hoàn Thiện
 
 - Template/export Excel hiện ưu tiên header ASCII không dấu để tránh lỗi tương thích Excel cũ; có thể polish lại sang tiếng Việt có dấu.
 - Upload ảnh món/hàng kho chưa kết nối Supabase Storage.
-- Tìm kiếm tài liệu AI hiện là keyword search; semantic search bằng embedding/pgvector là bước nâng cấp tiếp theo.
+- Semantic search hiện cần embedding 1536 chiều; nếu dùng provider khác OpenAI cần đảm bảo model embedding tương thích.
 - Chưa có module nhân sự, khách hàng/CRM, công nợ nâng cao.
 
 ## Cấu Trúc Chính
@@ -168,6 +182,19 @@ SUPABASE_SERVICE_ROLE_KEY=...
 # AI provider. Use one of: nvidia, minimax, openai
 AI_PROVIDER=nvidia
 
+# Optional model routing and runtime resilience
+AI_FAST_PROVIDER=nvidia
+AI_FAST_MODEL=minimaxai/minimax-m3
+AI_FAST_MAX_TOKENS=1400
+AI_QUALITY_PROVIDER=nvidia
+AI_QUALITY_MODEL=minimaxai/minimax-m3
+AI_QUALITY_MAX_TOKENS=2800
+AI_PROVIDER_TIMEOUT_MS=8000
+AI_CIRCUIT_FAILURE_THRESHOLD=2
+AI_CIRCUIT_COOLDOWN_MS=60000
+AI_RPC_CACHE_TTL_MS=45000
+AI_RPC_CACHE_BUCKET_MS=300000
+
 # NVIDIA NIM / Integrate API for MiniMax M3
 NVIDIA_API_KEY=...
 NVIDIA_BASE_URL=https://integrate.api.nvidia.com/v1
@@ -181,6 +208,23 @@ MINIMAX_MODEL=MiniMax-M3
 # Alternative: OpenAI Responses API
 OPENAI_API_KEY=...
 OPENAI_MODEL=gpt-4.1-mini
+
+# Optional: dùng để ước tính chi phí trong ai_runs
+AI_INPUT_COST_PER_MILLION=0
+AI_OUTPUT_COST_PER_MILLION=0
+
+# Optional semantic search embeddings.
+# Google AI Studio: only GOOGLE_AI_API_KEY + gemini-embedding-2 is needed; base URL can be omitted.
+AI_EMBEDDING_PROVIDER=google
+GOOGLE_AI_API_KEY=...
+AI_EMBEDDING_MODEL=gemini-embedding-2
+AI_EMBEDDING_DIMENSIONS=1536
+
+# Alternative: OpenAI-compatible embeddings
+AI_EMBEDDING_API_KEY=...
+AI_EMBEDDING_BASE_URL=https://api.openai.com/v1
+# AI_EMBEDDING_PROVIDER=openai-compatible
+# AI_EMBEDDING_MODEL=text-embedding-3-small
 ```
 
 Lưu ý: `SUPABASE_SERVICE_ROLE_KEY` chỉ được dùng server-side. Không thêm prefix `NEXT_PUBLIC_`.
@@ -200,6 +244,8 @@ supabase/migrations/0006_add_realtime_publication.sql
 supabase/migrations/0007_add_default_takeaway_channels.sql
 supabase/migrations/0008_add_operational_settings.sql
 supabase/migrations/0009_add_ai_assistant.sql
+supabase/migrations/0010_ai_semantic_dashboard.sql
+supabase/migrations/20260701131012_ai_conversations_and_analytics.sql
 ```
 
 Migration quan trọng gần đây:
@@ -209,6 +255,9 @@ Migration quan trọng gần đây:
 - `0006_add_realtime_publication.sql`: bật publication cho POS/Bếp realtime.
 - `0008_add_operational_settings.sql`: thêm nhóm setting vận hành/kho/bếp/POS.
 - `0009_add_ai_assistant.sql`: thêm bảng tài liệu AI, chunk tài liệu và RPC analytics scoped theo organization/branch.
+- `0010_ai_semantic_dashboard.sql`: thêm pgvector cho tài liệu AI, RPC semantic match và bảng dashboard template.
+- `20260701131012_ai_conversations_and_analytics.sql`: thêm chat history/memory, feedback, run telemetry, RPC time-series/nhóm món/so sánh kỳ và hybrid RAG.
+- `20260702072140_ai_runtime_telemetry.sql`: thêm intent, response mode, confidence và telemetry chi tiết cho từng AI run.
 
 ### 4. Tạo user và dữ liệu demo
 
@@ -386,9 +435,9 @@ npm run test
 
 Ưu tiên cao:
 
-1. Manual test AI với provider thật: NVIDIA/MiniMax/OpenAI, fallback reason, nguồn trích dẫn, upload tài liệu.
-2. Thêm semantic search cho tài liệu AI bằng embedding + Supabase pgvector.
-3. Thiết kế AI dashboard spec renderer để AI tạo dashboard bằng JSON an toàn thay vì HTML raw.
+1. Manual test AI với provider thật: NVIDIA/MiniMax/OpenAI, fallback reason, nguồn trích dẫn, upload tài liệu, semantic search.
+2. Manual test Dashboard Builder: tạo dashboard, lưu template, kiểm tra drill-down nguồn.
+3. Thêm màn quản lý dashboard template đã lưu: mở lại, đổi tên, xóa, đặt mặc định.
 4. Manual test toàn bộ flow Excel trên Supabase thật: tải mẫu, import preview, commit, export.
 5. Manual test flow POS thanh toán trước -> Bếp realtime -> Đã phục vụ -> bàn về trống.
 

@@ -2,9 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { canViewReports, requireRole } from "@/lib/auth/permissions";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { canViewReports, requireActiveContext, requireRole } from "@/lib/auth/permissions";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { chunkText, normalizeDocumentText } from "@/lib/ai/chunk";
+import { embedTexts, vectorToSql } from "@/lib/ai/embeddings";
 import { actionFail, actionOk, type ActionResult } from "@/lib/utils/action-result";
 
 const uploadDocumentSchema = z.object({
@@ -18,10 +19,17 @@ const uploadDocumentSchema = z.object({
 export async function uploadAiDocument(
   organizationId: string,
   input: unknown
-): Promise<ActionResult<{ documentId: string; chunks: number }>> {
+): Promise<ActionResult<{ documentId: string; chunks: number; embedded: number }>> {
   const membership = await requireRole(organizationId, canViewReports);
+  const activeContext = await requireActiveContext();
   const parsed = uploadDocumentSchema.safeParse(input);
   if (!parsed.success) return actionFail("VALIDATION_ERROR", "Tài liệu không hợp lệ.");
+  if (
+    activeContext.organizationId !== organizationId
+    || (parsed.data.branchId && parsed.data.branchId !== activeContext.branchId)
+  ) {
+    return actionFail("FORBIDDEN", "Bạn không có quyền upload tài liệu cho chi nhánh này.");
+  }
 
   const content = normalizeDocumentText(parsed.data.content);
   if (content.length < 20) return actionFail("VALIDATION_ERROR", "Tài liệu quá ngắn để tạo ngữ cảnh AI.");
@@ -30,9 +38,10 @@ export async function uploadAiDocument(
   const chunks = chunkText(content);
   if (chunks.length === 0) return actionFail("VALIDATION_ERROR", "Không tạo được đoạn dữ liệu từ tài liệu.");
 
-  const branchId = parsed.data.branchId ?? membership.branch?.id ?? null;
-  const admin = createSupabaseAdminClient();
-  const { data: doc, error: docError } = await admin
+  const embeddingResult = await embedTexts(chunks.map((chunk) => chunk.content)).catch(() => null);
+  const branchId = activeContext.branchId;
+  const supabase = createSupabaseServerClient();
+  const { data: doc, error: docError } = await supabase
     .from("ai_documents")
     .insert({
       organization_id: membership.organization.id,
@@ -47,27 +56,38 @@ export async function uploadAiDocument(
     .single();
   if (docError || !doc) return actionFail("INTERNAL_ERROR", "Không lưu được tài liệu: " + (docError?.message ?? ""));
 
-  const { error: chunkError } = await admin.from("ai_document_chunks").insert(
-    chunks.map((chunk) => ({
+  const { error: chunkError } = await supabase.from("ai_document_chunks").insert(
+    chunks.map((chunk, index) => ({
       organization_id: membership.organization.id,
       branch_id: branchId,
       document_id: doc.id,
       chunk_index: chunk.index,
       content: chunk.content,
+      embedding: embeddingResult?.vectors[index] ? vectorToSql(embeddingResult.vectors[index]) : null,
+      embedding_model: embeddingResult?.vectors[index] ? embeddingResult.model : null,
     }))
   );
-  if (chunkError) return actionFail("INTERNAL_ERROR", "Không lưu được đoạn dữ liệu tài liệu: " + chunkError.message);
+  if (chunkError) {
+    await supabase.from("ai_documents").delete().eq("id", doc.id);
+    return actionFail("INTERNAL_ERROR", "Không lưu được đoạn dữ liệu tài liệu: " + chunkError.message);
+  }
 
-  await admin.from("audit_logs").insert({
+  await supabase.from("audit_logs").insert({
     organization_id: membership.organization.id,
     branch_id: branchId,
     actor_user_id: membership.membership.user_id,
     action: "ai.document.upload",
     entity_type: "ai_documents",
     entity_id: doc.id,
-    after: { title: parsed.data.title, fileName: parsed.data.fileName, chunks: chunks.length },
+    after: {
+      title: parsed.data.title,
+      fileName: parsed.data.fileName,
+      chunks: chunks.length,
+      embedded: embeddingResult?.vectors.length ?? 0,
+      embeddingModel: embeddingResult?.model ?? null,
+    },
   });
 
   revalidatePath("/ai");
-  return actionOk({ documentId: doc.id, chunks: chunks.length });
+  return actionOk({ documentId: doc.id, chunks: chunks.length, embedded: embeddingResult?.vectors.length ?? 0 });
 }

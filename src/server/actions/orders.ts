@@ -6,6 +6,7 @@ import { actionFail, actionOk, type ActionResult } from "@/lib/utils/action-resu
 import { canCreateOrder, canPayOrder, canUpdateKitchen, requireRole } from "@/lib/auth/permissions";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { calculateTotals, newOrderNumber, classifyPaymentStatus } from "@/lib/calculations/orders";
+import { clearAiToolCache } from "@/server/ai/cache";
 
 const OPEN_ORDER_STATUSES = ["draft", "open", "sent_to_kitchen", "partially_paid"] as const;
 
@@ -455,6 +456,7 @@ export async function payOrder(organizationId: string, input: unknown): Promise<
   revalidatePath("/kitchen");
   revalidatePath("/dashboard");
   revalidatePath("/reports/end-of-day");
+  clearAiToolCache();
   return actionOk({ orderId: order.id, status, total, paid: newPaid, debt: debtAmount });
 }
 

@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:ai": "vitest run src/__tests__/ai.test.ts src/__tests__/ai-golden.test.ts src/__tests__/ai-runtime.test.ts src/__tests__/ai-migration.test.ts"
   },
   "dependencies": {
     "@radix-ui/react-checkbox": "^1.3.5",

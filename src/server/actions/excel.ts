@@ -10,6 +10,7 @@ import { listCategories, listProducts } from "@/server/queries/menu";
 import { listInventoryBalances, listInventoryItems } from "@/server/queries/inventory";
 import { computeEod, getOrCreateEodReport } from "@/server/queries/eod";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { clearAiToolCache } from "@/server/ai/cache";
 
 /**
  * Server actions that wrap the Excel import pipeline. The browser only
@@ -107,7 +108,10 @@ export async function commitInventoryItemImport(
     membership.membership.user_id,
     preview
   );
-  if (result.ok) revalidatePath("/inventory");
+  if (result.ok) {
+    revalidatePath("/inventory");
+    clearAiToolCache();
+  }
   return result;
 }
 
@@ -131,7 +135,10 @@ export async function commitInventoryMovementImport(
     Boolean(org?.allow_negative_inventory),
     preview
   );
-  if (result.ok) revalidatePath("/inventory");
+  if (result.ok) {
+    revalidatePath("/inventory");
+    clearAiToolCache();
+  }
   return result;
 }
 

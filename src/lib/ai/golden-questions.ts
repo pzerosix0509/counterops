@@ -1,0 +1,381 @@
+import { buildAiPlan } from "@/lib/ai/semantic-layer";
+import type { AiIntent, AiModelTier, AiToolName } from "@/types/ai";
+
+export interface AiGoldenQuestion {
+  question: string;
+  mode: "chat" | "dashboard";
+  expectedIntent: AiIntent;
+  expectedTools: AiToolName[];
+  expectedRangeLabel: string;
+  expectedDeterministic: boolean;
+  expectedModelTier: AiModelTier;
+}
+
+export const AI_GOLDEN_QUESTIONS: AiGoldenQuestion[] = [
+  {
+    question: "Doanh thu hôm nay là bao nhiêu?",
+    mode: "chat",
+    expectedIntent: "metric_lookup",
+    expectedTools: ["sales_summary"],
+    expectedRangeLabel: "Hôm nay",
+    expectedDeterministic: true,
+    expectedModelTier: "none",
+  },
+  {
+    question: "Vẽ biểu đồ doanh thu và lợi nhuận 7 ngày qua",
+    mode: "chat",
+    expectedIntent: "trend",
+    expectedTools: ["sales_summary", "sales_timeseries"],
+    expectedRangeLabel: "7 ngày qua",
+    expectedDeterministic: true,
+    expectedModelTier: "none",
+  },
+  {
+    question: "Top món có lợi nhuận cao nhất tháng này",
+    mode: "chat",
+    expectedIntent: "product_ranking",
+    expectedTools: ["sales_summary", "top_products"],
+    expectedRangeLabel: "Tháng này",
+    expectedDeterministic: true,
+    expectedModelTier: "none",
+  },
+  {
+    question: "Nhóm món nào tạo nhiều doanh thu nhất?",
+    mode: "chat",
+    expectedIntent: "category_analysis",
+    expectedTools: ["sales_summary", "category_summary"],
+    expectedRangeLabel: "7 ngày qua",
+    expectedDeterministic: true,
+    expectedModelTier: "none",
+  },
+  {
+    question: "Kênh Grab hay Shopee hiệu quả hơn hôm nay?",
+    mode: "chat",
+    expectedIntent: "channel_analysis",
+    expectedTools: ["sales_summary", "channel_summary"],
+    expectedRangeLabel: "Hôm nay",
+    expectedDeterministic: true,
+    expectedModelTier: "none",
+  },
+  {
+    question: "So sánh doanh thu tuần này với kỳ trước",
+    mode: "chat",
+    expectedIntent: "comparison",
+    expectedTools: ["sales_summary", "period_comparison"],
+    expectedRangeLabel: "Tuần này",
+    expectedDeterministic: true,
+    expectedModelTier: "none",
+  },
+  {
+    question: "Nguyên liệu nào sắp hết hoặc đang âm kho?",
+    mode: "chat",
+    expectedIntent: "inventory_risk",
+    expectedTools: ["inventory_risk"],
+    expectedRangeLabel: "7 ngày qua",
+    expectedDeterministic: true,
+    expectedModelTier: "none",
+  },
+  {
+    question: "Tóm tắt tài liệu đã upload về quy trình nhập hàng",
+    mode: "chat",
+    expectedIntent: "document_search",
+    expectedTools: ["search_documents"],
+    expectedRangeLabel: "7 ngày qua",
+    expectedDeterministic: false,
+    expectedModelTier: "fast",
+  },
+  {
+    question: "Theo tài liệu, mã KHO-E2E-5729 áp dụng khi nào?",
+    mode: "chat",
+    expectedIntent: "document_search",
+    expectedTools: ["search_documents"],
+    expectedRangeLabel: "7 ngày qua",
+    expectedDeterministic: false,
+    expectedModelTier: "fast",
+  },
+  {
+    question: "Tạo dashboard quản trị 30 ngày qua",
+    mode: "chat",
+    expectedIntent: "dashboard",
+    expectedTools: ["sales_summary", "sales_timeseries", "period_comparison", "top_products", "category_summary", "channel_summary"],
+    expectedRangeLabel: "30 ngày qua",
+    expectedDeterministic: true,
+    expectedModelTier: "none",
+  },
+  {
+    question: "Tổng quan KPI tháng này",
+    mode: "chat",
+    expectedIntent: "dashboard",
+    expectedTools: ["sales_summary", "sales_timeseries", "period_comparison", "top_products", "category_summary", "channel_summary"],
+    expectedRangeLabel: "Tháng này",
+    expectedDeterministic: true,
+    expectedModelTier: "none",
+  },
+  {
+    question: "Doanh thu tháng trước tăng hay giảm?",
+    mode: "chat",
+    expectedIntent: "comparison",
+    expectedTools: ["sales_summary", "period_comparison"],
+    expectedRangeLabel: "Tháng trước",
+    expectedDeterministic: true,
+    expectedModelTier: "none",
+  },
+  {
+    question: "Xu hướng doanh thu theo giờ hôm nay",
+    mode: "chat",
+    expectedIntent: "trend",
+    expectedTools: ["sales_summary", "sales_timeseries"],
+    expectedRangeLabel: "Hôm nay",
+    expectedDeterministic: true,
+    expectedModelTier: "none",
+  },
+  {
+    question: "Món nào bán chạy nhất hôm qua?",
+    mode: "chat",
+    expectedIntent: "product_ranking",
+    expectedTools: ["sales_summary", "top_products"],
+    expectedRangeLabel: "Hôm qua",
+    expectedDeterministic: true,
+    expectedModelTier: "none",
+  },
+  {
+    question: "Món nào có lãi thấp nhất 14 ngày qua?",
+    mode: "chat",
+    expectedIntent: "product_ranking",
+    expectedTools: ["sales_summary", "top_products"],
+    expectedRangeLabel: "14 ngày qua",
+    expectedDeterministic: true,
+    expectedModelTier: "none",
+  },
+  {
+    question: "Doanh thu theo nhóm món tháng này",
+    mode: "chat",
+    expectedIntent: "category_analysis",
+    expectedTools: ["sales_summary", "category_summary"],
+    expectedRangeLabel: "Tháng này",
+    expectedDeterministic: true,
+    expectedModelTier: "none",
+  },
+  {
+    question: "Doanh thu kênh bán 7 ngày qua",
+    mode: "chat",
+    expectedIntent: "channel_analysis",
+    expectedTools: ["sales_summary", "channel_summary"],
+    expectedRangeLabel: "7 ngày qua",
+    expectedDeterministic: true,
+    expectedModelTier: "none",
+  },
+  {
+    question: "Tại sao doanh thu tuần này giảm bất thường?",
+    mode: "chat",
+    expectedIntent: "diagnosis",
+    expectedTools: ["sales_summary", "sales_timeseries", "period_comparison", "top_products", "channel_summary"],
+    expectedRangeLabel: "Tuần này",
+    expectedDeterministic: false,
+    expectedModelTier: "quality",
+  },
+  {
+    question: "Đề xuất cách cải thiện lợi nhuận tháng này",
+    mode: "chat",
+    expectedIntent: "diagnosis",
+    expectedTools: ["sales_summary", "sales_timeseries", "period_comparison", "top_products", "channel_summary"],
+    expectedRangeLabel: "Tháng này",
+    expectedDeterministic: false,
+    expectedModelTier: "quality",
+  },
+  {
+    question: "Tóm tắt cuộc trò chuyện và các kết luận chính",
+    mode: "chat",
+    expectedIntent: "conversation_summary",
+    expectedTools: ["sales_summary", "top_products", "channel_summary"],
+    expectedRangeLabel: "7 ngày qua",
+    expectedDeterministic: false,
+    expectedModelTier: "quality",
+  },
+  {
+    question: "Xin chào",
+    mode: "chat",
+    expectedIntent: "greeting",
+    expectedTools: [],
+    expectedRangeLabel: "7 ngày qua",
+    expectedDeterministic: true,
+    expectedModelTier: "none",
+  },
+  {
+    question: "Giá vàng hôm nay bao nhiêu?",
+    mode: "chat",
+    expectedIntent: "out_of_scope",
+    expectedTools: [],
+    expectedRangeLabel: "Hôm nay",
+    expectedDeterministic: true,
+    expectedModelTier: "none",
+  },
+  {
+    question: "Thời tiết ngày mai thế nào?",
+    mode: "chat",
+    expectedIntent: "out_of_scope",
+    expectedTools: [],
+    expectedRangeLabel: "7 ngày qua",
+    expectedDeterministic: true,
+    expectedModelTier: "none",
+  },
+  {
+    question: "Có mặt hàng tồn nào cần chú ý?",
+    mode: "chat",
+    expectedIntent: "inventory_risk",
+    expectedTools: ["inventory_risk"],
+    expectedRangeLabel: "7 ngày qua",
+    expectedDeterministic: true,
+    expectedModelTier: "none",
+  },
+  {
+    question: "Lợi nhuận 30 ngày qua",
+    mode: "chat",
+    expectedIntent: "metric_lookup",
+    expectedTools: ["sales_summary"],
+    expectedRangeLabel: "30 ngày qua",
+    expectedDeterministic: true,
+    expectedModelTier: "none",
+  },
+  {
+    question: "Dashboard hiệu quả kênh bán hôm nay",
+    mode: "dashboard",
+    expectedIntent: "dashboard",
+    expectedTools: ["sales_summary", "sales_timeseries", "period_comparison", "top_products", "category_summary", "channel_summary"],
+    expectedRangeLabel: "Hôm nay",
+    expectedDeterministic: true,
+    expectedModelTier: "none",
+  },
+  // Vietnamese natural language with minor typos
+  {
+    question: "doanh thu hom nay la bao nhiu?",
+    mode: "chat",
+    expectedIntent: "metric_lookup",
+    expectedTools: ["sales_summary"],
+    expectedRangeLabel: "Hôm nay",
+    expectedDeterministic: true,
+    expectedModelTier: "none",
+  },
+  {
+    question: "top mon ban chay 7 ngay qua",
+    mode: "chat",
+    expectedIntent: "product_ranking",
+    expectedTools: ["sales_summary", "top_products"],
+    expectedRangeLabel: "7 ngày qua",
+    expectedDeterministic: true,
+    expectedModelTier: "none",
+  },
+  {
+    question: "kiem tra ton kho nguyen lieu",
+    mode: "chat",
+    expectedIntent: "inventory_risk",
+    expectedTools: ["inventory_risk"],
+    expectedRangeLabel: "7 ngày qua",
+    expectedDeterministic: true,
+    expectedModelTier: "none",
+  },
+  // Cases that must NOT call a model
+  {
+    question: "Có bao nhiêu đơn hôm nay?",
+    mode: "chat",
+    expectedIntent: "metric_lookup",
+    expectedTools: ["sales_summary"],
+    expectedRangeLabel: "Hôm nay",
+    expectedDeterministic: true,
+    expectedModelTier: "none",
+  },
+  {
+    question: "Lợi nhuận hôm nay",
+    mode: "chat",
+    expectedIntent: "metric_lookup",
+    expectedTools: ["sales_summary"],
+    expectedRangeLabel: "Hôm nay",
+    expectedDeterministic: true,
+    expectedModelTier: "none",
+  },
+  // Cases that must NOT call document search
+  {
+    question: "Doanh thu kênh bán tháng trước",
+    mode: "chat",
+    expectedIntent: "channel_analysis",
+    expectedTools: ["sales_summary", "channel_summary"],
+    expectedRangeLabel: "Tháng trước",
+    expectedDeterministic: true,
+    expectedModelTier: "none",
+  },
+  {
+    question: "Nhóm món nào lời nhất tuần này?",
+    mode: "chat",
+    expectedIntent: "category_analysis",
+    expectedTools: ["sales_summary", "category_summary"],
+    expectedRangeLabel: "Tuần này",
+    expectedDeterministic: true,
+    expectedModelTier: "none",
+  },
+  // Document identifier cases
+  {
+    question: "Theo tài liệu, mã KHO-E2E-5729 áp dụng khi nào?",
+    mode: "chat",
+    expectedIntent: "document_search",
+    expectedTools: ["search_documents"],
+    expectedRangeLabel: "7 ngày qua",
+    expectedDeterministic: false,
+    expectedModelTier: "fast",
+  },
+  {
+    question: "Quy định trong tài liệu SOP-INV-001 nói gì?",
+    mode: "chat",
+    expectedIntent: "document_search",
+    expectedTools: ["search_documents"],
+    expectedRangeLabel: "7 ngày qua",
+    expectedDeterministic: false,
+    expectedModelTier: "fast",
+  },
+  // Out-of-scope: must not call any tool or model
+  {
+    question: "Bitcoin hôm nay bao nhiêu?",
+    mode: "chat",
+    expectedIntent: "out_of_scope",
+    expectedTools: [],
+    expectedRangeLabel: "Hôm nay",
+    expectedDeterministic: true,
+    expectedModelTier: "none",
+  },
+];
+
+export function evaluateGoldenQuestions(now = new Date()) {
+  const cases = AI_GOLDEN_QUESTIONS.map((golden) => {
+    const plan = buildAiPlan(golden.question, golden.mode, now);
+    const plannedTools = plan.tools.map((call) => call.name);
+    const toolsMatch =
+      plannedTools.length === golden.expectedTools.length
+      && plannedTools.every((tool, index) => tool === golden.expectedTools[index]);
+    const passed =
+      toolsMatch
+      && plan.intent === golden.expectedIntent
+      && plan.range.label === golden.expectedRangeLabel
+      && plan.deterministic === golden.expectedDeterministic
+      && plan.modelTier === golden.expectedModelTier;
+    return {
+      question: golden.question,
+      passed,
+      plannedTools,
+      expectedTools: golden.expectedTools,
+      expectedIntent: golden.expectedIntent,
+      actualIntent: plan.intent,
+      expectedRangeLabel: golden.expectedRangeLabel,
+      actualRangeLabel: plan.range.label,
+      expectedDeterministic: golden.expectedDeterministic,
+      actualDeterministic: plan.deterministic,
+      expectedModelTier: golden.expectedModelTier,
+      actualModelTier: plan.modelTier,
+    };
+  });
+  const passed = cases.filter((item) => item.passed).length;
+  return {
+    passed,
+    total: cases.length,
+    accuracy: cases.length === 0 ? 1 : passed / cases.length,
+    cases,
+  };
+}
