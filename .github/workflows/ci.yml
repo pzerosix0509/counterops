@@ -10,9 +10,6 @@ jobs:
   quality:
     name: quality / repo
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: intro-app
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -25,9 +22,6 @@ jobs:
   test:
     name: test / ai
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: intro-app
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -39,9 +33,6 @@ jobs:
   test-all:
     name: test / all
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: intro-app
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
