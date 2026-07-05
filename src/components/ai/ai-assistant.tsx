@@ -462,15 +462,6 @@ export function AiAssistant({
     });
   }
 
-  const latestResponseIndex = messages.reduce(
-    (latestIndex, message, index) => message.response ? index : latestIndex,
-    -1,
-  );
-  const latestResponse = latestResponseIndex >= 0 ? messages[latestResponseIndex]?.response : undefined;
-  const latestResponsePrompt = latestResponseIndex > 0
-    ? [...messages.slice(0, latestResponseIndex)].reverse().find((message) => message.role === "user")?.content ?? ""
-    : "";
-
   return (
     <div className="flex min-h-[600px] flex-col-reverse gap-6 xl:h-[calc(100vh-10rem)] xl:flex-row">
       {/* Sidebar: History, Stats, v.v */}
@@ -624,122 +615,132 @@ export function AiAssistant({
                 ) : (
                   <>
                     {messages.map((message) => (
-                      <div key={message.id} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"} animate-in slide-in-from-bottom-2 fade-in duration-300`}>
-                        <div className={`flex gap-3 max-w-[90%] md:max-w-[80%] ${message.role === "user" ? "flex-row-reverse" : "flex-row"}`}>
-                          {message.role === "assistant" && (
-                            <div className="flex-shrink-0 h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary mt-1 border border-primary/20">
-                              <Bot className="h-4 w-4" />
+                      <div key={message.id} className="flex flex-col gap-4 animate-in slide-in-from-bottom-2 fade-in duration-300">
+                        <div className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
+                          <div className={`flex gap-3 max-w-[90%] md:max-w-[80%] ${message.role === "user" ? "flex-row-reverse" : "flex-row"}`}>
+                            {message.role === "assistant" && (
+                              <div className="flex-shrink-0 h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary mt-1 border border-primary/20">
+                                <Bot className="h-4 w-4" />
+                              </div>
+                            )}
+                            <div className={`group relative rounded-2xl px-5 py-3.5 text-sm shadow-sm ${
+                              message.role === "user"
+                                ? "bg-primary text-primary-foreground rounded-tr-sm"
+                                : "bg-muted/30 border border-border/50 rounded-tl-sm"
+                            }`}>
+                              <p className="whitespace-pre-wrap leading-relaxed">{message.content}</p>
+                              {message.response?.bullets?.length ? (
+                                <ul className="mt-3 space-y-1.5 list-disc pl-5">
+                                  {message.response.bullets.map((bullet, i) => <li key={i}>{bullet}</li>)}
+                                </ul>
+                              ) : null}
+                              {message.response?.usedFallback ? (
+                                <p className="mt-3 text-xs text-amber-600 font-medium flex items-center gap-1.5 bg-amber-500/10 p-2 rounded-md">
+                                  <Loader2 className="h-3 w-3" />
+                                  Đang dùng fallback nội bộ{message.response.fallbackReason ? `: ${message.response.fallbackReason}` : "."}
+                                </p>
+                              ) : null}
+                              {message.response?.confidence ? (
+                                <div className="mt-3 flex flex-wrap items-center gap-2">
+                                  <Badge variant="outline">
+                                    Độ tin cậy {Math.round(message.response.confidence.score * 100)}%
+                                  </Badge>
+                                  <Badge variant="secondary">
+                                    {message.response.responseMode === "deterministic"
+                                      ? "Từ dữ liệu hệ thống"
+                                      : message.response.responseMode === "model" ? "AI phân tích" : "Fallback"}
+                                  </Badge>
+                                </div>
+                              ) : null}
+                              {message.response?.anomalies?.length ? (
+                                <div className="mt-3 flex flex-col gap-1 rounded-md border bg-background/60 p-2 text-xs">
+                                  {message.response.anomalies.slice(0, 2).map((anomaly) => (
+                                    <p key={anomaly.code}>
+                                      <span className="font-semibold">{anomaly.title}:</span> {anomaly.description}
+                                    </p>
+                                  ))}
+                                </div>
+                              ) : null}
+                              {message.role === "assistant" ? (
+                                <div className="mt-3 flex items-center gap-2 border-t border-border/50 pt-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7 rounded-full hover:bg-primary/10 hover:text-primary"
+                                    onClick={() => submitFeedback(message.id, 1)}
+                                  >
+                                    <ThumbsUp className={`h-3.5 w-3.5 ${message.feedback === 1 ? "fill-current" : ""}`} />
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7 rounded-full hover:bg-destructive/10 hover:text-destructive"
+                                    onClick={() => submitFeedback(message.id, -1)}
+                                  >
+                                    <ThumbsDown className={`h-3.5 w-3.5 ${message.feedback === -1 ? "fill-current" : ""}`} />
+                                  </Button>
+                                  {message.response?.usage?.totalTokens ? (
+                                    <span className="ml-auto text-[10px] font-medium text-muted-foreground bg-background px-2 py-0.5 rounded-full border shadow-sm">
+                                      {message.response.usage.totalTokens.toLocaleString("vi-VN")} tokens
+                                    </span>
+                                  ) : null}
+                                  {message.response?.telemetry ? (
+                                    <span className="text-[10px] text-muted-foreground">
+                                      {(message.response.telemetry.responseReadyMs / 1000).toFixed(1)}s
+                                      {message.response.telemetry.cacheHits > 0
+                                        ? ` · ${message.response.telemetry.cacheHits} cache hit`
+                                        : ""}
+                                    </span>
+                                  ) : null}
+                                </div>
+                              ) : null}
                             </div>
-                          )}
-                          <div className={`group relative rounded-2xl px-5 py-3.5 text-sm shadow-sm ${
-                            message.role === "user"
-                              ? "bg-primary text-primary-foreground rounded-tr-sm"
-                              : "bg-muted/30 border border-border/50 rounded-tl-sm"
-                          }`}>
-                            <p className="whitespace-pre-wrap leading-relaxed">{message.content}</p>
-                            {message.response?.bullets?.length ? (
-                              <ul className="mt-3 space-y-1.5 list-disc pl-5">
-                                {message.response.bullets.map((bullet, i) => <li key={i}>{bullet}</li>)}
-                              </ul>
-                            ) : null}
-                            {message.response?.usedFallback ? (
-                              <p className="mt-3 text-xs text-amber-600 font-medium flex items-center gap-1.5 bg-amber-500/10 p-2 rounded-md">
-                                <Loader2 className="h-3 w-3" />
-                                Đang dùng fallback nội bộ{message.response.fallbackReason ? `: ${message.response.fallbackReason}` : "."}
-                              </p>
-                            ) : null}
-                            {message.response?.confidence ? (
-                              <div className="mt-3 flex flex-wrap items-center gap-2">
-                                <Badge variant="outline">
-                                  Độ tin cậy {Math.round(message.response.confidence.score * 100)}%
-                                </Badge>
-                                <Badge variant="secondary">
-                                  {message.response.responseMode === "deterministic"
-                                    ? "Từ dữ liệu hệ thống"
-                                    : message.response.responseMode === "model" ? "AI phân tích" : "Fallback"}
-                                </Badge>
-                              </div>
-                            ) : null}
-                            {message.response?.anomalies?.length ? (
-                              <div className="mt-3 flex flex-col gap-1 rounded-md border bg-background/60 p-2 text-xs">
-                                {message.response.anomalies.slice(0, 2).map((anomaly) => (
-                                  <p key={anomaly.code}>
-                                    <span className="font-semibold">{anomaly.title}:</span> {anomaly.description}
-                                  </p>
-                                ))}
-                              </div>
-                            ) : null}
-                            {message.role === "assistant" ? (
-                              <div className="mt-3 flex items-center gap-2 border-t border-border/50 pt-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-7 w-7 rounded-full hover:bg-primary/10 hover:text-primary"
-                                  onClick={() => submitFeedback(message.id, 1)}
-                                >
-                                  <ThumbsUp className={`h-3.5 w-3.5 ${message.feedback === 1 ? "fill-current" : ""}`} />
-                                </Button>
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-7 w-7 rounded-full hover:bg-destructive/10 hover:text-destructive"
-                                  onClick={() => submitFeedback(message.id, -1)}
-                                >
-                                  <ThumbsDown className={`h-3.5 w-3.5 ${message.feedback === -1 ? "fill-current" : ""}`} />
-                                </Button>
-                                {message.response?.usage?.totalTokens ? (
-                                  <span className="ml-auto text-[10px] font-medium text-muted-foreground bg-background px-2 py-0.5 rounded-full border shadow-sm">
-                                    {message.response.usage.totalTokens.toLocaleString("vi-VN")} tokens
-                                  </span>
-                                ) : null}
-                                {message.response?.telemetry ? (
-                                  <span className="text-[10px] text-muted-foreground">
-                                    {(message.response.telemetry.responseReadyMs / 1000).toFixed(1)}s
-                                    {message.response.telemetry.cacheHits > 0
-                                      ? ` · ${message.response.telemetry.cacheHits} cache hit`
-                                      : ""}
-                                  </span>
-                                ) : null}
-                              </div>
-                            ) : null}
                           </div>
                         </div>
+
+                        {/* Inline renderers for each assistant message */}
+                        {message.role === "assistant" && message.response && (
+                          message.response.dashboard || message.response.chart || (message.response.sources && message.response.sources.length > 0)
+                        ) ? (
+                          <div className="flex justify-start">
+                            <div className="flex gap-3 w-full">
+                              <div className="flex-shrink-0 h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary mt-1 border border-primary/20">
+                                <Database className="h-4 w-4" />
+                              </div>
+                              <div className="flex-1 space-y-4 min-w-0">
+                                {message.response.dashboard ? (
+                                  <div className="flex justify-end">
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => {
+                                        const prompt = [...messages]
+                                          .slice(0, messages.indexOf(message))
+                                          .reverse()
+                                          .find((m) => m.role === "user")?.content ?? "";
+                                        saveDashboard(message.response!.dashboard, prompt);
+                                      }}
+                                      disabled={isSaving}
+                                    >
+                                      {isSaving
+                                        ? <Loader2 data-icon="inline-start" className="animate-spin" />
+                                        : <Save data-icon="inline-start" />}
+                                      Lưu dashboard
+                                    </Button>
+                                  </div>
+                                ) : null}
+                                <AiDashboardRenderer dashboard={message.response.dashboard ?? null} />
+                                <ChartSpecRenderer chart={message.response.chart ?? null} />
+                                <SourcesPanel sources={message.response.sources ?? []} />
+                              </div>
+                            </div>
+                          </div>
+                        ) : null}
                       </div>
                     ))}
-
-                    {/* Renderers placed at the end of the message list */}
-                    {(latestResponse?.dashboard || latestResponse?.chart || (latestResponse?.sources && latestResponse.sources.length > 0)) && (
-                      <div className="flex justify-start animate-in fade-in duration-300">
-                        <div className="flex gap-3 w-full">
-                          <div className="flex-shrink-0 h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary mt-1 border border-primary/20">
-                            <Database className="h-4 w-4" />
-                          </div>
-                          <div className="flex-1 space-y-4 min-w-0">
-                            {latestResponse?.dashboard ? (
-                              <div className="flex justify-end">
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => saveDashboard(latestResponse.dashboard, latestResponsePrompt)}
-                                  disabled={isSaving}
-                                >
-                                  {isSaving
-                                    ? <Loader2 data-icon="inline-start" className="animate-spin" />
-                                    : <Save data-icon="inline-start" />}
-                                  Lưu dashboard
-                                </Button>
-                              </div>
-                            ) : null}
-                            <AiDashboardRenderer dashboard={latestResponse?.dashboard ?? null} />
-                            <ChartSpecRenderer chart={latestResponse?.chart ?? null} />
-                            <SourcesPanel sources={latestResponse?.sources ?? []} />
-                          </div>
-                        </div>
-                      </div>
-                    )}
 
                     {isAsking && (
                       <div className="flex justify-start animate-in fade-in duration-300">
