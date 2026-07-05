@@ -5,6 +5,8 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  Area,
+  AreaChart,
   Legend,
   Line,
   LineChart,
@@ -24,11 +26,19 @@ const COLORS = ["#0f172a", "#2563eb", "#0ea5e9", "#14b8a6", "#f59e0b", "#e11d48"
 function seriesLabel(key: string): string {
   const labels: Record<string, string> = {
     revenue: "Doanh thu",
-    profit: "Lãi gộp",
+    profit: "Lợi nhuận",
+    cost: "Giá vốn",
     fees: "Phí",
     value: "Giá trị",
   };
   return labels[key] ?? key.replace(/_/g, " ");
+}
+
+function formatXAxis(value: unknown): string {
+  if (typeof value !== "string" || !value.includes("T")) return String(value ?? "");
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("vi-VN", { day: "2-digit", month: "2-digit" }).format(date);
 }
 
 function getNumericSeries(chart: AiChartSpec): string[] {
@@ -54,10 +64,30 @@ export function ChartSpecRenderer({ chart }: { chart: AiChartSpec | null }) {
       <CardContent>
         <div className="h-80">
           <ResponsiveContainer>
-            {chart.type === "line" ? (
+            {chart.type === "area" ? (
+              <AreaChart data={chart.data} margin={{ top: 8, right: 16, left: 4, bottom: 8 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                <XAxis dataKey={chart.xKey} tick={{ fontSize: 11 }} tickFormatter={formatXAxis} />
+                <YAxis tickFormatter={(value) => Number(value).toLocaleString("vi-VN")} tick={{ fontSize: 11 }} width={82} />
+                <Tooltip formatter={(value) => formatVND(Number(value))} />
+                <Legend wrapperStyle={{ fontSize: 12 }} />
+                {yKeys.map((key, index) => (
+                  <Area
+                    key={key}
+                    type="monotone"
+                    dataKey={key}
+                    stroke={COLORS[index % COLORS.length]}
+                    fill={COLORS[index % COLORS.length]}
+                    fillOpacity={0.16}
+                    strokeWidth={2}
+                    name={seriesLabel(key)}
+                  />
+                ))}
+              </AreaChart>
+            ) : chart.type === "line" ? (
               <LineChart data={chart.data} margin={{ top: 8, right: 16, left: 4, bottom: 8 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis dataKey={chart.xKey} tick={{ fontSize: 11 }} />
+                <XAxis dataKey={chart.xKey} tick={{ fontSize: 11 }} tickFormatter={formatXAxis} />
                 <YAxis tickFormatter={(value) => Number(value).toLocaleString("vi-VN")} tick={{ fontSize: 11 }} width={82} />
                 <Tooltip formatter={(value) => formatVND(Number(value))} />
                 <Legend wrapperStyle={{ fontSize: 12 }} />
@@ -73,9 +103,9 @@ export function ChartSpecRenderer({ chart }: { chart: AiChartSpec | null }) {
                   />
                 ))}
               </LineChart>
-            ) : chart.type === "pie" ? (
+            ) : chart.type === "pie" || chart.type === "donut" ? (
               <PieChart>
-                <Pie data={chart.data} dataKey={chart.yKey} nameKey={chart.xKey} innerRadius={62} outerRadius={104} paddingAngle={2}>
+                <Pie data={chart.data} dataKey={chart.yKey} nameKey={chart.xKey} innerRadius={chart.type === "donut" ? 62 : 0} outerRadius={104} paddingAngle={2}>
                   {chart.data.map((_, index) => <Cell key={index} fill={COLORS[index % COLORS.length]} />)}
                 </Pie>
                 <Tooltip formatter={(value) => formatVND(Number(value))} />
@@ -84,7 +114,7 @@ export function ChartSpecRenderer({ chart }: { chart: AiChartSpec | null }) {
             ) : (
               <BarChart data={chart.data} margin={{ top: 8, right: 16, left: 4, bottom: 8 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis dataKey={chart.xKey} tick={{ fontSize: 11 }} interval={0} />
+                <XAxis dataKey={chart.xKey} tick={{ fontSize: 11 }} interval={0} tickFormatter={formatXAxis} />
                 <YAxis tickFormatter={(value) => Number(value).toLocaleString("vi-VN")} tick={{ fontSize: 11 }} width={82} />
                 <Tooltip formatter={(value) => formatVND(Number(value))} />
                 <Legend wrapperStyle={{ fontSize: 12 }} />
