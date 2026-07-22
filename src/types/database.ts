@@ -50,6 +50,8 @@ export interface OrganizationSettings {
   receipt_phone: string | null;
   receipt_logo_url: string | null;
   receipt_footer: string;
+  bank_code: string | null;
+  bank_account_number: string | null;
   created_at: string;
   updated_at: string;
 }

@@ -376,6 +376,32 @@ export function OperationalSettingsForm({
             </div>
           </div>
         </section>
+
+        <section className="space-y-3 rounded-md border bg-card p-4 xl:col-span-2">
+          <div>
+            <h2 className="text-sm font-semibold">Chuyển khoản ngân hàng</h2>
+            <p className="text-sm text-muted-foreground">Thông tin tài khoản để tự sinh QR VietQR khi thanh toán chuyển khoản trên POS.</p>
+          </div>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label>Mã ngân hàng (BIN)</Label>
+              <Input
+                placeholder="VD: 970415 (Vietinbank), 970436 (Vietcombank)"
+                value={draft.bankCode ?? ""}
+                onChange={(event) => updateDraft("bankCode", event.target.value || null)}
+              />
+              <FieldHint>Tra cứu BIN tại vietqr.io/danh-sach-ngan-hang</FieldHint>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Số tài khoản</Label>
+              <Input
+                placeholder="VD: 123456789"
+                value={draft.bankAccountNumber ?? ""}
+                onChange={(event) => updateDraft("bankAccountNumber", event.target.value || null)}
+              />
+            </div>
+          </div>
+        </section>
       </div>
 
       <div className="sticky bottom-0 flex justify-end border-t bg-background/95 py-3 backdrop-blur">

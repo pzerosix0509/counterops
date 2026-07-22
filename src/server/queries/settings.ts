@@ -30,6 +30,8 @@ function mapSettings(row: OrganizationSettings | null | undefined): OperationalS
     receiptPhone: row.receipt_phone,
     receiptLogoUrl: row.receipt_logo_url,
     receiptFooter: row.receipt_footer,
+    bankCode: row.bank_code ?? null,
+    bankAccountNumber: row.bank_account_number ?? null,
   };
 }
 
