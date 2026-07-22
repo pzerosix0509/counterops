@@ -1,6 +1,7 @@
 import "server-only";
 import { z } from "zod";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { aggregateToDailyPoints, computeForecast } from "@/lib/ai/forecast";
 import { searchAiDocumentChunks } from "@/server/queries/ai";
 import { aiToolCacheKey, withAiToolCache } from "@/server/ai/cache";
 import type { AiSource, AiToolCall, AiToolExecution, AiToolName } from "@/types/ai";
@@ -31,6 +32,9 @@ const toolArgumentSchemas = {
     query: z.string().trim().min(2).max(1000),
     limit: z.number().int().min(1).max(12),
   }).strict(),
+  forecast_revenue: rangeArgumentsSchema.extend({
+    horizon_days: z.number().int().min(7).max(90).optional(),
+  }).strict(),
 } satisfies Record<AiToolName, z.ZodType>;
 
 const sourceLabels: Record<Exclude<AiToolName, "search_documents">, string> = {
@@ -41,6 +45,7 @@ const sourceLabels: Record<Exclude<AiToolName, "search_documents">, string> = {
   channel_summary: "Doanh thu theo kênh bán",
   period_comparison: "So sánh với kỳ trước",
   inventory_risk: "Cảnh báo tồn kho",
+  forecast_revenue: "Dự báo doanh thu",
 };
 
 const rpcNames: Partial<Record<AiToolName, string>> = {
@@ -138,6 +143,38 @@ async function executeInventoryRisk(context: AiToolContext) {
   });
 }
 
+async function executeForecast(
+  call: AiToolCall,
+  context: AiToolContext,
+): Promise<{ rows: Array<Record<string, unknown>>; cacheHit: boolean }> {
+  const args = call.arguments as Record<string, any>;
+  const horizonDays = Number(args.horizon_days ?? 30);
+  const cacheKey = aiToolCacheKey({
+    organizationId: context.organizationId,
+    branchId: context.branchId,
+    tool: "forecast_revenue",
+    arguments: { from: args.from, to: args.to, horizon_days: horizonDays },
+  });
+  const cached = await withAiToolCache(cacheKey, async () => {
+    const supabase = createSupabaseServerClient();
+    const { data, error } = await supabase.rpc("ai_sales_timeseries" as any, {
+      p_org_id: context.organizationId,
+      p_branch_id: context.branchId,
+      p_from: args.from,
+      p_to: args.to,
+      p_granularity: "day",
+      p_timezone: context.timezone,
+    });
+    if (error) throw new Error(error.message);
+    const daily = aggregateToDailyPoints(
+      (data ?? []) as Array<{ period_start: string; net_revenue: number; total_orders: number }>,
+    );
+    const forecast = computeForecast(daily, horizonDays);
+    return [forecast as unknown as Record<string, unknown>];
+  });
+  return { rows: cached.value, cacheHit: cached.hit };
+}
+
 export async function executeAiTool(
   call: AiToolCall,
   context: AiToolContext,
@@ -177,6 +214,10 @@ export async function executeAiTool(
       const cached = await executeInventoryRisk(context);
       return { call, rows: cached.value, cacheHit: cached.hit, durationMs: Date.now() - startedAt };
     }
+    if (call.name === "forecast_revenue") {
+      const result = await executeForecast(call, context);
+      return { call, rows: result.rows, cacheHit: result.cacheHit, durationMs: Date.now() - startedAt };
+    }
     const result = await executeRpcTool(call, context);
     return { call, rows: result.rows, cacheHit: result.cacheHit, durationMs: Date.now() - startedAt };
   } catch (error) {
@@ -189,8 +230,27 @@ export async function executeAiTool(
   }
 }
 
+// Tools that must complete before dependent tools can be scheduled in wave 2.
+// In practice all RPCs are independent at the DB layer, but inventory_risk and
+// search_documents are I/O-heavy and benefit from being batched separately so
+// a fast sales_summary result can short-circuit the agentic loop early.
+const WAVE1_TOOLS = new Set<AiToolName>([
+  "sales_summary",
+  "top_products",
+  "category_summary",
+  "channel_summary",
+  "inventory_risk",
+]);
+
 export async function executeAiToolPlan(calls: AiToolCall[], context: AiToolContext) {
-  return Promise.all(calls.map((call) => executeAiTool(call, context)));
+  const wave1 = calls.filter((call) => WAVE1_TOOLS.has(call.name));
+  const wave2 = calls.filter((call) => !WAVE1_TOOLS.has(call.name));
+
+  const wave1Results = await Promise.all(wave1.map((call) => executeAiTool(call, context)));
+  if (wave2.length === 0) return wave1Results;
+
+  const wave2Results = await Promise.all(wave2.map((call) => executeAiTool(call, context)));
+  return [...wave1Results, ...wave2Results];
 }
 
 export function buildSourcesFromToolExecutions(executions: AiToolExecution[]): AiSource[] {

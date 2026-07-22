@@ -4,6 +4,7 @@ import type {
   AiAnalyticsContext,
   AiChartSpec,
   AiDashboardSpec,
+  AiForecastResult,
   AiPlan,
   AiSource,
   AiToolExecution,
@@ -28,6 +29,10 @@ export function buildAnalyticsContext(executions: AiToolExecution[]): AiAnalytic
   };
   const salesSummary = rowsFor(executions, "sales_summary")[0] as any;
   const comparison = rowsFor(executions, "period_comparison")[0] as any;
+
+  // forecast_revenue tool returns a single row which is the AiForecastResult object
+  const forecastRow = rowsFor(executions, "forecast_revenue")[0] as any;
+  const forecastRevenue: AiForecastResult | null = forecastRow ?? null;
 
   return {
     range,
@@ -80,6 +85,7 @@ export function buildAnalyticsContext(executions: AiToolExecution[]): AiAnalytic
       previous_profit: numberValue(comparison.previous_profit),
       profit_delta_percent: comparison.profit_delta_percent == null ? null : numberValue(comparison.profit_delta_percent),
     } : null,
+    forecastRevenue,
   };
 }
 
@@ -255,6 +261,20 @@ export function buildDashboardSpec(analytics: AiAnalyticsContext): AiDashboardSp
 
 export function buildChartForQuestion(question: string, analytics: AiAnalyticsContext): AiChartSpec | null {
   const q = question.toLocaleLowerCase("vi");
+  if ((q.includes("du bao") || q.includes("du doan") || q.includes("forecast") || q.includes("tuong lai") || q.includes("tháng tới") || q.includes("thang toi")) && analytics.forecastRevenue && !analytics.forecastRevenue.insufficient_data) {
+    return {
+      type: "area",
+      title: `Dự báo doanh thu ${analytics.forecastRevenue.horizon_days} ngày tới`,
+      xKey: "period",
+      yKey: "revenue",
+      data: analytics.forecastRevenue.points.map((point) => ({
+        period: point.period_start,
+        revenue: point.forecasted_revenue,
+        lower: point.lower_bound,
+        upper: point.upper_bound,
+      })),
+    };
+  }
   if ((q.includes("theo ngày") || q.includes("xu hướng") || q.includes("biểu đồ")) && analytics.salesTimeseries.length > 0) {
     return {
       type: "composed",
@@ -329,6 +349,31 @@ export function buildDeterministicAnswer(
   let bullets: string[] = [];
 
   switch (plan.intent) {
+    case "forecast": {
+      const forecast = analytics.forecastRevenue;
+      if (!forecast) {
+        bullets = ["Chưa có dữ liệu dự báo."];
+      } else if (forecast.insufficient_data) {
+        bullets = [
+          `Chưa đủ dữ liệu để dự báo. Cần ít nhất ${forecast.min_days_required} ngày lịch sử, hiện có ${forecast.training_days} ngày.`,
+          "Hãy tiếp tục vận hành và quay lại sau khi có thêm dữ liệu.",
+        ];
+      } else {
+        const first = forecast.points[0];
+        const last = forecast.points.at(-1);
+        const avgRevenue = Math.round(
+          forecast.points.reduce((sum, p) => sum + p.forecasted_revenue, 0) / forecast.points.length,
+        );
+        bullets = [
+          `Dự báo ${forecast.horizon_days} ngày tới dựa trên ${forecast.training_days} ngày lịch sử (phương pháp trung bình có trọng số).`,
+          first ? `Ngày đầu tiên (${first.period_start}): doanh thu dự kiến ${formatVND(first.forecasted_revenue)}, biên dao động ${formatVND(first.lower_bound)} – ${formatVND(first.upper_bound)}.` : "",
+          last && forecast.horizon_days > 1 ? `Ngày cuối (${last.period_start}): doanh thu dự kiến ${formatVND(last.forecasted_revenue)}.` : "",
+          `Doanh thu trung bình mỗi ngày dự báo: ${formatVND(avgRevenue)}.`,
+          "Dự báo này là ước tính thống kê đơn giản, không tính đến mùa vụ, khuyến mãi hoặc sự kiện bất thường.",
+        ].filter(Boolean) as string[];
+      }
+      break;
+    }
     case "greeting":
       bullets = [
         "Mình có thể tra cứu doanh thu, lợi nhuận, món bán chạy, kênh bán và tồn kho.",
