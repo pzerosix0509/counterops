@@ -18,6 +18,7 @@ const emptyAnalytics: AiAnalyticsContext = {
   salesTimeseries: [],
   categorySummary: [],
   periodComparison: null,
+  forecastRevenue: null,
 };
 
 describe("AI circuit breaker", () => {

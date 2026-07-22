@@ -20,7 +20,7 @@ import {
 } from "@/server/ai/conversations";
 import { generateAiModelAnswer, type AiProviderResult } from "@/server/ai/provider";
 import { buildSourcesFromToolExecutions, executeAiToolPlan } from "@/server/ai/tools";
-import type { AiChatResponse, AiProgressStage } from "@/types/ai";
+import type { AiChatResponse, AiProgressStage, AiToolCall } from "@/types/ai";
 
 export interface RunAiAnalysisInput {
   organizationId: string;
@@ -91,11 +91,55 @@ export async function runAiAnalysis(input: RunAiAnalysisInput): Promise<AiChatRe
 
   emitProgress(input.onProgress, "querying", "Đang truy vấn dữ liệu đã được phân quyền...");
   const toolsStartedAt = Date.now();
-  const executions = await executeAiToolPlan(plan.tools, {
+  const toolContext = {
     organizationId: input.organizationId,
     branchId: input.branchId,
     timezone: input.timezone,
-  });
+  };
+  let executions = await executeAiToolPlan(plan.tools, toolContext);
+
+  // Agentic loop: if confidence is low after first pass, run supplemental tools
+  // that weren't in the original plan (up to 1 refinement round).
+  const firstPassAnalytics = buildAnalyticsContext(executions);
+  const firstPassAssessment = assessAiEvidence(firstPassAnalytics, executions, buildSourcesFromToolExecutions(executions));
+  if (firstPassAssessment.confidence.score < 0.6 && plan.modelTier !== "none") {
+    const rangeCall = plan.tools.find((tool) => "from" in tool.arguments);
+    const rangeArgs = rangeCall?.arguments as { from: string; to: string; rangeLabel: string } | undefined;
+    const executedNames = new Set(executions.map((execution) => execution.call.name));
+    const supplementalCalls: AiToolCall[] = [];
+
+    // Add period_comparison if missing and we have sales data (helps explain drops/spikes)
+    if (!executedNames.has("period_comparison") && firstPassAnalytics.salesSummary && rangeArgs) {
+      supplementalCalls.push({
+        id: "refine-period-comparison",
+        name: "period_comparison",
+        arguments: { from: rangeArgs.from, to: rangeArgs.to, rangeLabel: rangeArgs.rangeLabel },
+      });
+    }
+    // Add top_products if missing and revenue data exists (helps diagnose anomalies)
+    if (!executedNames.has("top_products") && firstPassAnalytics.salesSummary?.total_orders && rangeArgs) {
+      supplementalCalls.push({
+        id: "refine-top-products",
+        name: "top_products",
+        arguments: { from: rangeArgs.from, to: rangeArgs.to, rangeLabel: rangeArgs.rangeLabel, limit: 10 },
+      });
+    }
+    // Add inventory_risk if there are anomalies but no inventory context
+    if (!executedNames.has("inventory_risk") && firstPassAssessment.anomalies.length > 0) {
+      supplementalCalls.push({
+        id: "refine-inventory-risk",
+        name: "inventory_risk",
+        arguments: { status: "attention" },
+      });
+    }
+
+    if (supplementalCalls.length > 0) {
+      emitProgress(input.onProgress, "querying", "Đang bổ sung dữ liệu để tăng độ tin cậy...");
+      const supplementalExecutions = await executeAiToolPlan(supplementalCalls, toolContext);
+      executions = [...executions, ...supplementalExecutions];
+    }
+  }
+
   const toolsMs = Date.now() - toolsStartedAt;
   const retrievalMs = executions
     .filter((execution) => execution.call.name === "search_documents")

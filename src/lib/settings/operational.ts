@@ -25,6 +25,8 @@ export interface OperationalSettings {
   receiptPhone: string | null;
   receiptLogoUrl: string | null;
   receiptFooter: string;
+  bankCode: string | null;
+  bankAccountNumber: string | null;
 }
 
 export const DEFAULT_OPERATIONAL_SETTINGS: OperationalSettings = {
@@ -49,4 +51,6 @@ export const DEFAULT_OPERATIONAL_SETTINGS: OperationalSettings = {
   receiptPhone: null,
   receiptLogoUrl: null,
   receiptFooter: "Cảm ơn quý khách.",
+  bankCode: null,
+  bankAccountNumber: null,
 };

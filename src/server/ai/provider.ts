@@ -1,6 +1,6 @@
 import "server-only";
 import { AiCircuitBreaker, runWithTimeout } from "@/lib/ai/circuit-breaker";
-import { aiModelAnswerSchema, type AiModelAnswerPayload } from "@/lib/ai/schemas";
+import { aiDashboardSpecSchema, aiModelAnswerSchema, type AiModelAnswerPayload } from "@/lib/ai/schemas";
 import { SEMANTIC_METRICS } from "@/lib/ai/semantic-layer";
 import type {
   AiAnomaly,
@@ -104,12 +104,38 @@ function extractOutputText(payload: any): string {
   return typeof chatContent === "string" ? chatContent : "";
 }
 
+function repairModelAnswer(obj: unknown): AiModelAnswerPayload | null {
+  if (typeof obj !== "object" || obj === null) return null;
+  const raw = obj as Record<string, unknown>;
+
+  // Ensure required string fields exist
+  if (typeof raw.answer !== "string" || !raw.answer.trim()) return null;
+
+  // Coerce bullets to string[]
+  const bullets = Array.isArray(raw.bullets)
+    ? raw.bullets.filter((item): item is string => typeof item === "string").slice(0, 10)
+    : typeof raw.answer === "string" ? [raw.answer.slice(0, 800)] : [];
+
+  // Repair dashboard: strip invalid, default to null
+  let dashboard: AiModelAnswerPayload["dashboard"] = null;
+  if (raw.dashboard !== null && raw.dashboard !== undefined) {
+    const dashParsed = aiDashboardSpecSchema.safeParse(raw.dashboard);
+    dashboard = dashParsed.success ? dashParsed.data : null;
+  }
+
+  const repaired = aiModelAnswerSchema.safeParse({ answer: raw.answer, bullets, dashboard });
+  return repaired.success ? repaired.data : null;
+}
+
 function parseModelAnswer(text: string): AiModelAnswerPayload | null {
   const raw = text.trim().replace(/^```json\s*/i, "").replace(/```$/i, "").trim();
   if (!raw) return null;
   try {
-    const parsed = aiModelAnswerSchema.safeParse(JSON.parse(raw));
-    return parsed.success ? parsed.data : null;
+    const obj = JSON.parse(raw);
+    const strict = aiModelAnswerSchema.safeParse(obj);
+    if (strict.success) return strict.data;
+    // Attempt partial repair before giving up
+    return repairModelAnswer(obj);
   } catch {
     return null;
   }

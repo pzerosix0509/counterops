@@ -243,6 +243,9 @@ function inferIntent(question: string, mode: "chat" | "dashboard"): {
   if (hasPhrase(q, ["tom tat cuoc tro chuyen", "tom tat hoi thoai", "ket luan chinh"])) {
     return { intent: "conversation_summary", confidence: 0.94, modelTier: "quality", deterministic: false, rationale: "Yêu cầu tổng hợp nhiều lượt hội thoại." };
   }
+  if (hasPhrase(q, ["du bao", "du doan", "tháng tới", "thang toi", "tuan toi", "ky toi", "forecast", "predict", "tuong lai"])) {
+    return { intent: "forecast", confidence: 0.92, modelTier: "fast", deterministic: false, rationale: "Yêu cầu dự báo hoặc dự đoán tương lai." };
+  }
   if (hasPhrase(q, ["tai sao", "nguyen nhan", "de xuat", "khuyen nghi", "can lam gi", "nen lam gi", "bat thuong"])) {
     return { intent: "diagnosis", confidence: 0.9, modelTier: "quality", deterministic: false, rationale: "Yêu cầu suy luận nguyên nhân hoặc khuyến nghị." };
   }
@@ -284,6 +287,7 @@ function toolsForIntent(intent: AiIntent): AiToolName[] {
     channel_analysis: ["sales_summary", "channel_summary"],
     inventory_risk: ["inventory_risk"],
     document_search: ["search_documents"],
+    forecast: ["sales_summary", "sales_timeseries", "forecast_revenue"],
     dashboard: ["sales_summary", "sales_timeseries", "period_comparison", "top_products", "category_summary", "channel_summary"],
     diagnosis: ["sales_summary", "sales_timeseries", "period_comparison", "top_products", "channel_summary"],
     conversation_summary: ["sales_summary", "top_products", "channel_summary"],
@@ -318,6 +322,7 @@ export function buildAiPlan(
       period_comparison: common,
       inventory_risk: { status: "attention" },
       search_documents: { query: question, limit: 6 },
+      forecast_revenue: { ...common, horizon_days: 30 },
     };
     return {
       id: `tool-${index + 1}`,
