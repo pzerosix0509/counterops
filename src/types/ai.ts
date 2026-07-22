@@ -19,6 +19,7 @@ export type AiIntent =
   | "document_search"
   | "dashboard"
   | "diagnosis"
+  | "forecast"
   | "conversation_summary"
   | "out_of_scope";
 
@@ -123,6 +124,23 @@ export interface AiDashboardSpec {
   insights: string[];
 }
 
+export interface AiForecastPoint {
+  period_start: string;
+  forecasted_revenue: number;
+  forecasted_orders: number;
+  lower_bound: number;
+  upper_bound: number;
+}
+
+export interface AiForecastResult {
+  horizon_days: number;
+  method: "weighted_moving_average";
+  training_days: number;
+  points: AiForecastPoint[];
+  insufficient_data: boolean;
+  min_days_required: number;
+}
+
 export interface AiAnalyticsContext {
   range: { from: string; to: string; label: string };
   salesSummary: {
@@ -174,6 +192,7 @@ export interface AiAnalyticsContext {
     previous_profit: number;
     profit_delta_percent: number | null;
   } | null;
+  forecastRevenue: AiForecastResult | null;
 }
 
 export type AiToolName =
@@ -184,7 +203,8 @@ export type AiToolName =
   | "channel_summary"
   | "period_comparison"
   | "inventory_risk"
-  | "search_documents";
+  | "search_documents"
+  | "forecast_revenue";
 
 export interface AiToolCall {
   id: string;

@@ -81,6 +81,7 @@ describe("strict AI dashboard schema", () => {
       previous_profit: 400_000,
       profit_delta_percent: 45,
     },
+    forecastRevenue: null,
   };
 
   it("accepts the deterministic dashboard generated from governed metrics", () => {

@@ -84,6 +84,8 @@ export async function updateOperationalSettings(
     receipt_phone: data.receiptPhone || null,
     receipt_logo_url: data.receiptLogoUrl || null,
     receipt_footer: data.receiptFooter || "Cảm ơn quý khách.",
+    bank_code: data.bankCode || null,
+    bank_account_number: data.bankAccountNumber || null,
     updated_at: new Date().toISOString(),
   };
   const { error: settingsError } = await admin

@@ -160,6 +160,8 @@ export const operationalSettingsSchema = z.object({
   receiptPhone: z.string().trim().max(40).nullable().optional(),
   receiptLogoUrl: z.string().trim().url().nullable().optional().or(z.literal("")),
   receiptFooter: z.string().trim().max(240),
+  bankCode: z.string().trim().max(20).nullable().optional(),
+  bankAccountNumber: z.string().trim().max(30).nullable().optional(),
   salesChannels: z.array(z.object({
     id: z.string().uuid().optional(),
     name: z.string().trim().min(1),

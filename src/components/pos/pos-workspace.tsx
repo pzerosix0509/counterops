@@ -590,6 +590,18 @@ export function PosWorkspace(props: Props) {
               <Plus className="h-3.5 w-3.5" /> Thêm hình thức
             </Button>
           </div>
+          {paymentLines.some((p) => p.method === "bank_transfer") && settings.bankCode && settings.bankAccountNumber ? (
+            <div className="flex flex-col items-center gap-2 rounded-md border bg-muted/30 p-3">
+              <p className="text-xs text-muted-foreground">Quét mã QR để chuyển khoản</p>
+              <img
+                src={`https://img.vietqr.io/image/${settings.bankCode}-${settings.bankAccountNumber}-compact2.png?amount=${paymentLines.find((p) => p.method === "bank_transfer")?.amount ?? total}&addInfo=DH${""}`}
+                alt="QR chuyển khoản"
+                className="h-48 w-48 rounded-md"
+              />
+            </div>
+          ) : paymentLines.some((p) => p.method === "bank_transfer") && (!settings.bankCode || !settings.bankAccountNumber) ? (
+            <p className="text-xs text-muted-foreground">Chưa cấu hình tài khoản ngân hàng. Vào Cài đặt &gt; Chuyển khoản ngân hàng để thêm.</p>
+          ) : null}
           <div className="flex items-center justify-between rounded-md bg-muted/40 p-2 text-sm">
             <span>Đã nhập</span>
             <span className="font-semibold">{formatVND(paymentLines.reduce((sum, payment) => sum + payment.amount, 0))}</span>
