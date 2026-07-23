@@ -94,9 +94,19 @@ export function PosWorkspace(props: Props) {
     { method: settings.defaultPaymentMethod, amount: 0 },
   ]);
 
+  const POS_REALTIME_TABLES = useMemo(
+    () => [
+      { name: "orders" as const, scopeByBranch: true },
+      { name: "order_items" as const, scopeByBranch: true },
+      { name: "dining_tables" as const, scopeByBranch: true },
+    ],
+    []
+  );
+
   const realtime = useBranchRealtime({
     branchId,
     organizationId,
+    tables: POS_REALTIME_TABLES,
     onChange: () => router.refresh(),
   });
 

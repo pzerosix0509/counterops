@@ -6,7 +6,7 @@ export async function listCategories(organizationId: string): Promise<MenuCatego
   const supabase = createSupabaseServerClient();
   const { data, error } = await supabase
     .from("menu_categories")
-    .select("*")
+    .select("id, organization_id, parent_id, name, sort_order, created_at, updated_at")
     .eq("organization_id", organizationId)
     .order("sort_order");
   if (error) throw new Error(error.message);

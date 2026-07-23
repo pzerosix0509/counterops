@@ -4,18 +4,20 @@ import type { Product, SalesChannel } from "@/types/database";
 
 export async function listProductsForPos(organizationId: string, branchId: string): Promise<(Product & { available: boolean })[]> {
   const supabase = createSupabaseServerClient();
-  const { data, error } = await supabase
-    .from("products")
-    .select("*")
-    .eq("organization_id", organizationId)
-    .is("deleted_at", null)
-    .eq("is_active", true)
-    .order("name");
+  const [{ data, error }, { data: settings }] = await Promise.all([
+    supabase
+      .from("products")
+      .select("*")
+      .eq("organization_id", organizationId)
+      .is("deleted_at", null)
+      .eq("is_active", true)
+      .order("name"),
+    supabase
+      .from("product_branch_settings")
+      .select("product_id, is_available, sale_price_override")
+      .eq("branch_id", branchId),
+  ]);
   if (error) throw new Error(error.message);
-  const { data: settings } = await supabase
-    .from("product_branch_settings")
-    .select("product_id, is_available, sale_price_override")
-    .eq("branch_id", branchId);
   const map = new Map<string, { is_available: boolean; sale_price_override: number | null }>();
   for (const s of settings ?? []) map.set(s.product_id, { is_available: s.is_available, sale_price_override: s.sale_price_override });
   return (data ?? []).map((p) => {
@@ -32,7 +34,7 @@ export async function listSalesChannels(organizationId: string, opts: { includeI
   const supabase = createSupabaseServerClient();
   let query = supabase
     .from("sales_channels")
-    .select("*")
+    .select("id, organization_id, name, type, is_active, platform_fee_percent, sort_order")
     .eq("organization_id", organizationId);
   if (!opts.includeInactive) query = query.eq("is_active", true);
   const { data, error } = await query
