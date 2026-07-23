@@ -1,6 +1,6 @@
 import "server-only";
 import { unstable_cache } from "next/cache";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import {
   DEFAULT_OPERATIONAL_SETTINGS,
   type OperationalSettings,
@@ -37,7 +37,7 @@ function mapSettings(row: OrganizationSettings | null | undefined): OperationalS
 }
 
 async function fetchOperationalSettings(organizationId: string): Promise<OperationalSettings> {
-  const supabase = createSupabaseServerClient();
+  const supabase = createSupabaseAdminClient();
   const { data, error } = await supabase
     .from("organization_settings")
     .select("*")
