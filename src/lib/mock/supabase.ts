@@ -54,6 +54,9 @@ function findRel(rootTable: string, targetTable: string): {
     menu_categories: {
       products: { fkCol: "category_id", pkCol: "id" },
     },
+    recipes: {
+      recipe_items: { fkCol: "recipe_id", pkCol: "id" },
+    },
   };
 
   const bt = belongsTo[rootTable]?.[targetTable];
@@ -65,40 +68,104 @@ function findRel(rootTable: string, targetTable: string): {
   return null;
 }
 
+// ── Parenthesis-aware helpers for select parsing ──
+
+function splitTopLevel(s: string, delim: string): string[] {
+  const parts: string[] = [];
+  let current = "";
+  let depth = 0;
+  for (const ch of s) {
+    if (ch === "(") depth++;
+    else if (ch === ")") { depth--; current += ch; continue; }
+    if (ch === delim && depth === 0) {
+      parts.push(current);
+      current = "";
+    } else {
+      current += ch;
+    }
+  }
+  if (current) parts.push(current);
+  return parts;
+}
+
+function findMatchingParen(s: string, openPos: number): number {
+  let depth = 1;
+  for (let i = openPos + 1; i < s.length; i++) {
+    if (s[i] === "(") depth++;
+    else if (s[i] === ")") { depth--; if (depth === 0) return i; }
+  }
+  return -1;
+}
+
 function parseSelect(colSpec: string): { rootCols: string[]; joins: JoinSpec[] } {
-  const allCols = colSpec.split(",").map((s) => s.trim()).filter(Boolean);
+  const allParts = splitTopLevel(colSpec, ",");
   const rootCols: string[] = [];
   const joins: JoinSpec[] = [];
 
-  function parseInner(cols: string[]): { plain: string[]; nested: JoinSpec[] } {
+  function parseColumns(innerSpec: string): { plain: string[]; nested: JoinSpec[] } {
+    const parts = splitTopLevel(innerSpec, ",");
+    const plain: string[] = [];
     const nested: JoinSpec[] = [];
-    const nestedRe = /^(\w+)\(([^)]*)\)$/;
-    for (const c of cols) {
-      const nm = c.match(nestedRe);
-      if (nm) {
-        const inner = parseInner(nm[2].split(",").map((s) => s.trim()).filter(Boolean));
-        nested.push({ table: nm[1], type: "inner", columns: inner.plain, nested: inner.nested });
+    for (const part of parts) {
+      const trimmed = part.trim();
+      if (!trimmed) continue;
+      const parenIdx = trimmed.indexOf("(");
+      if (parenIdx > 0 && trimmed.endsWith(")")) {
+        const tableName = trimmed.slice(0, parenIdx);
+        const inner = trimmed.slice(parenIdx + 1, -1);
+        const parsed = parseColumns(inner);
+        nested.push({ table: tableName, type: "inner", columns: parsed.plain, nested: parsed.nested });
+      } else {
+        plain.push(trimmed);
       }
     }
-    const plain = cols.filter((c) => !nested.some((n) => c === n.table + "(" + n.columns.join(",") + ")") && !nested.some((n) => c.startsWith(n.table + "(")));
     return { plain, nested };
   }
 
-  for (const col of allCols) {
-    const joinMatch = col.match(/^(\w+)!(inner|left|right)\(([^)]*)\)$/);
-    const relMatch = (!joinMatch && !col.includes(":")) ? col.match(/^(\w+)\(([^)]*)\)$/) : null;
+  for (const raw of allParts) {
+    const col = raw.trim();
+    if (!col) continue;
 
-    if (joinMatch) {
-      const innerCols = joinMatch[3].split(",").map((s) => s.trim()).filter(Boolean);
-      const { plain, nested } = parseInner(innerCols);
-      joins.push({ table: joinMatch[1], type: joinMatch[2], columns: plain, nested });
-    } else if (relMatch) {
-      const innerCols = relMatch[2].split(",").map((s) => s.trim()).filter(Boolean);
-      const { plain, nested } = parseInner(innerCols);
-      joins.push({ table: relMatch[1], type: "left", columns: plain, nested });
-    } else {
-      rootCols.push(col);
+    // Check for table!type(cols) syntax — e.g. orders!inner(...)
+    const bangIdx = col.search(/!(inner|left|right)\(/);
+    if (bangIdx >= 0) {
+      const tableName = col.slice(0, bangIdx);
+      const typeEnd = col.indexOf("(", bangIdx);
+      const joinType = col.slice(bangIdx + 1, typeEnd);
+      const closeParen = findMatchingParen(col, typeEnd);
+      if (closeParen >= 0) {
+        const innerContent = col.slice(typeEnd + 1, closeParen);
+        const parsed = parseColumns(innerContent);
+        joins.push({ table: tableName, type: joinType, columns: parsed.plain, nested: parsed.nested });
+        continue;
+      }
     }
+
+    // Check for alias:table(cols) syntax — e.g. organization:organizations(*)
+    const aliasMatch = col.match(/^(\w+):(\w+)\(/);
+    if (aliasMatch) {
+      const openParen = col.indexOf("(", aliasMatch[0].length - 1);
+      const closeParen = findMatchingParen(col, openParen);
+      if (closeParen >= 0) {
+        const innerContent = col.slice(openParen + 1, closeParen);
+        const parsed = parseColumns(innerContent);
+        joins.push({ table: resolveTable(aliasMatch[2]), type: "left", columns: parsed.plain, nested: parsed.nested, alias: aliasMatch[1] });
+        continue;
+      }
+    }
+
+    // Check for table(cols) syntax — e.g. recipe_items(*)
+    const parenIdx = col.indexOf("(");
+    if (parenIdx > 0 && col.endsWith(")")) {
+      const tableName = col.slice(0, parenIdx);
+      const innerContent = col.slice(parenIdx + 1, -1);
+      const parsed = parseColumns(innerContent);
+      joins.push({ table: tableName, type: "left", columns: parsed.plain, nested: parsed.nested });
+      continue;
+    }
+
+    // Plain column
+    rootCols.push(col);
   }
 
   return { rootCols, joins };
@@ -336,7 +403,7 @@ export class MockQueryBuilder {
 
   private loadAliasRelations(rows: any[]): any[] {
     const aliasSpecs: Array<{ alias: string; table: string; columns: string }> = [];
-    for (const col of this.selectColumns.split(",").map((s) => s.trim())) {
+    for (const col of splitTopLevel(this.selectColumns, ",").map((s) => s.trim())) {
       const m = col.match(/^(\w+):(\w+)\(([^)]*)\)$/);
       if (m) aliasSpecs.push({ alias: m[1], table: resolveTable(m[2]), columns: m[3] });
     }
@@ -351,7 +418,7 @@ export class MockQueryBuilder {
           row[spec.alias] = items.map((r: any) => {
             if (spec.columns === "*") return { ...r };
             const p: any = {};
-            for (const c of spec.columns.split(",").map((s) => s.trim()).filter(Boolean)) {
+              for (const c of splitTopLevel(spec.columns, ",").map((s) => s.trim()).filter(Boolean)) {
               if (c in r) p[c] = r[c];
             }
             return p;
@@ -461,6 +528,17 @@ export class MockQueryBuilder {
           upserted.push(newRow);
         }
       }
+      if (this.selectColumns !== "*") {
+        const projected = upserted.map((row: any) => {
+          const { rootCols } = parseSelect(this.selectColumns);
+          return this.projectColumns(row, rootCols);
+        });
+        if (this.returnSingle) return { data: projected[0] ?? null, error: null };
+        if (this.returnMaybeSingle) return { data: projected[0] ?? null, error: null };
+        return { data: projected, error: null };
+      }
+      if (this.returnSingle) return { data: upserted[0] ?? null, error: null };
+      if (this.returnMaybeSingle) return { data: upserted[0] ?? null, error: null };
       return { data: upserted, error: null };
     }
 
@@ -493,6 +571,8 @@ export class MockQueryBuilder {
     }
 
     let filtered = this.filterRows([...table]);
+
+    filtered = this.applyOrder(filtered);
 
     if (this.limitCount != null) {
       filtered = filtered.slice(0, this.limitCount);

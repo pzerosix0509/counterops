@@ -31,9 +31,166 @@ function daysAgo(n: number): string {
 // ORG_ID = organization_Id 
 // BRANCH_ID = chi nhanh cua user
 // USER_ID = the id of the user account
-export const MOCK_ORG_ID = "org_1";
-export const MOCK_BRANCH_ID = "branch_1";
-export const MOCK_USER_ID = "user_1";
+
+// Deterministic UUIDs — fixed so foreign-key references stay consistent across reloads
+// Zod v4 requires valid RFC-4122 UUIDs: version nibble [1-8], variant [89abAB]
+// Pattern: XXXXXXXX-0000-4XXX-aXXX-XXXXXXXXXXXX (deterministic, readable)
+export const MOCK_ORG_ID = "00000001-0000-4000-a000-000000000001";
+export const MOCK_BRANCH_ID = "00000002-0000-4000-a000-000000000001";
+export const MOCK_USER_ID = "00000003-0000-4000-a000-000000000001";
+
+
+const CAT = {
+  coffee: "10000001-0000-4000-a000-000000000001",
+  tea: "10000001-0000-4000-a000-000000000002",
+  smoothie: "10000001-0000-4000-a000-000000000003",
+  pastry: "10000001-0000-4000-a000-000000000004",
+  other: "10000001-0000-4000-a000-000000000005",
+};
+
+const PROD = {
+  espresso: "20000001-0000-4000-a000-000000000001",
+  cappuccino: "20000001-0000-4000-a000-000000000002",
+  latte: "20000001-0000-4000-a000-000000000003",
+  phads: "20000001-0000-4000-a000-000000000004",
+  blackcoffee: "20000001-0000-4000-a000-000000000005",
+  teapeach: "20000001-0000-4000-a000-000000000006",
+  tealemon: "20000001-0000-4000-a000-000000000007",
+  milktea: "20000001-0000-4000-a000-000000000008",
+  avosmoothie: "20000001-0000-4000-a000-000000000009",
+  mangosmoothie: "20000001-0000-4000-a000-000000000010",
+  toast: "20000001-0000-4000-a000-000000000011",
+  sponge: "20000001-0000-4000-a000-000000000012",
+  tiramisu: "20000001-0000-4000-a000-000000000013",
+  water: "20000001-0000-4000-a000-000000000014",
+  cola: "20000001-0000-4000-a000-000000000015",
+};
+
+const CH = {
+  dineIn: "30000001-0000-4000-a000-000000000001",
+  takeaway: "30000001-0000-4000-a000-000000000002",
+  grab: "30000001-0000-4000-a000-000000000003",
+};
+
+const AREA = {
+  indoor: "40000001-0000-4000-a000-000000000001",
+  outdoor: "40000001-0000-4000-a000-000000000002",
+};
+
+const ROOM = {
+  vip: "50000001-0000-4000-a000-000000000001",
+  a: "50000001-0000-4000-a000-000000000002",
+  garden: "50000001-0000-4000-a000-000000000003",
+};
+
+const TBL = {
+  t1: "60000001-0000-4000-a000-000000000001",
+  t2: "60000001-0000-4000-a000-000000000002",
+  t3: "60000001-0000-4000-a000-000000000003",
+  t4: "60000001-0000-4000-a000-000000000004",
+  t5: "60000001-0000-4000-a000-000000000005",
+  t6: "60000001-0000-4000-a000-000000000006",
+  t7: "60000001-0000-4000-a000-000000000007",
+  t8: "60000001-0000-4000-a000-000000000008",
+  t9: "60000001-0000-4000-a000-000000000009",
+  t10: "60000001-0000-4000-a000-000000000010",
+};
+
+const INV = {
+  coffeerobusta: "70000001-0000-4000-a000-000000000001",
+  coffeearabica: "70000001-0000-4000-a000-000000000002",
+  milk: "70000001-0000-4000-a000-000000000003",
+  condensed: "70000001-0000-4000-a000-000000000004",
+  sugar: "70000001-0000-4000-a000-000000000005",
+  teabag: "70000001-0000-4000-a000-000000000006",
+  peach: "70000001-0000-4000-a000-000000000007",
+  tapioca: "70000001-0000-4000-a000-000000000008",
+  avocado: "70000001-0000-4000-a000-000000000009",
+  mango: "70000001-0000-4000-a000-000000000010",
+};
+
+const ORD = {
+  o1: "80000001-0000-4000-a000-000000000001",
+  o2: "80000001-0000-4000-a000-000000000002",
+  o3: "80000001-0000-4000-a000-000000000003",
+  o4: "80000001-0000-4000-a000-000000000004",
+  o5: "80000001-0000-4000-a000-000000000005",
+  o6: "80000001-0000-4000-a000-000000000006",
+  o7: "80000001-0000-4000-a000-000000000007",
+  o8: "80000001-0000-4000-a000-000000000008",
+};
+
+const OI = {
+  i1: "90000001-0000-4000-a000-000000000001",
+  i2: "90000001-0000-4000-a000-000000000002",
+  i3: "90000001-0000-4000-a000-000000000003",
+  i4: "90000001-0000-4000-a000-000000000004",
+  i5: "90000001-0000-4000-a000-000000000005",
+  i6: "90000001-0000-4000-a000-000000000006",
+  i7: "90000001-0000-4000-a000-000000000007",
+  i8: "90000001-0000-4000-a000-000000000008",
+  i9: "90000001-0000-4000-a000-000000000009",
+  i10: "90000001-0000-4000-a000-000000000010",
+  i11: "90000001-0000-4000-a000-000000000011",
+  i12: "90000001-0000-4000-a000-000000000012",
+  i13: "90000001-0000-4000-a000-000000000013",
+  i14: "90000001-0000-4000-a000-000000000014",
+  i15: "90000001-0000-4000-a000-000000000015",
+  i16: "90000001-0000-4000-a000-000000000016",
+  i17: "90000001-0000-4000-a000-000000000017",
+  i18: "90000001-0000-4000-a000-000000000018",
+  i19: "90000001-0000-4000-a000-000000000019",
+  i20: "90000001-0000-4000-a000-000000000020",
+  i21: "90000001-0000-4000-a000-000000000021",
+};
+
+const PAY = {
+  p1: "a0000001-0000-4000-a000-000000000001",
+  p2: "a0000001-0000-4000-a000-000000000002",
+  p3: "a0000001-0000-4000-a000-000000000003",
+  p4: "a0000001-0000-4000-a000-000000000004",
+  p5: "a0000001-0000-4000-a000-000000000005",
+  p6: "a0000001-0000-4000-a000-000000000006",
+};
+
+const MEM = {
+  m1: "b0000001-0000-4000-a000-000000000001",
+};
+
+const BAL = {
+  b1: "c0000001-0000-4000-a000-000000000001",
+  b2: "c0000001-0000-4000-a000-000000000002",
+  b3: "c0000001-0000-4000-a000-000000000003",
+  b4: "c0000001-0000-4000-a000-000000000004",
+  b5: "c0000001-0000-4000-a000-000000000005",
+  b6: "c0000001-0000-4000-a000-000000000006",
+  b7: "c0000001-0000-4000-a000-000000000007",
+  b8: "c0000001-0000-4000-a000-000000000008",
+  b9: "c0000001-0000-4000-a000-000000000009",
+  b10: "c0000001-0000-4000-a000-000000000010",
+};
+
+const MOV = {
+  m1: "d0000001-0000-4000-a000-000000000001",
+  m2: "d0000001-0000-4000-a000-000000000002",
+  m3: "d0000001-0000-4000-a000-000000000003",
+};
+
+const RCP = {
+  r1: "e0000001-0000-4000-a000-000000000001",
+  r2: "e0000001-0000-4000-a000-000000000002",
+  r3: "e0000001-0000-4000-a000-000000000003",
+};
+
+const RCI = {
+  i1: "f0000001-0000-4000-a000-000000000001",
+  i2: "f0000001-0000-4000-a000-000000000002",
+  i3: "f0000001-0000-4000-a000-000000000003",
+  i4: "f0000001-0000-4000-a000-000000000004",
+  i5: "f0000001-0000-4000-a000-000000000005",
+  i6: "f0000001-0000-4000-a000-000000000006",
+};
+
 
 // create a mock Organization data
 export const MOCK_ORGANIZATIONS: Organization[] = [
@@ -79,7 +236,7 @@ export const MOCK_PROFILES: Profile[] = [
 
 export const MOCK_MEMBERSHIPS: Membership[] = [
   {
-    id: "mem_1",
+    id: MEM.m1,
     organization_id: MOCK_ORG_ID,
     branch_id: null,
     user_id: MOCK_USER_ID,
@@ -92,115 +249,115 @@ export const MOCK_MEMBERSHIPS: Membership[] = [
 ];
 
 export const MOCK_CATEGORIES: MenuCategory[] = [
-  { id: "cat_1", organization_id: MOCK_ORG_ID, parent_id: null, name: "Cà phê", sort_order: 1, created_at: daysAgo(30), updated_at: daysAgo(30) },
-  { id: "cat_2", organization_id: MOCK_ORG_ID, parent_id: null, name: "Trà", sort_order: 2, created_at: daysAgo(30), updated_at: daysAgo(30) },
-  { id: "cat_3", organization_id: MOCK_ORG_ID, parent_id: null, name: "Sinh tố", sort_order: 3, created_at: daysAgo(30), updated_at: daysAgo(30) },
-  { id: "cat_4", organization_id: MOCK_ORG_ID, parent_id: null, name: "Bánh ngọt", sort_order: 4, created_at: daysAgo(30), updated_at: daysAgo(30) },
-  { id: "cat_5", organization_id: MOCK_ORG_ID, parent_id: null, name: "Khác", sort_order: 5, created_at: daysAgo(30), updated_at: daysAgo(30) },
+  { id: CAT.coffee, organization_id: MOCK_ORG_ID, parent_id: null, name: "Cà phê", sort_order: 1, created_at: daysAgo(30), updated_at: daysAgo(30) },
+  { id: CAT.tea, organization_id: MOCK_ORG_ID, parent_id: null, name: "Trà", sort_order: 2, created_at: daysAgo(30), updated_at: daysAgo(30) },
+  { id: CAT.smoothie, organization_id: MOCK_ORG_ID, parent_id: null, name: "Sinh tố", sort_order: 3, created_at: daysAgo(30), updated_at: daysAgo(30) },
+  { id: CAT.pastry, organization_id: MOCK_ORG_ID, parent_id: null, name: "Bánh ngọt", sort_order: 4, created_at: daysAgo(30), updated_at: daysAgo(30) },
+  { id: CAT.other, organization_id: MOCK_ORG_ID, parent_id: null, name: "Khác", sort_order: 5, created_at: daysAgo(30), updated_at: daysAgo(30) },
 ];
 
 export const MOCK_PRODUCTS: Product[] = [
-  { id: "prod_1", organization_id: MOCK_ORG_ID, category_id: "cat_1", name: "Espresso", code: "CF001", image_url: null, description: "Cà phê espresso nguyên chất", menu_type: "drink", product_type: "regular", cost_price: 5000, sale_price: 25000, unit: "ly", is_active: true, created_at: daysAgo(30), updated_at: daysAgo(1), deleted_at: null },
-  { id: "prod_2", organization_id: MOCK_ORG_ID, category_id: "cat_1", name: "Cappuccino", code: "CF002", image_url: null, description: "Cà phê capuccino với bọt sữa", menu_type: "drink", product_type: "regular", cost_price: 8000, sale_price: 35000, unit: "ly", is_active: true, created_at: daysAgo(30), updated_at: daysAgo(1), deleted_at: null },
-  { id: "prod_3", organization_id: MOCK_ORG_ID, category_id: "cat_1", name: "Latte", code: "CF003", image_url: null, description: "Cà phê latte sữa nóng", menu_type: "drink", product_type: "regular", cost_price: 8000, sale_price: 35000, unit: "ly", is_active: true, created_at: daysAgo(30), updated_at: daysAgo(1), deleted_at: null },
-  { id: "prod_4", organization_id: MOCK_ORG_ID, category_id: "cat_1", name: "Cà phê sữa đá", code: "CF004", image_url: null, description: "Cà phê sữa đá truyền thống", menu_type: "drink", product_type: "regular", cost_price: 4000, sale_price: 20000, unit: "ly", is_active: true, created_at: daysAgo(30), updated_at: daysAgo(1), deleted_at: null },
-  { id: "prod_5", organization_id: MOCK_ORG_ID, category_id: "cat_1", name: "Cà phê đen", code: "CF005", image_url: null, description: "Cà phê đen đá", menu_type: "drink", product_type: "regular", cost_price: 3000, sale_price: 15000, unit: "ly", is_active: true, created_at: daysAgo(30), updated_at: daysAgo(1), deleted_at: null },
-  { id: "prod_6", organization_id: MOCK_ORG_ID, category_id: "cat_2", name: "Trà đào", code: "TR001", image_url: null, description: "Trà đào cam sả", menu_type: "drink", product_type: "regular", cost_price: 5000, sale_price: 30000, unit: "ly", is_active: true, created_at: daysAgo(30), updated_at: daysAgo(1), deleted_at: null },
-  { id: "prod_7", organization_id: MOCK_ORG_ID, category_id: "cat_2", name: "Trà chanh", code: "TR002", image_url: null, description: "Trà chanh tươi mát", menu_type: "drink", product_type: "regular", cost_price: 3000, sale_price: 20000, unit: "ly", is_active: true, created_at: daysAgo(30), updated_at: daysAgo(1), deleted_at: null },
-  { id: "prod_8", organization_id: MOCK_ORG_ID, category_id: "cat_2", name: "Trà sữa", code: "TR003", image_url: null, description: "Trà sữa trân châu", menu_type: "drink", product_type: "regular", cost_price: 7000, sale_price: 35000, unit: "ly", is_active: true, created_at: daysAgo(30), updated_at: daysAgo(1), deleted_at: null },
-  { id: "prod_9", organization_id: MOCK_ORG_ID, category_id: "cat_3", name: "Sinh tố bơ", code: "ST001", image_url: null, description: "Sinh tố bơ đậm đặc", menu_type: "drink", product_type: "regular", cost_price: 10000, sale_price: 40000, unit: "ly", is_active: true, created_at: daysAgo(30), updated_at: daysAgo(1), deleted_at: null },
-  { id: "prod_10", organization_id: MOCK_ORG_ID, category_id: "cat_3", name: "Sinh tố xoài", code: "ST002", image_url: null, description: "Sinh tố xoài tươi", menu_type: "drink", product_type: "regular", cost_price: 8000, sale_price: 35000, unit: "ly", is_active: true, created_at: daysAgo(30), updated_at: daysAgo(1), deleted_at: null },
-  { id: "prod_11", organization_id: MOCK_ORG_ID, category_id: "cat_4", name: "Bánh mì nướng", code: "BN001", image_url: null, description: "Bánh mì nướng bơ tỏi", menu_type: "food", product_type: "regular", cost_price: 5000, sale_price: 25000, unit: "phần", is_active: true, created_at: daysAgo(30), updated_at: daysAgo(1), deleted_at: null },
-  { id: "prod_12", organization_id: MOCK_ORG_ID, category_id: "cat_4", name: "Bánh bông lan", code: "BN002", image_url: null, description: "Bánh bông lan kem tươi", menu_type: "food", product_type: "regular", cost_price: 8000, sale_price: 30000, unit: "phần", is_active: true, created_at: daysAgo(30), updated_at: daysAgo(1), deleted_at: null },
-  { id: "prod_13", organization_id: MOCK_ORG_ID, category_id: "cat_4", name: "Tiramisu", code: "BN003", image_url: null, description: "Bánh tiramisu Ý", menu_type: "food", product_type: "regular", cost_price: 12000, sale_price: 45000, unit: "phần", is_active: true, created_at: daysAgo(30), updated_at: daysAgo(1), deleted_at: null },
-  { id: "prod_14", organization_id: MOCK_ORG_ID, category_id: "cat_5", name: "Nước suối", code: "KC001", image_url: null, description: "Nước suối Lavie 500ml", menu_type: "drink", product_type: "regular", cost_price: 3000, sale_price: 10000, unit: "chai", is_active: true, created_at: daysAgo(30), updated_at: daysAgo(1), deleted_at: null },
-  { id: "prod_15", organization_id: MOCK_ORG_ID, category_id: "cat_5", name: "Coca Cola", code: "KC002", image_url: null, description: "Coca Cola lon 330ml", menu_type: "drink", product_type: "regular", cost_price: 5000, sale_price: 15000, unit: "lon", is_active: true, created_at: daysAgo(30), updated_at: daysAgo(1), deleted_at: null },
+  { id: PROD.espresso, organization_id: MOCK_ORG_ID, category_id: CAT.coffee, name: "Espresso", code: "CF001", image_url: null, description: "Cà phê espresso nguyên chất", menu_type: "drink", product_type: "regular", cost_price: 5000, sale_price: 25000, unit: "ly", is_active: true, created_at: daysAgo(30), updated_at: daysAgo(1), deleted_at: null },
+  { id: PROD.cappuccino, organization_id: MOCK_ORG_ID, category_id: CAT.coffee, name: "Cappuccino", code: "CF002", image_url: null, description: "Cà phê capuccino với bọt sữa", menu_type: "drink", product_type: "regular", cost_price: 8000, sale_price: 35000, unit: "ly", is_active: true, created_at: daysAgo(30), updated_at: daysAgo(1), deleted_at: null },
+  { id: PROD.latte, organization_id: MOCK_ORG_ID, category_id: CAT.coffee, name: "Latte", code: "CF003", image_url: null, description: "Cà phê latte sữa nóng", menu_type: "drink", product_type: "regular", cost_price: 8000, sale_price: 35000, unit: "ly", is_active: true, created_at: daysAgo(30), updated_at: daysAgo(1), deleted_at: null },
+  { id: PROD.phads, organization_id: MOCK_ORG_ID, category_id: CAT.coffee, name: "Cà phê sữa đá", code: "CF004", image_url: null, description: "Cà phê sữa đá truyền thống", menu_type: "drink", product_type: "regular", cost_price: 4000, sale_price: 20000, unit: "ly", is_active: true, created_at: daysAgo(30), updated_at: daysAgo(1), deleted_at: null },
+  { id: PROD.blackcoffee, organization_id: MOCK_ORG_ID, category_id: CAT.coffee, name: "Cà phê đen", code: "CF005", image_url: null, description: "Cà phê đen đá", menu_type: "drink", product_type: "regular", cost_price: 3000, sale_price: 15000, unit: "ly", is_active: true, created_at: daysAgo(30), updated_at: daysAgo(1), deleted_at: null },
+  { id: PROD.teapeach, organization_id: MOCK_ORG_ID, category_id: CAT.tea, name: "Trà đào", code: "TR001", image_url: null, description: "Trà đào cam sả", menu_type: "drink", product_type: "regular", cost_price: 5000, sale_price: 30000, unit: "ly", is_active: true, created_at: daysAgo(30), updated_at: daysAgo(1), deleted_at: null },
+  { id: PROD.tealemon, organization_id: MOCK_ORG_ID, category_id: CAT.tea, name: "Trà chanh", code: "TR002", image_url: null, description: "Trà chanh tươi mát", menu_type: "drink", product_type: "regular", cost_price: 3000, sale_price: 20000, unit: "ly", is_active: true, created_at: daysAgo(30), updated_at: daysAgo(1), deleted_at: null },
+  { id: PROD.milktea, organization_id: MOCK_ORG_ID, category_id: CAT.tea, name: "Trà sữa", code: "TR003", image_url: null, description: "Trà sữa trân châu", menu_type: "drink", product_type: "regular", cost_price: 7000, sale_price: 35000, unit: "ly", is_active: true, created_at: daysAgo(30), updated_at: daysAgo(1), deleted_at: null },
+  { id: PROD.avosmoothie, organization_id: MOCK_ORG_ID, category_id: CAT.smoothie, name: "Sinh tố bơ", code: "ST001", image_url: null, description: "Sinh tố bơ đậm đặc", menu_type: "drink", product_type: "regular", cost_price: 10000, sale_price: 40000, unit: "ly", is_active: true, created_at: daysAgo(30), updated_at: daysAgo(1), deleted_at: null },
+  { id: PROD.mangosmoothie, organization_id: MOCK_ORG_ID, category_id: CAT.smoothie, name: "Sinh tố xoài", code: "ST002", image_url: null, description: "Sinh tố xoài tươi", menu_type: "drink", product_type: "regular", cost_price: 8000, sale_price: 35000, unit: "ly", is_active: true, created_at: daysAgo(30), updated_at: daysAgo(1), deleted_at: null },
+  { id: PROD.toast, organization_id: MOCK_ORG_ID, category_id: CAT.pastry, name: "Bánh mì nướng", code: "BN001", image_url: null, description: "Bánh mì nướng bơ tỏi", menu_type: "food", product_type: "regular", cost_price: 5000, sale_price: 25000, unit: "phần", is_active: true, created_at: daysAgo(30), updated_at: daysAgo(1), deleted_at: null },
+  { id: PROD.sponge, organization_id: MOCK_ORG_ID, category_id: CAT.pastry, name: "Bánh bông lan", code: "BN002", image_url: null, description: "Bánh bông lan kem tươi", menu_type: "food", product_type: "regular", cost_price: 8000, sale_price: 30000, unit: "phần", is_active: true, created_at: daysAgo(30), updated_at: daysAgo(1), deleted_at: null },
+  { id: PROD.tiramisu, organization_id: MOCK_ORG_ID, category_id: CAT.pastry, name: "Tiramisu", code: "BN003", image_url: null, description: "Bánh tiramisu Ý", menu_type: "food", product_type: "regular", cost_price: 12000, sale_price: 45000, unit: "phần", is_active: true, created_at: daysAgo(30), updated_at: daysAgo(1), deleted_at: null },
+  { id: PROD.water, organization_id: MOCK_ORG_ID, category_id: CAT.other, name: "Nước suối", code: "KC001", image_url: null, description: "Nước suối Lavie 500ml", menu_type: "drink", product_type: "regular", cost_price: 3000, sale_price: 10000, unit: "chai", is_active: true, created_at: daysAgo(30), updated_at: daysAgo(1), deleted_at: null },
+  { id: PROD.cola, organization_id: MOCK_ORG_ID, category_id: CAT.other, name: "Coca Cola", code: "KC002", image_url: null, description: "Coca Cola lon 330ml", menu_type: "drink", product_type: "regular", cost_price: 5000, sale_price: 15000, unit: "lon", is_active: true, created_at: daysAgo(30), updated_at: daysAgo(1), deleted_at: null },
 ];
 
 export const MOCK_PRODUCT_BRANCH_SETTINGS: any[] = [];
 
 export const MOCK_SALES_CHANNELS: SalesChannel[] = [
-  { id: "ch_1", organization_id: MOCK_ORG_ID, name: "Tại quán", type: "dine_in", is_active: true, platform_fee_percent: 0, sort_order: 1 },
-  { id: "ch_2", organization_id: MOCK_ORG_ID, name: "Mang về", type: "takeaway", is_active: true, platform_fee_percent: 0, sort_order: 2 },
-  { id: "ch_3", organization_id: MOCK_ORG_ID, name: "GrabFood", type: "delivery", is_active: true, platform_fee_percent: 15, sort_order: 3 },
+  { id: CH.dineIn, organization_id: MOCK_ORG_ID, name: "Tại quán", type: "dine_in", is_active: true, platform_fee_percent: 0, sort_order: 1 },
+  { id: CH.takeaway, organization_id: MOCK_ORG_ID, name: "Mang về", type: "takeaway", is_active: true, platform_fee_percent: 0, sort_order: 2 },
+  { id: CH.grab, organization_id: MOCK_ORG_ID, name: "GrabFood", type: "delivery", is_active: true, platform_fee_percent: 15, sort_order: 3 },
 ];
 
 export const MOCK_AREAS: Area[] = [
-  { id: "area_1", organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, name: "Trong nhà", sort_order: 1 },
-  { id: "area_2", organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, name: "Ngoài trời", sort_order: 2 },
+  { id: AREA.indoor, organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, name: "Trong nhà", sort_order: 1 },
+  { id: AREA.outdoor, organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, name: "Ngoài trời", sort_order: 2 },
 ];
 
 export const MOCK_ROOMS: Room[] = [
-  { id: "room_1", organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, area_id: "area_1", name: "Phòng VIP", sort_order: 1 },
-  { id: "room_2", organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, area_id: "area_1", name: "Phòng A", sort_order: 2 },
-  { id: "room_3", organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, area_id: "area_2", name: "Sân vườn", sort_order: 3 },
+  { id: ROOM.vip, organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, area_id: AREA.indoor, name: "Phòng VIP", sort_order: 1 },
+  { id: ROOM.a, organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, area_id: AREA.indoor, name: "Phòng A", sort_order: 2 },
+  { id: ROOM.garden, organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, area_id: AREA.outdoor, name: "Sân vườn", sort_order: 3 },
 ];
 
 export const MOCK_TABLES: DiningTable[] = [
-  { id: "tbl_1", organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, area_id: "area_1", room_id: null, name: "Bàn 1", seats: 2, status: "occupied", sort_order: 1 },
-  { id: "tbl_2", organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, area_id: "area_1", room_id: null, name: "Bàn 2", seats: 4, status: "available", sort_order: 2 },
-  { id: "tbl_3", organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, area_id: "area_1", room_id: null, name: "Bàn 3", seats: 4, status: "available", sort_order: 3 },
-  { id: "tbl_4", organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, area_id: "area_1", room_id: null, name: "Bàn 4", seats: 6, status: "occupied", sort_order: 4 },
-  { id: "tbl_5", organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, area_id: "area_1", room_id: null, name: "Bàn 5", seats: 6, status: "reserved", sort_order: 5 },
-  { id: "tbl_6", organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, area_id: "area_2", room_id: null, name: "Bàn 6", seats: 2, status: "occupied", sort_order: 6 },
-  { id: "tbl_7", organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, area_id: "area_2", room_id: null, name: "Bàn 7", seats: 4, status: "available", sort_order: 7 },
-  { id: "tbl_8", organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, area_id: "area_2", room_id: null, name: "Bàn 8", seats: 4, status: "available", sort_order: 8 },
-  { id: "tbl_9", organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, area_id: null, room_id: "room_1", name: "VIP 1", seats: 8, status: "available", sort_order: 9 },
-  { id: "tbl_10", organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, area_id: null, room_id: "room_1", name: "VIP 2", seats: 10, status: "occupied", sort_order: 10 },
+  { id: TBL.t1, organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, area_id: AREA.indoor, room_id: null, name: "Bàn 1", seats: 2, status: "occupied", sort_order: 1 },
+  { id: TBL.t2, organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, area_id: AREA.indoor, room_id: null, name: "Bàn 2", seats: 4, status: "available", sort_order: 2 },
+  { id: TBL.t3, organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, area_id: AREA.indoor, room_id: null, name: "Bàn 3", seats: 4, status: "available", sort_order: 3 },
+  { id: TBL.t4, organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, area_id: AREA.indoor, room_id: null, name: "Bàn 4", seats: 6, status: "occupied", sort_order: 4 },
+  { id: TBL.t5, organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, area_id: AREA.indoor, room_id: null, name: "Bàn 5", seats: 6, status: "reserved", sort_order: 5 },
+  { id: TBL.t6, organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, area_id: AREA.outdoor, room_id: null, name: "Bàn 6", seats: 2, status: "occupied", sort_order: 6 },
+  { id: TBL.t7, organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, area_id: AREA.outdoor, room_id: null, name: "Bàn 7", seats: 4, status: "available", sort_order: 7 },
+  { id: TBL.t8, organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, area_id: AREA.outdoor, room_id: null, name: "Bàn 8", seats: 4, status: "available", sort_order: 8 },
+  { id: TBL.t9, organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, area_id: null, room_id: ROOM.vip, name: "VIP 1", seats: 8, status: "available", sort_order: 9 },
+  { id: TBL.t10, organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, area_id: null, room_id: ROOM.vip, name: "VIP 2", seats: 10, status: "occupied", sort_order: 10 },
 ];
 
 export const MOCK_INVENTORY_ITEMS: InventoryItem[] = [
-  { id: "inv_1", organization_id: MOCK_ORG_ID, name: "Hạt cà phê robusta", code: "KHO001", image_url: null, item_type: "ingredient", unit: "kg", cost_price: 80000, description: "Cà phê hạt robusta Đắk Lắk", is_active: true, created_at: daysAgo(30), updated_at: daysAgo(1), deleted_at: null },
-  { id: "inv_2", organization_id: MOCK_ORG_ID, name: "Hạt cà phê arabica", code: "KHO002", image_url: null, item_type: "ingredient", unit: "kg", cost_price: 120000, description: "Cà phê hạt arabica Cầu Đất", is_active: true, created_at: daysAgo(30), updated_at: daysAgo(1), deleted_at: null },
-  { id: "inv_3", organization_id: MOCK_ORG_ID, name: "Sữa tươi", code: "KHO003", image_url: null, item_type: "ingredient", unit: "lít", cost_price: 25000, description: "Sữa tươi tiệt trùng", is_active: true, created_at: daysAgo(30), updated_at: daysAgo(1), deleted_at: null },
-  { id: "inv_4", organization_id: MOCK_ORG_ID, name: "Sữa đặc", code: "KHO004", image_url: null, item_type: "ingredient", unit: "lon", cost_price: 15000, description: "Sữa đặc có đường", is_active: true, created_at: daysAgo(30), updated_at: daysAgo(1), deleted_at: null },
-  { id: "inv_5", organization_id: MOCK_ORG_ID, name: "Đường", code: "KHO005", image_url: null, item_type: "ingredient", unit: "kg", cost_price: 15000, description: "Đường RE", is_active: true, created_at: daysAgo(30), updated_at: daysAgo(1), deleted_at: null },
-  { id: "inv_6", organization_id: MOCK_ORG_ID, name: "Trà túi lọc", code: "KHO006", image_url: null, item_type: "ingredient", unit: "hộp", cost_price: 20000, description: "Trà túi lọc Lipton", is_active: true, created_at: daysAgo(30), updated_at: daysAgo(1), deleted_at: null },
-  { id: "inv_7", organization_id: MOCK_ORG_ID, name: "Đào hộp", code: "KHO007", image_url: null, item_type: "ingredient", unit: "hộp", cost_price: 25000, description: "Đào hộp nhập khẩu", is_active: true, created_at: daysAgo(30), updated_at: daysAgo(1), deleted_at: null },
-  { id: "inv_8", organization_id: MOCK_ORG_ID, name: "Trân châu", code: "KHO008", image_url: null, item_type: "ingredient", unit: "kg", cost_price: 30000, description: "Trân châu đen", is_active: true, created_at: daysAgo(30), updated_at: daysAgo(1), deleted_at: null },
-  { id: "inv_9", organization_id: MOCK_ORG_ID, name: "Bơ sáp", code: "KHO009", image_url: null, item_type: "ingredient", unit: "kg", cost_price: 60000, description: "Bơ sáp Đắk Lắk", is_active: true, created_at: daysAgo(30), updated_at: daysAgo(1), deleted_at: null },
-  { id: "inv_10", organization_id: MOCK_ORG_ID, name: "Xoài cát", code: "KHO010", image_url: null, item_type: "ingredient", unit: "kg", cost_price: 35000, description: "Xoài cát Hòa Lộc", is_active: true, created_at: daysAgo(30), updated_at: daysAgo(1), deleted_at: null },
+  { id: INV.coffeerobusta, organization_id: MOCK_ORG_ID, name: "Hạt cà phê robusta", code: "KHO001", image_url: null, item_type: "ingredient", unit: "kg", cost_price: 80000, description: "Cà phê hạt robusta Đắk Lắk", is_active: true, created_at: daysAgo(30), updated_at: daysAgo(1), deleted_at: null },
+  { id: INV.coffeearabica, organization_id: MOCK_ORG_ID, name: "Hạt cà phê arabica", code: "KHO002", image_url: null, item_type: "ingredient", unit: "kg", cost_price: 120000, description: "Cà phê hạt arabica Cầu Đất", is_active: true, created_at: daysAgo(30), updated_at: daysAgo(1), deleted_at: null },
+  { id: INV.milk, organization_id: MOCK_ORG_ID, name: "Sữa tươi", code: "KHO003", image_url: null, item_type: "ingredient", unit: "lít", cost_price: 25000, description: "Sữa tươi tiệt trùng", is_active: true, created_at: daysAgo(30), updated_at: daysAgo(1), deleted_at: null },
+  { id: INV.condensed, organization_id: MOCK_ORG_ID, name: "Sữa đặc", code: "KHO004", image_url: null, item_type: "ingredient", unit: "lon", cost_price: 15000, description: "Sữa đặc có đường", is_active: true, created_at: daysAgo(30), updated_at: daysAgo(1), deleted_at: null },
+  { id: INV.sugar, organization_id: MOCK_ORG_ID, name: "Đường", code: "KHO005", image_url: null, item_type: "ingredient", unit: "kg", cost_price: 15000, description: "Đường RE", is_active: true, created_at: daysAgo(30), updated_at: daysAgo(1), deleted_at: null },
+  { id: INV.teabag, organization_id: MOCK_ORG_ID, name: "Trà túi lọc", code: "KHO006", image_url: null, item_type: "ingredient", unit: "hộp", cost_price: 20000, description: "Trà túi lọc Lipton", is_active: true, created_at: daysAgo(30), updated_at: daysAgo(1), deleted_at: null },
+  { id: INV.peach, organization_id: MOCK_ORG_ID, name: "Đào hộp", code: "KHO007", image_url: null, item_type: "ingredient", unit: "hộp", cost_price: 25000, description: "Đào hộp nhập khẩu", is_active: true, created_at: daysAgo(30), updated_at: daysAgo(1), deleted_at: null },
+  { id: INV.tapioca, organization_id: MOCK_ORG_ID, name: "Trân châu", code: "KHO008", image_url: null, item_type: "ingredient", unit: "kg", cost_price: 30000, description: "Trân châu đen", is_active: true, created_at: daysAgo(30), updated_at: daysAgo(1), deleted_at: null },
+  { id: INV.avocado, organization_id: MOCK_ORG_ID, name: "Bơ sáp", code: "KHO009", image_url: null, item_type: "ingredient", unit: "kg", cost_price: 60000, description: "Bơ sáp Đắk Lắk", is_active: true, created_at: daysAgo(30), updated_at: daysAgo(1), deleted_at: null },
+  { id: INV.mango, organization_id: MOCK_ORG_ID, name: "Xoài cát", code: "KHO010", image_url: null, item_type: "ingredient", unit: "kg", cost_price: 35000, description: "Xoài cát Hòa Lộc", is_active: true, created_at: daysAgo(30), updated_at: daysAgo(1), deleted_at: null },
 ];
 
 export const MOCK_INVENTORY_BALANCES: InventoryBalance[] = [
-  { id: "bal_1", organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, inventory_item_id: "inv_1", quantity_on_hand: 25, low_stock_threshold: 5, high_stock_threshold: 50, updated_at: daysAgo(1) },
-  { id: "bal_2", organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, inventory_item_id: "inv_2", quantity_on_hand: 15, low_stock_threshold: 3, high_stock_threshold: 30, updated_at: daysAgo(1) },
-  { id: "bal_3", organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, inventory_item_id: "inv_3", quantity_on_hand: 30, low_stock_threshold: 10, high_stock_threshold: 60, updated_at: daysAgo(1) },
-  { id: "bal_4", organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, inventory_item_id: "inv_4", quantity_on_hand: 20, low_stock_threshold: 5, high_stock_threshold: 40, updated_at: daysAgo(1) },
-  { id: "bal_5", organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, inventory_item_id: "inv_5", quantity_on_hand: 10, low_stock_threshold: 3, high_stock_threshold: 20, updated_at: daysAgo(1) },
-  { id: "bal_6", organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, inventory_item_id: "inv_6", quantity_on_hand: 8, low_stock_threshold: 2, high_stock_threshold: 15, updated_at: daysAgo(1) },
-  { id: "bal_7", organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, inventory_item_id: "inv_7", quantity_on_hand: 5, low_stock_threshold: 2, high_stock_threshold: 10, updated_at: daysAgo(1) },
-  { id: "bal_8", organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, inventory_item_id: "inv_8", quantity_on_hand: 3, low_stock_threshold: 1, high_stock_threshold: 10, updated_at: daysAgo(1) },
-  { id: "bal_9", organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, inventory_item_id: "inv_9", quantity_on_hand: 6, low_stock_threshold: 2, high_stock_threshold: 12, updated_at: daysAgo(1) },
-  { id: "bal_10", organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, inventory_item_id: "inv_10", quantity_on_hand: 4, low_stock_threshold: 2, high_stock_threshold: 10, updated_at: daysAgo(1) },
+  { id: BAL.b1, organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, inventory_item_id: INV.coffeerobusta, quantity_on_hand: 25, low_stock_threshold: 5, high_stock_threshold: 50, updated_at: daysAgo(1) },
+  { id: BAL.b2, organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, inventory_item_id: INV.coffeearabica, quantity_on_hand: 15, low_stock_threshold: 3, high_stock_threshold: 30, updated_at: daysAgo(1) },
+  { id: BAL.b3, organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, inventory_item_id: INV.milk, quantity_on_hand: 30, low_stock_threshold: 10, high_stock_threshold: 60, updated_at: daysAgo(1) },
+  { id: BAL.b4, organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, inventory_item_id: INV.condensed, quantity_on_hand: 20, low_stock_threshold: 5, high_stock_threshold: 40, updated_at: daysAgo(1) },
+  { id: BAL.b5, organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, inventory_item_id: INV.sugar, quantity_on_hand: 10, low_stock_threshold: 3, high_stock_threshold: 20, updated_at: daysAgo(1) },
+  { id: BAL.b6, organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, inventory_item_id: INV.teabag, quantity_on_hand: 8, low_stock_threshold: 2, high_stock_threshold: 15, updated_at: daysAgo(1) },
+  { id: BAL.b7, organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, inventory_item_id: INV.peach, quantity_on_hand: 5, low_stock_threshold: 2, high_stock_threshold: 10, updated_at: daysAgo(1) },
+  { id: BAL.b8, organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, inventory_item_id: INV.tapioca, quantity_on_hand: 3, low_stock_threshold: 1, high_stock_threshold: 10, updated_at: daysAgo(1) },
+  { id: BAL.b9, organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, inventory_item_id: INV.avocado, quantity_on_hand: 6, low_stock_threshold: 2, high_stock_threshold: 12, updated_at: daysAgo(1) },
+  { id: BAL.b10, organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, inventory_item_id: INV.mango, quantity_on_hand: 4, low_stock_threshold: 2, high_stock_threshold: 10, updated_at: daysAgo(1) },
 ];
 
 export const MOCK_INVENTORY_MOVEMENTS: InventoryMovement[] = [
-  { id: "mov_1", organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, inventory_item_id: "inv_1", movement_type: "purchase", quantity_delta: 30, unit_cost: 80000, reference_type: null, reference_id: null, note: "Nhập hàng tháng 6", created_by: MOCK_USER_ID, created_at: daysAgo(7) },
-  { id: "mov_2", organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, inventory_item_id: "inv_3", movement_type: "purchase", quantity_delta: 50, unit_cost: 25000, reference_type: null, reference_id: null, note: "Nhập sữa tuần", created_by: MOCK_USER_ID, created_at: daysAgo(5) },
-  { id: "mov_3", organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, inventory_item_id: "inv_1", movement_type: "sale_deduction", quantity_delta: -2, unit_cost: 80000, reference_type: "order", reference_id: "ord_1", note: null, created_by: null, created_at: hoursAgo(2) },
+  { id: MOV.m1, organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, inventory_item_id: INV.coffeerobusta, movement_type: "purchase", quantity_delta: 30, unit_cost: 80000, reference_type: null, reference_id: null, note: "Nhập hàng tháng 6", created_by: MOCK_USER_ID, created_at: daysAgo(7) },
+  { id: MOV.m2, organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, inventory_item_id: INV.milk, movement_type: "purchase", quantity_delta: 50, unit_cost: 25000, reference_type: null, reference_id: null, note: "Nhập sữa tuần", created_by: MOCK_USER_ID, created_at: daysAgo(5) },
+  { id: MOV.m3, organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, inventory_item_id: INV.coffeerobusta, movement_type: "sale_deduction", quantity_delta: -2, unit_cost: 80000, reference_type: "order", reference_id: ORD.o1, note: null, created_by: null, created_at: hoursAgo(2) },
 ];
 
 export const MOCK_RECIPES: Recipe[] = [
-  { id: "rcp_1", organization_id: MOCK_ORG_ID, product_id: "prod_1", version: 1, is_active: true, created_at: daysAgo(30) },
-  { id: "rcp_2", organization_id: MOCK_ORG_ID, product_id: "prod_2", version: 1, is_active: true, created_at: daysAgo(30) },
-  { id: "rcp_3", organization_id: MOCK_ORG_ID, product_id: "prod_4", version: 1, is_active: true, created_at: daysAgo(30) },
+  { id: RCP.r1, organization_id: MOCK_ORG_ID, product_id: PROD.espresso, version: 1, is_active: true, created_at: daysAgo(30) },
+  { id: RCP.r2, organization_id: MOCK_ORG_ID, product_id: PROD.cappuccino, version: 1, is_active: true, created_at: daysAgo(30) },
+  { id: RCP.r3, organization_id: MOCK_ORG_ID, product_id: PROD.phads, version: 1, is_active: true, created_at: daysAgo(30) },
 ];
 
 export const MOCK_RECIPE_ITEMS: RecipeItem[] = [
-  { id: "rci_1", recipe_id: "rcp_1", inventory_item_id: "inv_1", quantity: 0.02, unit: "kg", estimated_cost: 1600 },
-  { id: "rci_2", recipe_id: "rcp_1", inventory_item_id: "inv_5", quantity: 0.01, unit: "kg", estimated_cost: 150 },
-  { id: "rci_3", recipe_id: "rcp_2", inventory_item_id: "inv_1", quantity: 0.02, unit: "kg", estimated_cost: 1600 },
-  { id: "rci_4", recipe_id: "rcp_2", inventory_item_id: "inv_3", quantity: 0.1, unit: "lít", estimated_cost: 2500 },
-  { id: "rci_5", recipe_id: "rcp_3", inventory_item_id: "inv_1", quantity: 0.015, unit: "kg", estimated_cost: 1200 },
-  { id: "rci_6", recipe_id: "rcp_3", inventory_item_id: "inv_4", quantity: 0.05, unit: "lon", estimated_cost: 750 },
+  { id: RCI.i1, recipe_id: RCP.r1, inventory_item_id: INV.coffeerobusta, quantity: 0.02, unit: "kg", estimated_cost: 1600 },
+  { id: RCI.i2, recipe_id: RCP.r1, inventory_item_id: INV.sugar, quantity: 0.01, unit: "kg", estimated_cost: 150 },
+  { id: RCI.i3, recipe_id: RCP.r2, inventory_item_id: INV.coffeerobusta, quantity: 0.02, unit: "kg", estimated_cost: 1600 },
+  { id: RCI.i4, recipe_id: RCP.r2, inventory_item_id: INV.milk, quantity: 0.1, unit: "lít", estimated_cost: 2500 },
+  { id: RCI.i5, recipe_id: RCP.r3, inventory_item_id: INV.coffeerobusta, quantity: 0.015, unit: "kg", estimated_cost: 1200 },
+  { id: RCI.i6, recipe_id: RCP.r3, inventory_item_id: INV.condensed, quantity: 0.05, unit: "lon", estimated_cost: 750 },
 ];
 
 export const MOCK_ORDERS: Order[] = [
   {
-    id: "ord_1", organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID,
-    order_number: "ORD-001", table_id: "tbl_1", customer_id: null,
-    sales_channel_id: "ch_1", order_type: "dine_in",
+    id: ORD.o1, organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID,
+    order_number: "ORD-001", table_id: TBL.t1, customer_id: null,
+    sales_channel_id: CH.dineIn, order_type: "dine_in",
     status: "paid", subtotal: 85000, discount_amount: 0, tax_amount: 0,
     service_fee_amount: 0, total_amount: 85000, paid_amount: 85000,
     debt_amount: 0, opened_by: MOCK_USER_ID, closed_by: MOCK_USER_ID,
@@ -208,9 +365,9 @@ export const MOCK_ORDERS: Order[] = [
     cancelled_by: null, cancellation_reason: null,
   },
   {
-    id: "ord_2", organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID,
-    order_number: "ORD-002", table_id: "tbl_4", customer_id: null,
-    sales_channel_id: "ch_1", order_type: "dine_in",
+    id: ORD.o2, organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID,
+    order_number: "ORD-002", table_id: TBL.t4, customer_id: null,
+    sales_channel_id: CH.dineIn, order_type: "dine_in",
     status: "paid", subtotal: 155000, discount_amount: 5000, tax_amount: 0,
     service_fee_amount: 0, total_amount: 150000, paid_amount: 150000,
     debt_amount: 0, opened_by: MOCK_USER_ID, closed_by: MOCK_USER_ID,
@@ -218,9 +375,9 @@ export const MOCK_ORDERS: Order[] = [
     cancelled_by: null, cancellation_reason: null,
   },
   {
-    id: "ord_3", organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID,
+    id: ORD.o3, organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID,
     order_number: "ORD-003", table_id: null, customer_id: null,
-    sales_channel_id: "ch_2", order_type: "takeaway",
+    sales_channel_id: CH.takeaway, order_type: "takeaway",
     status: "paid", subtotal: 45000, discount_amount: 0, tax_amount: 0,
     service_fee_amount: 0, total_amount: 45000, paid_amount: 45000,
     debt_amount: 0, opened_by: MOCK_USER_ID, closed_by: MOCK_USER_ID,
@@ -228,9 +385,9 @@ export const MOCK_ORDERS: Order[] = [
     cancelled_by: null, cancellation_reason: null,
   },
   {
-    id: "ord_4", organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID,
-    order_number: "ORD-004", table_id: "tbl_6", customer_id: null,
-    sales_channel_id: "ch_1", order_type: "dine_in",
+    id: ORD.o4, organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID,
+    order_number: "ORD-004", table_id: TBL.t6, customer_id: null,
+    sales_channel_id: CH.dineIn, order_type: "dine_in",
     status: "sent_to_kitchen", subtotal: 65000, discount_amount: 0, tax_amount: 0,
     service_fee_amount: 0, total_amount: 65000, paid_amount: 0,
     debt_amount: 0, opened_by: MOCK_USER_ID, closed_by: null,
@@ -238,9 +395,9 @@ export const MOCK_ORDERS: Order[] = [
     cancelled_by: null, cancellation_reason: null,
   },
   {
-    id: "ord_5", organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID,
-    order_number: "ORD-005", table_id: "tbl_4", customer_id: null,
-    sales_channel_id: "ch_3", order_type: "delivery",
+    id: ORD.o5, organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID,
+    order_number: "ORD-005", table_id: TBL.t4, customer_id: null,
+    sales_channel_id: CH.grab, order_type: "delivery",
     status: "open", subtotal: 120000, discount_amount: 10000, tax_amount: 0,
     service_fee_amount: 5000, total_amount: 115000, paid_amount: 0,
     debt_amount: 0, opened_by: MOCK_USER_ID, closed_by: null,
@@ -248,9 +405,9 @@ export const MOCK_ORDERS: Order[] = [
     cancelled_by: null, cancellation_reason: null,
   },
   {
-    id: "ord_6", organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID,
-    order_number: "ORD-006", table_id: "tbl_10", customer_id: null,
-    sales_channel_id: "ch_1", order_type: "dine_in",
+    id: ORD.o6, organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID,
+    order_number: "ORD-006", table_id: TBL.t10, customer_id: null,
+    sales_channel_id: CH.dineIn, order_type: "dine_in",
     status: "paid", subtotal: 320000, discount_amount: 20000, tax_amount: 0,
     service_fee_amount: 0, total_amount: 300000, paid_amount: 300000,
     debt_amount: 0, opened_by: MOCK_USER_ID, closed_by: MOCK_USER_ID,
@@ -258,9 +415,9 @@ export const MOCK_ORDERS: Order[] = [
     cancelled_by: null, cancellation_reason: null,
   },
   {
-    id: "ord_7", organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID,
+    id: ORD.o7, organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID,
     order_number: "ORD-007", table_id: null, customer_id: null,
-    sales_channel_id: "ch_2", order_type: "takeaway",
+    sales_channel_id: CH.takeaway, order_type: "takeaway",
     status: "cancelled", subtotal: 55000, discount_amount: 0, tax_amount: 0,
     service_fee_amount: 0, total_amount: 55000, paid_amount: 0,
     debt_amount: 0, opened_by: MOCK_USER_ID, closed_by: null,
@@ -268,9 +425,9 @@ export const MOCK_ORDERS: Order[] = [
     cancelled_by: MOCK_USER_ID, cancellation_reason: "Hủy đơn",
   },
   {
-    id: "ord_8", organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID,
-    order_number: "ORD-008", table_id: "tbl_1", customer_id: null,
-    sales_channel_id: "ch_1", order_type: "dine_in",
+    id: ORD.o8, organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID,
+    order_number: "ORD-008", table_id: TBL.t1, customer_id: null,
+    sales_channel_id: CH.dineIn, order_type: "dine_in",
     status: "paid", subtotal: 200000, discount_amount: 0, tax_amount: 0,
     service_fee_amount: 0, total_amount: 200000, paid_amount: 200000,
     debt_amount: 0, opened_by: MOCK_USER_ID, closed_by: MOCK_USER_ID,
@@ -280,36 +437,27 @@ export const MOCK_ORDERS: Order[] = [
 ];
 
 export const MOCK_ORDER_ITEMS: OrderItem[] = [
-  { id: "oi_1", organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, order_id: "ord_1", product_id: "prod_4", product_name_snapshot: "Cà phê sữa đá", unit_price_snapshot: 20000, cost_price_snapshot: 4000, quantity: 2, note: null, kitchen_status: "served", cancellation_stage: null, cancelled_by: null, cancelled_at: null, created_at: hoursAgo(3) },
-  { id: "oi_2", organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, order_id: "ord_1", product_id: "prod_11", product_name_snapshot: "Bánh mì nướng", unit_price_snapshot: 25000, cost_price_snapshot: 5000, quantity: 1, note: null, kitchen_status: "served", cancellation_stage: null, cancelled_by: null, cancelled_at: null, created_at: hoursAgo(3) },
-  { id: "oi_3", organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, order_id: "ord_1", product_id: "prod_14", product_name_snapshot: "Nước suối", unit_price_snapshot: 10000, cost_price_snapshot: 3000, quantity: 2, note: null, kitchen_status: "not_required", cancellation_stage: null, cancelled_by: null, cancelled_at: null, created_at: hoursAgo(3) },
-  { id: "oi_4", organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, order_id: "ord_2", product_id: "prod_2", product_name_snapshot: "Cappuccino", unit_price_snapshot: 35000, cost_price_snapshot: 8000, quantity: 2, note: null, kitchen_status: "served", cancellation_stage: null, cancelled_by: null, cancelled_at: null, created_at: hoursAgo(5) },
-  { id: "oi_5", organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, order_id: "ord_2", product_id: "prod_6", product_name_snapshot: "Trà đào", unit_price_snapshot: 30000, cost_price_snapshot: 5000, quantity: 1, note: null, kitchen_status: "served", cancellation_stage: null, cancelled_by: null, cancelled_at: null, created_at: hoursAgo(5) },
-  { id: "oi_6", organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, order_id: "ord_2", product_id: "prod_13", product_name_snapshot: "Tiramisu", unit_price_snapshot: 45000, cost_price_snapshot: 12000, quantity: 1, note: null, kitchen_status: "served", cancellation_stage: null, cancelled_by: null, cancelled_at: null, created_at: hoursAgo(5) },
-  { id: "oi_7", organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, order_id: "ord_3", product_id: "prod_4", product_name_snapshot: "Cà phê sữa đá", unit_price_snapshot: 20000, cost_price_snapshot: 4000, quantity: 1, note: null, kitchen_status: "not_required", cancellation_stage: null, cancelled_by: null, cancelled_at: null, created_at: hoursAgo(4) },
-  { id: "oi_8", organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, order_id: "ord_3", product_id: "prod_7", product_name_snapshot: "Trà chanh", unit_price_snapshot: 20000, cost_price_snapshot: 3000, quantity: 1, note: null, kitchen_status: "not_required", cancellation_stage: null, cancelled_by: null, cancelled_at: null, created_at: hoursAgo(4) },
-  { id: "oi_9", organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, order_id: "ord_4", product_id: "prod_1", product_name_snapshot: "Espresso", unit_price_snapshot: 25000, cost_price_snapshot: 5000, quantity: 1, note: null, kitchen_status: "pending", cancellation_stage: null, cancelled_by: null, cancelled_at: null, created_at: hoursAgo(1) },
-  { id: "oi_10", organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, order_id: "ord_4", product_id: "prod_12", product_name_snapshot: "Bánh bông lan", unit_price_snapshot: 30000, cost_price_snapshot: 8000, quantity: 1, note: "Ít đường", kitchen_status: "pending", cancellation_stage: null, cancelled_by: null, cancelled_at: null, created_at: hoursAgo(1) },
-  { id: "oi_11", organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, order_id: "ord_5", product_id: "prod_8", product_name_snapshot: "Trà sữa", unit_price_snapshot: 35000, cost_price_snapshot: 7000, quantity: 2, note: "Trân châu nhiều", kitchen_status: "cooking", cancellation_stage: null, cancelled_by: null, cancelled_at: null, created_at: hoursAgo(1) },
-  { id: "oi_12", organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, order_id: "ord_5", product_id: "prod_10", product_name_snapshot: "Sinh tố xoài", unit_price_snapshot: 35000, cost_price_snapshot: 8000, quantity: 1, note: null, kitchen_status: "pending", cancellation_stage: null, cancelled_by: null, cancelled_at: null, created_at: hoursAgo(1) },
-  { id: "oi_13", organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, order_id: "ord_6", product_id: "prod_9", product_name_snapshot: "Sinh tố bơ", unit_price_snapshot: 40000, cost_price_snapshot: 10000, quantity: 3, note: null, kitchen_status: "served", cancellation_stage: null, cancelled_by: null, cancelled_at: null, created_at: hoursAgo(8) },
-  { id: "oi_14", organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, order_id: "ord_6", product_id: "prod_2", product_name_snapshot: "Cappuccino", unit_price_snapshot: 35000, cost_price_snapshot: 8000, quantity: 2, note: null, kitchen_status: "served", cancellation_stage: null, cancelled_by: null, cancelled_at: null, created_at: hoursAgo(8) },
-  { id: "oi_15", organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, order_id: "ord_6", product_id: "prod_13", product_name_snapshot: "Tiramisu", unit_price_snapshot: 45000, cost_price_snapshot: 12000, quantity: 2, note: null, kitchen_status: "served", cancellation_stage: null, cancelled_by: null, cancelled_at: null, created_at: hoursAgo(8) },
-  { id: "oi_16", organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, order_id: "ord_6", product_id: "prod_14", product_name_snapshot: "Nước suối", unit_price_snapshot: 10000, cost_price_snapshot: 3000, quantity: 4, note: null, kitchen_status: "not_required", cancellation_stage: null, cancelled_by: null, cancelled_at: null, created_at: hoursAgo(8) },
-  { id: "oi_17", organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, order_id: "ord_7", product_id: "prod_6", product_name_snapshot: "Trà đào", unit_price_snapshot: 30000, cost_price_snapshot: 5000, quantity: 1, note: null, kitchen_status: "cancelled", cancellation_stage: null, cancelled_by: MOCK_USER_ID, cancelled_at: hoursAgo(6), created_at: hoursAgo(7) },
-  { id: "oi_18", organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, order_id: "ord_7", product_id: "prod_11", product_name_snapshot: "Bánh mì nướng", unit_price_snapshot: 25000, cost_price_snapshot: 5000, quantity: 1, note: null, kitchen_status: "cancelled", cancellation_stage: null, cancelled_by: MOCK_USER_ID, cancelled_at: hoursAgo(6), created_at: hoursAgo(7) },
-  { id: "oi_19", organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, order_id: "ord_8", product_id: "prod_2", product_name_snapshot: "Cappuccino", unit_price_snapshot: 35000, cost_price_snapshot: 8000, quantity: 2, note: null, kitchen_status: "served", cancellation_stage: null, cancelled_by: null, cancelled_at: null, created_at: daysAgo(1) },
-  { id: "oi_20", organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, order_id: "ord_8", product_id: "prod_9", product_name_snapshot: "Sinh tố bơ", unit_price_snapshot: 40000, cost_price_snapshot: 10000, quantity: 1, note: null, kitchen_status: "served", cancellation_stage: null, cancelled_by: null, cancelled_at: null, created_at: daysAgo(1) },
-  { id: "oi_21", organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, order_id: "ord_8", product_id: "prod_15", product_name_snapshot: "Coca Cola", unit_price_snapshot: 15000, cost_price_snapshot: 5000, quantity: 2, note: null, kitchen_status: "not_required", cancellation_stage: null, cancelled_by: null, cancelled_at: null, created_at: daysAgo(1) },
+  { id: OI.i1, organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, order_id: ORD.o1, product_id: PROD.phads, product_name_snapshot: "Cà phê sữa đá", unit_price_snapshot: 20000, cost_price_snapshot: 4000, quantity: 2, note: null, kitchen_status: "served", cancellation_stage: null, cancelled_by: null, cancelled_at: null, created_at: hoursAgo(3) },
+  { id: OI.i2, organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, order_id: ORD.o1, product_id: PROD.toast, product_name_snapshot: "Bánh mì nướng", unit_price_snapshot: 25000, cost_price_snapshot: 5000, quantity: 1, note: null, kitchen_status: "served", cancellation_stage: null, cancelled_by: null, cancelled_at: null, created_at: hoursAgo(3) },
+  { id: OI.i3, organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, order_id: ORD.o1, product_id: PROD.water, product_name_snapshot: "Nước suối", unit_price_snapshot: 10000, cost_price_snapshot: 3000, quantity: 2, note: null, kitchen_status: "not_required", cancellation_stage: null, cancelled_by: null, cancelled_at: null, created_at: hoursAgo(3) },
+  { id: OI.i4, organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, order_id: ORD.o2, product_id: PROD.cappuccino, product_name_snapshot: "Cappuccino", unit_price_snapshot: 35000, cost_price_snapshot: 8000, quantity: 2, note: null, kitchen_status: "served", cancellation_stage: null, cancelled_by: null, cancelled_at: null, created_at: hoursAgo(5) },
+  { id: OI.i5, organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, order_id: ORD.o2, product_id: PROD.teapeach, product_name_snapshot: "Trà đào", unit_price_snapshot: 30000, cost_price_snapshot: 5000, quantity: 1, note: null, kitchen_status: "served", cancellation_stage: null, cancelled_by: null, cancelled_at: null, created_at: hoursAgo(5) },
+  { id: OI.i6, organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, order_id: ORD.o2, product_id: PROD.tiramisu, product_name_snapshot: "Tiramisu", unit_price_snapshot: 45000, cost_price_snapshot: 12000, quantity: 1, note: null, kitchen_status: "served", cancellation_stage: null, cancelled_by: null, cancelled_at: null, created_at: hoursAgo(5) },
+  { id: OI.i7, organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, order_id: ORD.o3, product_id: PROD.phads, product_name_snapshot: "Cà phê sữa đá", unit_price_snapshot: 20000, cost_price_snapshot: 4000, quantity: 1, note: null, kitchen_status: "not_required", cancellation_stage: null, cancelled_by: null, cancelled_at: null, created_at: hoursAgo(4) },
+  { id: OI.i8, organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, order_id: ORD.o3, product_id: PROD.tealemon, product_name_snapshot: "Trà chanh", unit_price_snapshot: 20000, cost_price_snapshot: 3000, quantity: 1, note: null, kitchen_status: "not_required", cancellation_stage: null, cancelled_by: null, cancelled_at: null, created_at: hoursAgo(4) },
+  { id: OI.i9, organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, order_id: ORD.o4, product_id: PROD.espresso, product_name_snapshot: "Espresso", unit_price_snapshot: 25000, cost_price_snapshot: 5000, quantity: 1, note: null, kitchen_status: "pending", cancellation_stage: null, cancelled_by: null, cancelled_at: null, created_at: hoursAgo(1) },
+  { id: OI.i10, organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, order_id: ORD.o4, product_id: PROD.sponge, product_name_snapshot: "Bánh bông lan", unit_price_snapshot: 30000, cost_price_snapshot: 8000, quantity: 1, note: "Ít đường", kitchen_status: "pending", cancellation_stage: null, cancelled_by: null, cancelled_at: null, created_at: hoursAgo(1) },
+  { id: OI.i11, organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, order_id: ORD.o5, product_id: PROD.milktea, product_name_snapshot: "Trà sữa", unit_price_snapshot: 35000, cost_price_snapshot: 7000, quantity: 2, note: "Trân châu nhiều", kitchen_status: "cooking", cancellation_stage: null, cancelled_by: null, cancelled_at: null, created_at: hoursAgo(1) },
+  { id: OI.i12, organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, order_id: ORD.o5, product_id: PROD.mangosmoothie, product_name_snapshot: "Sinh tố xoài", unit_price_snapshot: 35000, cost_price_snapshot: 8000, quantity: 1, note: null, kitchen_status: "cooking", cancellation_stage: null, cancelled_by: null, cancelled_at: null, created_at: hoursAgo(1) },
 ];
 
 export const MOCK_PAYMENTS: Payment[] = [
-  { id: "pay_1", organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, order_id: "ord_1", method: "cash", amount: 85000, paid_at: hoursAgo(2), received_by: MOCK_USER_ID, transaction_ref: null },
-  { id: "pay_2", organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, order_id: "ord_2", method: "bank_transfer", amount: 150000, paid_at: hoursAgo(3), received_by: MOCK_USER_ID, transaction_ref: "CK001" },
-  { id: "pay_3", organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, order_id: "ord_3", method: "cash", amount: 45000, paid_at: hoursAgo(3), received_by: MOCK_USER_ID, transaction_ref: null },
-  { id: "pay_4", organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, order_id: "ord_6", method: "cash", amount: 200000, paid_at: hoursAgo(6), received_by: MOCK_USER_ID, transaction_ref: null },
-  { id: "pay_5", organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, order_id: "ord_6", method: "bank_transfer", amount: 100000, paid_at: hoursAgo(6), received_by: MOCK_USER_ID, transaction_ref: "CK002" },
-  { id: "pay_6", organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, order_id: "ord_8", method: "ewallet", amount: 200000, paid_at: daysAgo(1), received_by: MOCK_USER_ID, transaction_ref: "MOMO001" },
+  { id: PAY.p1, organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, order_id: ORD.o1, method: "cash", amount: 85000, paid_at: hoursAgo(2), received_by: MOCK_USER_ID, transaction_ref: null },
+  { id: PAY.p2, organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, order_id: ORD.o2, method: "bank_transfer", amount: 150000, paid_at: hoursAgo(3), received_by: MOCK_USER_ID, transaction_ref: "CK001" },
+  { id: PAY.p3, organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, order_id: ORD.o3, method: "cash", amount: 45000, paid_at: hoursAgo(3), received_by: MOCK_USER_ID, transaction_ref: null },
+  { id: PAY.p4, organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, order_id: ORD.o6, method: "cash", amount: 200000, paid_at: hoursAgo(6), received_by: MOCK_USER_ID, transaction_ref: null },
+  { id: PAY.p5, organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, order_id: ORD.o6, method: "bank_transfer", amount: 100000, paid_at: hoursAgo(6), received_by: MOCK_USER_ID, transaction_ref: "CK002" },
+  { id: PAY.p6, organization_id: MOCK_ORG_ID, branch_id: MOCK_BRANCH_ID, order_id: ORD.o8, method: "ewallet", amount: 200000, paid_at: daysAgo(1), received_by: MOCK_USER_ID, transaction_ref: "MOMO001" },
 ];
 
 export const MOCK_DATA: Record<string, any[]> = {
