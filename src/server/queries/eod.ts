@@ -85,7 +85,7 @@ export async function computeEod(branchId: string, reportDate: string): Promise<
         .select("id, platform_fee_percent")
         .eq("organization_id", organizationId)
     : { data: [] };
-  const channelFeePercent = new Map((channels ?? []).map((channel) => [channel.id, Number(channel.platform_fee_percent ?? 0)]));
+  const channelFeePercent = new Map<string, number>((channels ?? []).map((channel: any) => [channel.id, Number(channel.platform_fee_percent ?? 0)]));
   const getOrderChannelFee = (order: Order) => {
     const feePercent = order.sales_channel_id ? channelFeePercent.get(order.sales_channel_id) ?? 0 : 0;
     return Math.round(Number(order.total_amount ?? 0) * (feePercent / 100));
@@ -101,7 +101,7 @@ export async function computeEod(branchId: string, reportDate: string): Promise<
   const otherPayments = payments.filter((p) => p.method === "other").reduce((s, p) => s + p.amount, 0);
   const debtAmount = paid.reduce((s, o) => s + (o.debt_amount ?? 0), 0);
   const cancelledOrders = (cancelled ?? []).length;
-  const cancelledAmount = (cancelled ?? []).reduce((s, o) => s + (o.total_amount ?? 0), 0);
+  const cancelledAmount = (cancelled ?? []).reduce((s: number, o: any) => s + (o.total_amount ?? 0), 0);
 
   return {
     totalOrders: paid.length,

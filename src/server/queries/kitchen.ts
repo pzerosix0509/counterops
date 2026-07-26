@@ -51,7 +51,7 @@ export async function listKitchenItems(
       openedAt: row.orders?.opened_at ?? row.created_at,
       paidAt: row.orders?.closed_at ?? null,
     }))
-    .sort((a, b) => {
+    .sort((a: any, b: any) => {
       const aTime = Date.parse(a.paidAt ?? a.openedAt ?? a.item.created_at);
       const bTime = Date.parse(b.paidAt ?? b.openedAt ?? b.item.created_at);
       return aTime - bTime;

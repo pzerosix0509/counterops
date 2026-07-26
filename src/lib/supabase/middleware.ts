@@ -3,10 +3,17 @@ import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "@/types/database";
 
 export async function updateSession(request: NextRequest) {
+  // manage the user session
   let response = NextResponse.next({ request: { headers: request.headers } });
+
+  if (process.env.NEXT_PUBLIC_MOCK === "true") {
+    // if its in the mock version, skip the auth route 
+    return response;
+  }
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  // if the .env file does not have the url, key defined then, skip auth route
   if (!url || !key) return response;
 
   const supabase = createServerClient<Database>(url, key, {

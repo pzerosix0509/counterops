@@ -138,7 +138,7 @@ async function executeInventoryRisk(context: AiToolContext) {
           status,
         };
       })
-      .filter((row) => row.status !== "Ổn")
+      .filter((row: any) => row.status !== "Ổn")
       .slice(0, 50);
   });
 }

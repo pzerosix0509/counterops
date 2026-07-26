@@ -9,7 +9,7 @@ import {
   getActiveBranchId,
   getCurrentProfile,
 } from "@/lib/auth/permissions";
-import type { MembershipRole } from "@/types/database";
+import type { Branch, MembershipRole } from "@/types/database";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const supabase = createSupabaseServerClient();
@@ -47,7 +47,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           userEmail={user.email ?? ""}
           userName={profile?.full_name ?? null}
           organizationName={org.name}
-          branches={branches.map((b) => ({ id: b.id, name: b.name }))}
+          branches={branches.map((b: Branch) => ({ id: b.id, name: b.name }))}
           currentBranchId={branchId}
           role={active.role as MembershipRole}
         />

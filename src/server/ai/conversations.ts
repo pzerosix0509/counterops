@@ -37,7 +37,7 @@ export async function listAiChatSessions(
     .order("last_message_at", { ascending: false })
     .limit(30);
   if (error) return [];
-  return (data ?? []).map((row) => ({
+  return (data ?? []).map((row: any) => ({
     id: row.id,
     title: row.title,
     mode: row.mode,
@@ -85,7 +85,7 @@ export async function listAiChatMessages(sessionId: string): Promise<AiStoredCha
     .limit(200);
   if (error) throw new Error(error.message);
 
-  const assistantIds = (data ?? []).filter((row) => row.role === "assistant").map((row) => row.id);
+  const assistantIds = (data ?? []).filter((row: any) => row.role === "assistant").map((row: any) => row.id);
   const feedbackByMessage = new Map<string, -1 | 1>();
   if (assistantIds.length > 0) {
     const { data: feedback } = await supabase
@@ -95,7 +95,7 @@ export async function listAiChatMessages(sessionId: string): Promise<AiStoredCha
     for (const row of feedback ?? []) feedbackByMessage.set(row.message_id, row.rating);
   }
 
-  return (data ?? []).map((row) => ({
+  return (data ?? []).map((row: any) => ({
     id: row.id,
     role: row.role as "user" | "assistant",
     content: row.content,
@@ -163,7 +163,7 @@ export async function getConversationMemory(sessionId: string): Promise<Conversa
     summary: session?.memory_summary ?? null,
     turns: (messages ?? [])
       .reverse()
-      .map((row) => ({ role: row.role as "user" | "assistant", content: row.content })),
+      .map((row: any) => ({ role: row.role as "user" | "assistant", content: row.content })),
   };
 }
 
@@ -242,7 +242,7 @@ export async function updateAiSessionMemory(sessionId: string) {
   const older = chronological.slice(0, Math.max(0, chronological.length - RECENT_MEMORY_TURNS));
   const memorySummary = older.length > 0
     ? older
-      .map((message) => `${message.role === "user" ? "Người dùng" : "Trợ lý"}: ${message.content.slice(0, 320)}`)
+      .map((message: any) => `${message.role === "user" ? "Người dùng" : "Trợ lý"}: ${message.content.slice(0, 320)}`)
       .join("\n")
       .slice(-6000)
     : null;

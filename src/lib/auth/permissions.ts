@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { cache } from "react";
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { MOCK_USER_ID } from "@/lib/mock/data";
 import type { Branch, Membership, MembershipRole, Organization, Profile } from "@/types/database";
 
 export interface ActiveMembership {
@@ -13,6 +14,23 @@ export interface ActiveMembership {
 }
 
 export const getSession = cache(async () => {
+  if (process.env.NEXT_PUBLIC_MOCK === "true") {
+    // if its in the mock version, return the mock session data,
+    // this function is an internal helper function for all the methods below
+    // this function is used to get the user data, but most of the code uses it
+    // just for the user.id
+    // If there are any uses for getSession() more than getting user.id, then
+    // this Mock data may need to be modified.
+    return {
+      id: MOCK_USER_ID,
+      email: "admin@demo.com",
+      user_metadata: { full_name: "Admin Demo" },
+      app_metadata: {},
+      aud: "authenticated",
+      created_at: new Date().toISOString(),
+      role: "authenticated",
+    } as any;
+  }
   const supabase = createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
   return user;
@@ -41,8 +59,8 @@ export const getActiveMemberships = cache(async (): Promise<ActiveMembership[]> 
     .eq("status", "active");
   if (error || !data) return [];
   return data
-    .filter((row) => (row as any).organization)
-    .map((row) => {
+    .filter((row: any) => row.organization)
+    .map((row: any) => {
       const organization = (row as any).organization as Organization;
       const branch = ((row as any).branch as Branch | null) ?? null;
       return {

@@ -18,7 +18,7 @@ export async function listProductsForPos(organizationId: string, branchId: strin
     .eq("branch_id", branchId);
   const map = new Map<string, { is_available: boolean; sale_price_override: number | null }>();
   for (const s of settings ?? []) map.set(s.product_id, { is_available: s.is_available, sale_price_override: s.sale_price_override });
-  return (data ?? []).map((p) => {
+  return (data ?? []).map((p: any) => {
     const s = map.get(p.id);
     return {
       ...p,

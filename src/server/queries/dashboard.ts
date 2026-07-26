@@ -132,23 +132,23 @@ export async function getDashboardSummary(opts: {
       .lte("opened_at", range.to.toISOString()),
   ]);
 
-  const revenueToday = (todayPaid ?? []).reduce((s, o) => s + (o.total_amount || 0), 0);
+  const revenueToday = (todayPaid ?? []).reduce((s: number, o: any) => s + (o.total_amount || 0), 0);
   const ordersToday = todayCount ?? 0;
   const totalTables = tableCount ?? 0;
   const occupiedTables = occupied ?? 0;
   const selectedOrders = (rangeOrders ?? []).length;
   const selectedNetRevenue = (rangeOrders ?? [])
-    .filter((o) => o.status === "paid")
-    .reduce((s, o) => s + (o.total_amount || 0), 0);
-  const paidOrders = (rangeOrders ?? []).filter((o) => o.status === "paid").length;
+    .filter((o: any) => o.status === "paid")
+    .reduce((s: number, o: any) => s + (o.total_amount || 0), 0);
+  const paidOrders = (rangeOrders ?? []).filter((o: any) => o.status === "paid").length;
 
   const allItems = (rangeItems ?? []).filter((it: any) => it.orders?.status === "paid");
-  const totalItemRevenue = allItems.reduce((s, it) => s + it.unit_price_snapshot * it.quantity, 0);
+  const totalItemRevenue = allItems.reduce((s: number, it: any) => s + it.unit_price_snapshot * it.quantity, 0);
   const profitTotals = calculateProfitTotals(
     allItems.map((it: any) => ({ costPrice: Number(it.cost_price_snapshot ?? 0), quantity: Number(it.quantity ?? 0) })),
     selectedNetRevenue
   );
-  const totalItemQty = allItems.reduce((s, it) => s + Number(it.quantity), 0);
+  const totalItemQty = allItems.reduce((s: number, it: any) => s + Number(it.quantity), 0);
   const averageItemValue = totalItemQty > 0 ? Math.round(totalItemRevenue / totalItemQty) : 0;
   // foodItems aggregated for average calculations (reserved for future menu_type breakdown)
 
@@ -194,23 +194,23 @@ export async function getDashboardSummary(opts: {
     .from("sales_channels")
     .select("id, platform_fee_percent")
     .eq("organization_id", organizationId);
-  const catMap = new Map((categories ?? []).map((c) => [c.id, c.name]));
-  const productMeta = new Map((products ?? []).map((p) => [p.id, p]));
-  const channelFeePercent = new Map((channels ?? []).map((channel) => [channel.id, Number(channel.platform_fee_percent ?? 0)]));
+  const catMap = new Map<string, string>((categories ?? []).map((c: any) => [c.id, c.name]));
+  const productMeta = new Map<string, any>((products ?? []).map((p: any) => [p.id, p]));
+  const channelFeePercent = new Map<string, number>((channels ?? []).map((channel: any) => [channel.id, Number(channel.platform_fee_percent ?? 0)]));
   const selectedChannelFees = Math.round(
     (rangeOrders ?? [])
-      .filter((o) => o.status === "paid")
-      .reduce((sum, order) => {
-        const feePercent = order.sales_channel_id ? channelFeePercent.get(order.sales_channel_id) ?? 0 : 0;
+      .filter((o: any) => o.status === "paid")
+      .reduce((sum: number, order: any) => {
+        const feePercent: number = order.sales_channel_id ? channelFeePercent.get(order.sales_channel_id) ?? 0 : 0;
         return sum + Number(order.total_amount ?? 0) * (feePercent / 100);
       }, 0)
   );
   const selectedNetProfit = profitTotals.grossProfit - selectedChannelFees;
   const menuMap = new Map<string, { revenue: number; orders: number }>();
   for (const it of allItems) {
-    const meta = it.product_id ? productMeta.get(it.product_id) : null;
-    const categoryId = meta?.category_id ?? null;
-    const categoryName = categoryId ? catMap.get(categoryId) ?? "Khác" : "Chưa phân loại";
+    const meta: any = it.product_id ? productMeta.get(it.product_id) : null;
+    const categoryId: string | null = meta?.category_id ?? null;
+    const categoryName: string = categoryId ? (catMap.get(categoryId) ?? "Khác") : "Chưa phân loại";
     const cur = menuMap.get(categoryName) ?? { revenue: 0, orders: 0 };
     cur.revenue += it.unit_price_snapshot * it.quantity;
     cur.orders += 1;
