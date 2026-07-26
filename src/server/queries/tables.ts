@@ -32,7 +32,7 @@ export async function listOpenOrdersByTable(branchId: string): Promise<Record<st
     .from("orders")
     .select("*, items:order_items(*)")
     .eq("branch_id", branchId)
-    .in("status", ["draft", "open", "sent_to_kitchen", "partially_paid", "paid"])
+    .in("status", ["draft", "open", "sent_to_kitchen", "partially_paid"])
     .order("opened_at", { ascending: false });
   if (error) throw new Error(error.message);
   const map: Record<string, OpenOrderWithItems> = {};
