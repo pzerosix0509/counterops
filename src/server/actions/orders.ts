@@ -437,10 +437,6 @@ export async function payOrder(organizationId: string, input: unknown): Promise<
     })
     .eq("id", order.id);
 
-  if (status === "paid" && order.table_id) {
-    await admin.from("dining_tables").update({ status: "occupied" }).eq("id", order.table_id);
-  }
-
   await admin.from("audit_logs").insert({
     organization_id: m.organization.id,
     branch_id: order.branch_id,

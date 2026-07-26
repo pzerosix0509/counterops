@@ -1,5 +1,5 @@
 "use client";
-import { useState, useTransition, useMemo } from "react";
+import { useState, useTransition, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -54,6 +54,23 @@ export function TablesManager({
   const router = useRouter();
   const [openTable, setOpenTable] = useState(false);
 
+  const [statusOverrides, setStatusOverrides] = useState<Record<string, TableStatus>>({});
+
+  // Clear overrides once the DB value has caught up with what we set
+  useEffect(() => {
+    setStatusOverrides((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      for (const t of tables) {
+        if (next[t.id] !== undefined && next[t.id] === t.status) {
+          delete next[t.id];
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [tables]);
+
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [activeArea, setActiveArea] = useState<string>("all");
@@ -90,9 +107,18 @@ export function TablesManager({
   }
 
   function onStatusChange(tableId: string, status: TableStatus) {
+    setStatusOverrides((prev) => ({ ...prev, [tableId]: status }));
     startTransition(async () => {
-      await updateTableStatus(organizationId, { tableId, status });
-      router.refresh();
+      const res = await updateTableStatus(organizationId, { tableId, status });
+      if (res.ok) {
+        router.refresh();
+      } else {
+        setStatusOverrides((prev) => {
+          const next = { ...prev };
+          delete next[tableId];
+          return next;
+        });
+      }
     });
   }
 
@@ -193,17 +219,18 @@ export function TablesManager({
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
                   {g.tables.map((t) => {
                     const open = openByTable[t.id];
+                    const derivedStatus: TableStatus = statusOverrides[t.id] ?? t.status;
                     return (
                       <div
                         key={t.id}
                         className={cn(
                           "rounded-md border p-3 text-sm shadow-sm",
-                          STATUS_TONE[t.status]
+                          STATUS_TONE[derivedStatus]
                         )}
                       >
                         <div className="flex items-center justify-between">
                           <span className="font-semibold">{t.name}</span>
-                          <Badge variant={STATUS_VARIANT[t.status]}>{STATUS_LABEL[t.status]}</Badge>
+                          <Badge variant={STATUS_VARIANT[derivedStatus]}>{STATUS_LABEL[derivedStatus]}</Badge>
                         </div>
                         <p className="mt-1 text-xs text-muted-foreground">
                           <Users className="mr-1 inline h-3 w-3" /> {t.seats} ghế
@@ -215,7 +242,7 @@ export function TablesManager({
                         ) : null}
                         {canManage ? (
                           <Select
-                            value={t.status}
+                            value={derivedStatus}
                             onValueChange={(v) => onStatusChange(t.id, v as TableStatus)}
                           >
                             <SelectTrigger className="mt-2 h-7 text-xs">

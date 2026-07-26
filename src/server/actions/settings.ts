@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { canManageInventory, requireRole } from "@/lib/auth/permissions";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { inventorySettingsSchema, operationalSettingsSchema } from "@/lib/validation/schemas";
@@ -123,5 +123,6 @@ export async function updateOperationalSettings(
   revalidatePath("/kitchen");
   revalidatePath("/dashboard");
   revalidatePath("/reports/end-of-day");
+  revalidateTag(`settings-${membership.organization.id}`);
   return actionOk({ saved: true });
 }

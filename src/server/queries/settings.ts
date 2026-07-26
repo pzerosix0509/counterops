@@ -1,5 +1,6 @@
 import "server-only";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { unstable_cache } from "next/cache";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import {
   DEFAULT_OPERATIONAL_SETTINGS,
   type OperationalSettings,
@@ -35,8 +36,8 @@ function mapSettings(row: OrganizationSettings | null | undefined): OperationalS
   };
 }
 
-export async function getOperationalSettings(organizationId: string): Promise<OperationalSettings> {
-  const supabase = createSupabaseServerClient();
+async function fetchOperationalSettings(organizationId: string): Promise<OperationalSettings> {
+  const supabase = createSupabaseAdminClient();
   const { data, error } = await supabase
     .from("organization_settings")
     .select("*")
@@ -44,4 +45,12 @@ export async function getOperationalSettings(organizationId: string): Promise<Op
     .maybeSingle();
   if (error) throw new Error(error.message);
   return mapSettings(data as OrganizationSettings | null);
+}
+
+export function getOperationalSettings(organizationId: string): Promise<OperationalSettings> {
+  return unstable_cache(
+    () => fetchOperationalSettings(organizationId),
+    ["settings", organizationId],
+    { revalidate: 60, tags: [`settings-${organizationId}`] }
+  )();
 }
