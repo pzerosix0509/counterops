@@ -116,7 +116,7 @@ function matchValue(actual: any, operator: Filter["operator"], value: any): bool
       const pattern = value.replace(/%/g, ".*").toLowerCase();
       return new RegExp(`^${pattern}$`).test(actual.toLowerCase());
     }
-    case "is": return value === null ? actual === null : actual === value;
+    case "is": return value === null ? actual == null : actual === value;
     default: return true;
   }
 }
@@ -425,7 +425,7 @@ export class MockQueryBuilder {
       const rows = Array.isArray(this._insertData) ? this._insertData : [this._insertData];
       const inserted = rows.map((row: any) => {
         const newRow = { ...row };
-        if (!newRow.id) newRow.id = `mock_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        if (!newRow.id) newRow.id = crypto.randomUUID();
         if (!newRow.created_at) newRow.created_at = new Date().toISOString();
         table.push(newRow);
         return newRow;
@@ -455,7 +455,7 @@ export class MockQueryBuilder {
           upserted.push(table[existingIdx]);
         } else {
           const newRow = { ...row };
-          if (!newRow.id) newRow.id = `mock_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+          if (!newRow.id) newRow.id = crypto.randomUUID();
           if (!newRow.created_at) newRow.created_at = new Date().toISOString();
           table.push(newRow);
           upserted.push(newRow);
@@ -565,8 +565,186 @@ function makeMockChannel() {
   return channel;
 }
 
-function makeRpcMock(_name: string, _args?: any): PromiseLike<{ data: any; error: null }> {
-  return Promise.resolve({ data: [], error: null });
+function getMockOrders(branchId: string, from: string, to: string) {
+  const orders = (MOCK_DATA.orders ?? []) as any[];
+  return orders.filter(
+    (o) => o.branch_id === branchId && o.status === "paid" && o.opened_at >= from && o.opened_at <= to,
+  );
+}
+
+function getMockOrderItems(branchId: string, from: string, to: string) {
+  const paidOrders = getMockOrders(branchId, from, to);
+  const orderIds = new Set(paidOrders.map((o) => o.id));
+  const items = (MOCK_DATA.order_items ?? []) as any[];
+  return items.filter((it) => orderIds.has(it.order_id));
+}
+
+function mockRpcHandlers(name: string, args: any): any[] {
+  const branchId = args?.p_branch_id as string;
+  const from = (args?.p_from as string) ?? "";
+  const to = (args?.p_to as string) ?? "";
+
+  switch (name) {
+    case "ai_sales_summary": {
+      const orders = getMockOrders(branchId, from, to);
+      const totalOrders = orders.length;
+      const netRevenue = orders.reduce((s, o) => s + (o.total_amount ?? 0), 0);
+      const items = getMockOrderItems(branchId, from, to);
+      const costOfGoods = items.reduce((s, it) => s + (it.cost_price_snapshot ?? 0) * (it.quantity ?? 0), 0);
+      const channels = (MOCK_DATA.sales_channels ?? []) as any[];
+      const channelMap = new Map(channels.map((c) => [c.id, c]));
+      const channelFees = orders.reduce((s, o) => {
+        const ch = channelMap.get(o.sales_channel_id);
+        return s + (o.total_amount ?? 0) * ((ch?.platform_fee_percent ?? 0) / 100);
+      }, 0);
+      const grossProfit = netRevenue - costOfGoods;
+      return [{ total_orders: totalOrders, net_revenue: netRevenue, cost_of_goods: costOfGoods, gross_profit: grossProfit, channel_fees: Math.round(channelFees), net_profit: grossProfit - Math.round(channelFees) }];
+    }
+
+    case "ai_top_products": {
+      const items = getMockOrderItems(branchId, from, to);
+      const limit = Number(args?.p_limit ?? 10);
+      const productMap = new Map<string, { product_name: string; quantity: number; revenue: number; cost_of_goods: number }>();
+      for (const it of items) {
+        const key = it.product_id ?? it.product_name_snapshot;
+        const existing = productMap.get(key) ?? { product_name: it.product_name_snapshot, quantity: 0, revenue: 0, cost_of_goods: 0 };
+        existing.quantity += it.quantity ?? 0;
+        existing.revenue += (it.unit_price_snapshot ?? 0) * (it.quantity ?? 0);
+        existing.cost_of_goods += (it.cost_price_snapshot ?? 0) * (it.quantity ?? 0);
+        productMap.set(key, existing);
+      }
+      return Array.from(productMap.values())
+        .map((p) => ({ ...p, gross_profit: p.revenue - p.cost_of_goods }))
+        .sort((a, b) => b.revenue - a.revenue)
+        .slice(0, limit);
+    }
+
+    case "ai_category_summary": {
+      const items = getMockOrderItems(branchId, from, to);
+      const limit = Number(args?.p_limit ?? 20);
+      const products = (MOCK_DATA.products ?? []) as any[];
+      const categories = (MOCK_DATA.menu_categories ?? []) as any[];
+      const productCatMap = new Map(products.map((p) => [p.id, p.category_id]));
+      const catNameMap = new Map(categories.map((c) => [c.id, c.name]));
+      const catMap = new Map<string, { category_id: string | null; category_name: string; quantity: number; revenue: number; cost_of_goods: number }>();
+      for (const it of items) {
+        const catId = productCatMap.get(it.product_id) ?? null;
+        const key = catId ?? "__null__";
+        const existing = catMap.get(key) ?? { category_id: catId, category_name: catId ? (catNameMap.get(catId) ?? "Khác") : "Chưa phân loại", quantity: 0, revenue: 0, cost_of_goods: 0 };
+        existing.quantity += it.quantity ?? 0;
+        existing.revenue += (it.unit_price_snapshot ?? 0) * (it.quantity ?? 0);
+        existing.cost_of_goods += (it.cost_price_snapshot ?? 0) * (it.quantity ?? 0);
+        catMap.set(key, existing);
+      }
+      return Array.from(catMap.values())
+        .map((c) => ({ ...c, gross_profit: c.revenue - c.cost_of_goods }))
+        .sort((a, b) => b.revenue - a.revenue)
+        .slice(0, limit);
+    }
+
+    case "ai_channel_summary": {
+      const orders = getMockOrders(branchId, from, to);
+      const channels = (MOCK_DATA.sales_channels ?? []) as any[];
+      const channelMap = new Map(channels.map((c) => [c.id, c]));
+      const sumMap = new Map<string, { channel_name: string; orders: number; revenue: number; channel_fees: number }>();
+      for (const o of orders) {
+        const chId = o.sales_channel_id ?? "__none__";
+        const ch = channelMap.get(chId);
+        const existing = sumMap.get(chId) ?? { channel_name: ch?.name ?? "Không rõ", orders: 0, revenue: 0, channel_fees: 0 };
+        existing.orders += 1;
+        existing.revenue += o.total_amount ?? 0;
+        existing.channel_fees += Math.round((o.total_amount ?? 0) * ((ch?.platform_fee_percent ?? 0) / 100));
+        sumMap.set(chId, existing);
+      }
+      return Array.from(sumMap.values()).sort((a, b) => b.revenue - a.revenue);
+    }
+
+    case "ai_sales_timeseries": {
+      const orders = getMockOrders(branchId, from, to);
+      const items = getMockOrderItems(branchId, from, to);
+      const granularity = (args?.p_granularity as string) ?? "day";
+      const bucketMap = new Map<string, { period_start: string; total_orders: number; net_revenue: number; cost_of_goods: number }>();
+      for (const o of orders) {
+        const d = new Date(o.opened_at);
+        const key = granularity === "hour"
+          ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}T${String(d.getHours()).padStart(2, "0")}:00:00`
+          : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}T00:00:00`;
+        const existing = bucketMap.get(key) ?? { period_start: key, total_orders: 0, net_revenue: 0, cost_of_goods: 0 };
+        existing.total_orders += 1;
+        existing.net_revenue += o.total_amount ?? 0;
+        bucketMap.set(key, existing);
+      }
+      const orderIdsByDate = new Map<string, Set<string>>();
+      for (const o of orders) {
+        const d = new Date(o.opened_at);
+        const key = granularity === "hour"
+          ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}T${String(d.getHours()).padStart(2, "0")}:00:00`
+          : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}T00:00:00`;
+        if (!orderIdsByDate.has(key)) orderIdsByDate.set(key, new Set());
+        orderIdsByDate.get(key)!.add(o.id);
+      }
+      for (const it of items) {
+        for (const [dateKey, orderIds] of Array.from(orderIdsByDate.entries())) {
+          if (orderIds.has(it.order_id)) {
+            const bucket = bucketMap.get(dateKey);
+            if (bucket) bucket.cost_of_goods += (it.cost_price_snapshot ?? 0) * (it.quantity ?? 0);
+          }
+        }
+      }
+      return Array.from(bucketMap.values())
+        .sort((a, b) => a.period_start.localeCompare(b.period_start))
+        .map((b) => ({ ...b, gross_profit: b.net_revenue - b.cost_of_goods, channel_fees: 0, net_profit: b.net_revenue - b.cost_of_goods }));
+    }
+
+    case "ai_period_comparison": {
+      const currentOrders = getMockOrders(branchId, from, to);
+      const currentRevenue = currentOrders.reduce((s, o) => s + (o.total_amount ?? 0), 0);
+      const durationMs = new Date(to).getTime() - new Date(from).getTime();
+      const prevFrom = new Date(new Date(from).getTime() - durationMs).toISOString();
+      const prevTo = from;
+      const prevOrders = getMockOrders(branchId, prevFrom, prevTo);
+      const prevRevenue = prevOrders.reduce((s, o) => s + (o.total_amount ?? 0), 0);
+      const curItems = getMockOrderItems(branchId, from, to);
+      const curCost = curItems.reduce((s, it) => s + (it.cost_price_snapshot ?? 0) * (it.quantity ?? 0), 0);
+      const prevItems = getMockOrderItems(branchId, prevFrom, prevTo);
+      const prevCost = prevItems.reduce((s, it) => s + (it.cost_price_snapshot ?? 0) * (it.quantity ?? 0), 0);
+      const curProfit = currentRevenue - curCost;
+      const prevProfit = prevRevenue - prevCost;
+      const delta = (cur: number, prev: number) => prev === 0 ? null : Math.round(((cur - prev) / prev) * 100 * 10) / 10;
+      return [{
+        current_orders: currentOrders.length,
+        previous_orders: prevOrders.length,
+        orders_delta_percent: delta(currentOrders.length, prevOrders.length),
+        current_revenue: currentRevenue,
+        previous_revenue: prevRevenue,
+        revenue_delta_percent: delta(currentRevenue, prevRevenue),
+        current_profit: curProfit,
+        previous_profit: prevProfit,
+        profit_delta_percent: delta(curProfit, prevProfit),
+      }];
+    }
+
+    case "ai_usage_summary": {
+      const runs = (MOCK_DATA.ai_runs ?? []) as any[];
+      const filtered = runs.filter(
+        (r) => r.branch_id === branchId && r.created_at >= from && r.created_at <= to,
+      );
+      return [{
+        total_runs: filtered.length,
+        total_tokens: filtered.reduce((s, r) => s + (r.total_tokens ?? 0), 0),
+        estimated_cost_usd: filtered.reduce((s, r) => s + (r.estimated_cost_usd ?? 0), 0),
+        fallback_runs: filtered.filter((r) => r.status === "fallback").length,
+        average_latency_ms: filtered.length > 0 ? Math.round(filtered.reduce((s, r) => s + (r.latency_ms ?? 0), 0) / filtered.length) : 0,
+      }];
+    }
+
+    default:
+      return [];
+  }
+}
+
+function makeRpcMock(name: string, args?: any): PromiseLike<{ data: any; error: null }> {
+  return Promise.resolve({ data: mockRpcHandlers(name, args), error: null });
 }
 
 export function createMockServerClient() {
