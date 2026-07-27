@@ -495,10 +495,10 @@ export async function updateKitchenStatus(
     if ((count ?? 0) === 0) {
       await admin.from("dining_tables").update({ status: "available" }).eq("id", order.table_id);
     }
+    revalidatePath("/pos");
+    revalidatePath("/tables");
   }
   revalidatePath("/kitchen");
-  revalidatePath("/pos");
-  revalidatePath("/tables");
   return actionOk({ id: orderItemId, status: parsed.data.status });
 }
 
