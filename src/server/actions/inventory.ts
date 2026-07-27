@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { inventoryItemSchema, inventoryMovementSchema } from "@/lib/validation/schemas";
 import { actionFail, actionOk, type ActionResult } from "@/lib/utils/action-result";
 import { canManageInventory, requireRole } from "@/lib/auth/permissions";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { clearAiToolCache } from "@/server/ai/cache";
 
 export async function createInventoryItem(
@@ -15,8 +15,8 @@ export async function createInventoryItem(
   const m = await requireRole(organizationId, canManageInventory);
   const parsed = inventoryItemSchema.safeParse(input);
   if (!parsed.success) return actionFail("VALIDATION_ERROR", "Thiếu hoặc sai thông tin hàng hóa");
-  const admin = createSupabaseAdminClient();
-  const { data: exists } = await admin
+  const supabase = createSupabaseServerClient();
+  const { data: exists } = await supabase
     .from("inventory_items")
     .select("id")
     .eq("organization_id", m.organization.id)
@@ -24,7 +24,7 @@ export async function createInventoryItem(
     .maybeSingle();
   if (exists) return actionFail("CONFLICT", "Mã hàng đã tồn tại", { code: ["Mã hàng đã tồn tại"] });
 
-  const { data: item, error } = await admin
+  const { data: item, error } = await supabase
     .from("inventory_items")
     .insert({
       organization_id: m.organization.id,
@@ -41,14 +41,14 @@ export async function createInventoryItem(
   if (error || !item) return actionFail("INTERNAL_ERROR", "Không tạo được hàng hóa: " + (error?.message ?? ""));
 
   if (parsed.data.initialQuantity > 0) {
-    await admin.from("inventory_balances").upsert({
+    await supabase.from("inventory_balances").upsert({
       organization_id: m.organization.id,
       branch_id: branchId,
       inventory_item_id: item.id,
       quantity_on_hand: parsed.data.initialQuantity,
       low_stock_threshold: parsed.data.lowStockThreshold,
     });
-    await admin.from("inventory_movements").insert({
+    await supabase.from("inventory_movements").insert({
       organization_id: m.organization.id,
       branch_id: branchId,
       inventory_item_id: item.id,
@@ -60,7 +60,7 @@ export async function createInventoryItem(
       created_by: m.membership.user_id,
     });
   } else {
-    await admin.from("inventory_balances").insert({
+    await supabase.from("inventory_balances").insert({
       organization_id: m.organization.id,
       branch_id: branchId,
       inventory_item_id: item.id,
@@ -80,9 +80,9 @@ export async function createInventoryMovement(
   const m = await requireRole(organizationId, canManageInventory);
   const parsed = inventoryMovementSchema.safeParse(input);
   if (!parsed.success) return actionFail("VALIDATION_ERROR", "Thiếu thông tin phiếu kho");
-  const admin = createSupabaseAdminClient();
+  const supabase = createSupabaseServerClient();
 
-  const { data: balance } = await admin
+  const { data: balance } = await supabase
     .from("inventory_balances")
     .select("*")
     .eq("branch_id", parsed.data.branchId)
@@ -100,7 +100,7 @@ export async function createInventoryMovement(
     }
   }
 
-  const { data: mv, error } = await admin
+  const { data: mv, error } = await supabase
     .from("inventory_movements")
     .insert({
       organization_id: m.organization.id,
@@ -118,12 +118,12 @@ export async function createInventoryMovement(
 
   if (balance) {
     const newQty = Number(balance.quantity_on_hand) + parsed.data.quantityDelta;
-    await admin
+    await supabase
       .from("inventory_balances")
       .update({ quantity_on_hand: newQty })
       .eq("id", balance.id);
   } else {
-    await admin.from("inventory_balances").insert({
+    await supabase.from("inventory_balances").insert({
       organization_id: m.organization.id,
       branch_id: parsed.data.branchId,
       inventory_item_id: parsed.data.inventoryItemId,
@@ -132,7 +132,7 @@ export async function createInventoryMovement(
     });
   }
 
-  await admin.from("audit_logs").insert({
+  await supabase.from("audit_logs").insert({
     organization_id: m.organization.id,
     branch_id: parsed.data.branchId,
     actor_user_id: m.membership.user_id,

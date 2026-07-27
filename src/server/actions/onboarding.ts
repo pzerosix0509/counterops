@@ -25,9 +25,9 @@ export async function createOrganizationWithFirstBranch(
 
   const admin = createSupabaseAdminClient();
 
-  const { data: existingProfile } = await admin.from("profiles").select("id").eq("id", user.id).maybeSingle();
+  const { data: existingProfile } = await supabase.from("profiles").select("id").eq("id", user.id).maybeSingle();
   if (!existingProfile) {
-    const { error: profileError } = await admin.from("profiles").insert({
+    const { error: profileError } = await supabase.from("profiles").insert({
       id: user.id,
       full_name: (user.user_metadata?.full_name as string | undefined) ?? null,
     });
@@ -41,7 +41,7 @@ export async function createOrganizationWithFirstBranch(
     return actionFail("CONFLICT", "Mã định danh đã tồn tại, vui lòng chọn mã khác.", { organizationSlug: ["Mã định danh đã tồn tại"] });
   }
 
-  const { data: org, error: orgErr } = await admin
+  const { data: org, error: orgErr } = await supabase
     .from("organizations")
     .insert({
       name: data.organizationName,
@@ -75,7 +75,7 @@ export async function createOrganizationWithFirstBranch(
   });
   if (memberErr) return actionFail("INTERNAL_ERROR", "Không gán được quyền chủ sở hữu: " + memberErr.message);
 
-  await admin.from("profiles").update({ default_organization_id: org.id }).eq("id", user.id);
+  await supabase.from("profiles").update({ default_organization_id: org.id }).eq("id", user.id);
 
   const defaultChannels = [
     { organization_id: org.id, name: "Tại quán", type: "direct" },
@@ -85,15 +85,15 @@ export async function createOrganizationWithFirstBranch(
     { organization_id: org.id, name: "BeFood", type: "delivery" },
     { organization_id: org.id, name: "Online", type: "online" },
   ];
-  await admin.from("sales_channels").insert(defaultChannels);
+  await supabase.from("sales_channels").insert(defaultChannels);
 
   const defaultCategories = ["Cà phê", "Trà", "Đồ ăn", "Khác"].map((name) => ({
     organization_id: org.id,
     name,
   }));
-  await admin.from("menu_categories").insert(defaultCategories);
+  await supabase.from("menu_categories").insert(defaultCategories);
 
-  await admin.from("audit_logs").insert({
+  await supabase.from("audit_logs").insert({
     organization_id: org.id,
     branch_id: branch.id,
     actor_user_id: user.id,

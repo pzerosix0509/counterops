@@ -6,7 +6,6 @@ import { categorySchema, productSchema } from "@/lib/validation/schemas";
 import { actionFail, actionOk, type ActionResult } from "@/lib/utils/action-result";
 import { canManageMenu, requireRole } from "@/lib/auth/permissions";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export async function createCategory(
   organizationId: string,
@@ -41,8 +40,8 @@ export async function createProduct(
     }
     return actionFail("VALIDATION_ERROR", "Vui lòng kiểm tra các trường", fieldErrors);
   }
-  const admin = createSupabaseAdminClient();
-  const { data: codeTaken } = await admin
+  const supabase = createSupabaseServerClient();
+  const { data: codeTaken } = await supabase
     .from("products")
     .select("id")
     .eq("organization_id", m.organization.id)
@@ -50,7 +49,7 @@ export async function createProduct(
     .maybeSingle();
   if (codeTaken) return actionFail("CONFLICT", "Mã món đã tồn tại trong cửa hàng", { code: ["Mã món đã tồn tại"] });
 
-  const { data: product, error } = await admin
+  const { data: product, error } = await supabase
     .from("products")
     .insert({
       organization_id: m.organization.id,
@@ -71,7 +70,7 @@ export async function createProduct(
   if (error || !product) return actionFail("INTERNAL_ERROR", "Không tạo được món: " + (error?.message ?? ""));
 
   if (parsed.data.recipe && parsed.data.recipe.length > 0) {
-    const { data: recipe, error: recipeErr } = await admin
+    const { data: recipe, error: recipeErr } = await supabase
       .from("recipes")
       .insert({ organization_id: m.organization.id, product_id: product.id, version: 1, is_active: true })
       .select("id")
@@ -84,10 +83,10 @@ export async function createProduct(
       unit: r.unit,
       estimated_cost: r.estimatedCost,
     }));
-    await admin.from("recipe_items").insert(items);
+    await supabase.from("recipe_items").insert(items);
   }
 
-  await admin.from("audit_logs").insert({
+  await supabase.from("audit_logs").insert({
     organization_id: m.organization.id,
     actor_user_id: m.membership.user_id,
     action: "product.create",
@@ -102,8 +101,8 @@ export async function createProduct(
 
 export async function toggleProductActive(organizationId: string, productId: string, isActive: boolean): Promise<ActionResult<{ id: string }>> {
   const m = await requireRole(organizationId, canManageMenu);
-  const admin = createSupabaseAdminClient();
-  const { error } = await admin
+  const supabase = createSupabaseServerClient();
+  const { error } = await supabase
     .from("products")
     .update({ is_active: isActive })
     .eq("id", productId)
