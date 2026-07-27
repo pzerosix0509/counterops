@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Hourglass } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -11,7 +11,7 @@ import { EmptyState } from "@/components/common/states";
 import { formatTime } from "@/lib/utils/format";
 import { updateKitchenStatus } from "@/server/actions/orders";
 import { useBranchRealtime } from "@/hooks/use-branch-realtime";
-import { notifyError, notifyInfo, notifySuccess } from "@/hooks/use-notify";
+import { notifyError, notifyInfo } from "@/hooks/use-notify";
 import type { KitchenItem as KitchenItemType } from "@/server/queries/kitchen";
 
 type KitchenTab = "pending" | "ready";
@@ -33,9 +33,8 @@ export function KitchenBoard({
 }) {
   const router = useRouter();
   const [tab, setTab] = useState<KitchenTab>("pending");
-  const [isPending, startTransition] = useTransition();
-  const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [optimisticIds, setOptimisticIds] = useState<Record<string, "ready" | "served">>({});
   const seenItemIdsRef = useRef<Set<string> | null>(null);
 
   const realtime = useBranchRealtime({
@@ -107,18 +106,19 @@ export function KitchenBoard({
     if (!canUpdate) return;
     const nextStatus = status === "ready" && autoMarkServedOnReady ? "served" : status;
     setError(null);
-    setBusyId(itemId);
-    startTransition(async () => {
-      const result = await updateKitchenStatus(organizationId, itemId, { status: nextStatus });
+    setOptimisticIds((prev) => ({ ...prev, [itemId]: nextStatus }));
+    updateKitchenStatus(organizationId, itemId, { status: nextStatus }).then((result) => {
       if (!result.ok) {
+        setOptimisticIds((prev) => {
+          const copy = { ...prev };
+          delete copy[itemId];
+          return copy;
+        });
         setError(result.error.message);
-        setBusyId(null);
         notifyError("Không thể cập nhật trạng thái bếp", result.error.message);
         return;
       }
-      setBusyId(null);
       router.refresh();
-      notifySuccess(nextStatus === "ready" ? "Đã đánh dấu sẵn sàng" : "Đã phục vụ");
     });
   }
 
@@ -173,12 +173,12 @@ export function KitchenBoard({
                     {canUpdate ? (
                       <div className="mt-2 flex flex-wrap gap-1">
                         {tab === "pending" ? (
-                          <Button size="sm" disabled={busyId === it.item.id || isPending} onClick={() => changeStatus(it.item.id, "ready")}>
-                            <Check className="h-3.5 w-3.5" /> Sẵn sàng
+                          <Button size="sm" disabled={!!optimisticIds[it.item.id]} onClick={() => changeStatus(it.item.id, "ready")}>
+                            <Check className="h-3.5 w-3.5" /> {optimisticIds[it.item.id] ? "Đã gửi..." : "Sẵn sàng"}
                           </Button>
                         ) : (
-                          <Button size="sm" variant="outline" disabled={busyId === it.item.id || isPending} onClick={() => changeStatus(it.item.id, "served")}>
-                            Đã phục vụ
+                          <Button size="sm" variant="outline" disabled={!!optimisticIds[it.item.id]} onClick={() => changeStatus(it.item.id, "served")}>
+                            {optimisticIds[it.item.id] ? "Đã gửi..." : "Đã phục vụ"}
                           </Button>
                         )}
                       </div>
