@@ -4,7 +4,8 @@ create or replace function public.update_kitchen_status_rpc(
   p_new_status kitchen_status,
   p_allowed_roles membership_role[],
   p_caller_org_id uuid,
-  p_caller_branch_id uuid
+  p_caller_branch_id uuid,
+  p_caller_user_id uuid
 ) returns jsonb
 language plpgsql
 security definer
@@ -23,7 +24,7 @@ begin
     join public.orders o on o.id = oi.order_id
    where oi.id = p_item_id
      and o.organization_id = p_caller_org_id
-     and o.branch_id = p_caller_branch_id;
+     and (p_caller_branch_id is null or o.branch_id = p_caller_branch_id);
 
   if not found then
     return jsonb_build_object('ok', false, 'code', 'NOT_FOUND', 'message', 'Không tìm thấy món');
@@ -33,7 +34,7 @@ begin
   if not exists (
     select 1 from public.memberships m
     where m.organization_id = p_caller_org_id
-      and m.user_id = auth.uid()
+      and m.user_id = p_caller_user_id
       and m.status = 'active'
       and m.role = any(p_allowed_roles)
   ) then

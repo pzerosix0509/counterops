@@ -476,6 +476,7 @@ export async function updateKitchenStatus(
     p_allowed_roles: canUpdateKitchen,
     p_caller_org_id: organizationId,
     p_caller_branch_id: m.branch?.id ?? null,
+    p_caller_user_id: m.membership.user_id,
   });
 
   if (rpcErr) return actionFail("INTERNAL_ERROR", "Không cập nhật được trạng thái bếp: " + rpcErr.message);
