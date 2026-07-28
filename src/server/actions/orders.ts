@@ -4,15 +4,14 @@ import { revalidatePath } from "next/cache";
 import { orderInputSchema, paymentInputSchema, kitchenStatusSchema, cancelOrderItemSchema } from "@/lib/validation/schemas";
 import { actionFail, actionOk, type ActionResult } from "@/lib/utils/action-result";
 import { canCreateOrder, canPayOrder, canUpdateKitchen, requireRole } from "@/lib/auth/permissions";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { calculateTotals, newOrderNumber, classifyPaymentStatus } from "@/lib/calculations/orders";
 import { clearAiToolCache } from "@/server/ai/cache";
 
 const OPEN_ORDER_STATUSES = ["draft", "open", "sent_to_kitchen", "partially_paid"] as const;
 
-async function nextOrderSeq(admin: ReturnType<typeof createSupabaseAdminClient>, branchId: string): Promise<number> {
-  const { count } = await admin
+async function nextOrderSeq(supabase: ReturnType<typeof createSupabaseServerClient>, branchId: string): Promise<number> {
+  const { count } = await supabase
     .from("orders")
     .select("id", { count: "exact", head: true })
     .eq("branch_id", branchId);
@@ -20,7 +19,7 @@ async function nextOrderSeq(admin: ReturnType<typeof createSupabaseAdminClient>,
 }
 
 async function loadProductCostSnapshots(
-  admin: ReturnType<typeof createSupabaseAdminClient>,
+  supabase: ReturnType<typeof createSupabaseServerClient>,
   organizationId: string,
   products: Map<string, any>
 ): Promise<Map<string, number>> {
@@ -35,7 +34,7 @@ async function loadProductCostSnapshots(
     .map((product) => product.id);
   if (preparedIds.length === 0) return costs;
 
-  const { data: recipes } = await admin
+  const { data: recipes } = await supabase
     .from("recipes")
     .select("id, product_id, version, recipe_items(quantity, estimated_cost, inventory_item:inventory_items(cost_price))")
     .eq("organization_id", organizationId)
@@ -78,10 +77,10 @@ export async function createOrUpdateOrder(
     }
     return actionFail("VALIDATION_ERROR", "Vui lòng kiểm tra các trường", fieldErrors);
   }
-  const admin = createSupabaseAdminClient();
+  const supabase = createSupabaseServerClient();
 
   const productIds = parsed.data.items.map((i) => i.productId);
-  const { data: products, error: prodErr } = await admin
+  const { data: products, error: prodErr } = await supabase
     .from("products")
     .select("*")
     .in("id", productIds)
@@ -93,7 +92,7 @@ export async function createOrUpdateOrder(
       return actionFail("VALIDATION_ERROR", `Món không tồn tại: ${item.productId}`);
     }
   }
-  const productCostMap = await loadProductCostSnapshots(admin, m.organization.id, productMap);
+  const productCostMap = await loadProductCostSnapshots(supabase, m.organization.id, productMap);
 
   const itemsForCalc = parsed.data.items.map((item) => {
     const p = productMap.get(item.productId)!;
@@ -108,7 +107,7 @@ export async function createOrUpdateOrder(
   const totals = calculateTotals(itemsForCalc, parsed.data.discountAmount, parsed.data.taxAmount, parsed.data.serviceFeeAmount);
 
   if (orderId) {
-    const { data: existing } = await admin
+    const { data: existing } = await supabase
       .from("orders")
       .select("*")
       .eq("id", orderId)
@@ -119,7 +118,7 @@ export async function createOrUpdateOrder(
       return actionFail("ORDER_LOCKED", "Đơn đã khoá, không thể chỉnh sửa.");
     }
     if (parsed.data.tableId && parsed.data.tableId !== existing.table_id) {
-      const { data: tableOrder } = await admin
+      const { data: tableOrder } = await supabase
         .from("orders")
         .select("id, order_number")
         .eq("branch_id", branchId)
@@ -131,7 +130,7 @@ export async function createOrUpdateOrder(
         return actionFail("TABLE_OCCUPIED", `Bàn đã có khách (${tableOrder.order_number}). Vui lòng chọn đúng đơn trên bàn để cập nhật hoặc thanh toán.`);
       }
     }
-    await admin.from("order_items").delete().eq("order_id", orderId);
+    await supabase.from("order_items").delete().eq("order_id", orderId);
     const rows = parsed.data.items.map((item) => {
       const p = productMap.get(item.productId)!;
       return {
@@ -147,8 +146,8 @@ export async function createOrUpdateOrder(
         kitchen_status: p.product_type === "prepared" ? "pending" : "not_required",
       };
     });
-    await admin.from("order_items").insert(rows);
-    await admin
+    await supabase.from("order_items").insert(rows);
+    await supabase
       .from("orders")
       .update({
         table_id: parsed.data.tableId ?? null,
@@ -163,7 +162,7 @@ export async function createOrUpdateOrder(
       })
       .eq("id", orderId);
     if (existing.table_id && existing.table_id !== parsed.data.tableId) {
-      const { data: otherOpenOrder } = await admin
+      const { data: otherOpenOrder } = await supabase
         .from("orders")
         .select("id")
         .eq("branch_id", branchId)
@@ -172,11 +171,11 @@ export async function createOrUpdateOrder(
         .neq("id", orderId)
         .maybeSingle();
       if (!otherOpenOrder) {
-        await admin.from("dining_tables").update({ status: "available" }).eq("id", existing.table_id);
+        await supabase.from("dining_tables").update({ status: "available" }).eq("id", existing.table_id);
       }
     }
     if (parsed.data.tableId) {
-      await admin.from("dining_tables").update({ status: "occupied" }).eq("id", parsed.data.tableId);
+      await supabase.from("dining_tables").update({ status: "occupied" }).eq("id", parsed.data.tableId);
     }
     revalidatePath("/pos");
     revalidatePath("/tables");
@@ -186,7 +185,7 @@ export async function createOrUpdateOrder(
 
   // create
   if (parsed.data.tableId) {
-    const { data: tableOrder } = await admin
+    const { data: tableOrder } = await supabase
       .from("orders")
       .select("id, order_number")
       .eq("branch_id", branchId)
@@ -198,9 +197,9 @@ export async function createOrUpdateOrder(
     }
   }
 
-  const seq = await nextOrderSeq(admin, branchId);
+  const seq = await nextOrderSeq(supabase, branchId);
   const orderNumber = newOrderNumber(seq);
-  const { data: order, error: orderErr } = await admin
+  const { data: order, error: orderErr } = await supabase
     .from("orders")
     .insert({
       organization_id: m.organization.id,
@@ -224,7 +223,7 @@ export async function createOrUpdateOrder(
   if (orderErr || !order) return actionFail("INTERNAL_ERROR", "Không tạo được đơn: " + (orderErr?.message ?? ""));
 
   if (parsed.data.tableId) {
-    await admin.from("dining_tables").update({ status: "occupied" }).eq("id", parsed.data.tableId);
+    await supabase.from("dining_tables").update({ status: "occupied" }).eq("id", parsed.data.tableId);
   }
 
   const rows = parsed.data.items.map((item) => {
@@ -242,7 +241,7 @@ export async function createOrUpdateOrder(
       kitchen_status: p.product_type === "prepared" ? "pending" : "not_required",
     };
   });
-  await admin.from("order_items").insert(rows);
+  await supabase.from("order_items").insert(rows);
 
   revalidatePath("/pos");
   revalidatePath("/tables");
@@ -255,9 +254,9 @@ export async function payOrder(organizationId: string, input: unknown): Promise<
   const m = await requireRole(organizationId, canPayOrder);
   const parsed = paymentInputSchema.safeParse(input);
   if (!parsed.success) return actionFail("VALIDATION_ERROR", "Thiếu thông tin thanh toán");
-  const admin = createSupabaseAdminClient();
+  const supabase = createSupabaseServerClient();
 
-  const { data: order } = await admin
+  const { data: order } = await supabase
     .from("orders")
     .select("*, items:order_items(*, product:products(*))")
     .eq("id", parsed.data.orderId)
@@ -279,7 +278,7 @@ export async function payOrder(organizationId: string, input: unknown): Promise<
   if (paidTotal <= 0) return actionFail("VALIDATION_ERROR", "Số tiền thanh toán phải lớn hơn 0");
   if (paidTotal > total) return actionFail("VALIDATION_ERROR", `Số tiền thanh toán vượt quá tổng đơn (${total}).`);
 
-  const { count: deductionCount } = await admin
+  const { count: deductionCount } = await supabase
     .from("inventory_movements")
     .select("id", { count: "exact", head: true })
     .eq("branch_id", order.branch_id)
@@ -312,7 +311,7 @@ export async function payOrder(organizationId: string, input: unknown): Promise<
       const product = it.product;
       if (!product) continue;
       if (product.product_type === "regular") {
-        const { data: link } = await admin
+        const { data: link } = await supabase
           .from("inventory_items")
           .select("id, name, unit")
           .eq("organization_id", m.organization.id)
@@ -320,7 +319,7 @@ export async function payOrder(organizationId: string, input: unknown): Promise<
           .eq("code", product.code)
           .maybeSingle();
         if (link) {
-          const { data: balance } = await admin
+          const { data: balance } = await supabase
             .from("inventory_balances")
             .select("quantity_on_hand")
             .eq("branch_id", order.branch_id)
@@ -335,7 +334,7 @@ export async function payOrder(organizationId: string, input: unknown): Promise<
           });
         }
       } else {
-        const { data: recipe } = await admin
+        const { data: recipe } = await supabase
           .from("recipes")
           .select("id, recipe_items(*, inventory_item:inventory_items(id, name, unit))")
           .eq("product_id", product.id)
@@ -344,7 +343,7 @@ export async function payOrder(organizationId: string, input: unknown): Promise<
           .limit(1)
           .maybeSingle();
         for (const ri of (recipe?.recipe_items ?? []) as any[]) {
-          const { data: balance } = await admin
+          const { data: balance } = await supabase
             .from("inventory_balances")
             .select("quantity_on_hand")
             .eq("branch_id", order.branch_id)
@@ -388,10 +387,10 @@ export async function payOrder(organizationId: string, input: unknown): Promise<
     received_by: m.membership.user_id,
     transaction_ref: p.transactionRef ?? null,
   }));
-  await admin.from("payments").insert(paymentRows);
+  await supabase.from("payments").insert(paymentRows);
 
   for (const c of checks) {
-    const { data: balance } = await admin
+    const { data: balance } = await supabase
       .from("inventory_balances")
       .select("id, quantity_on_hand")
       .eq("branch_id", order.branch_id)
@@ -399,9 +398,9 @@ export async function payOrder(organizationId: string, input: unknown): Promise<
       .maybeSingle();
     const newQty = Number(balance?.quantity_on_hand ?? 0) - c.quantityNeeded;
     if (balance) {
-      await admin.from("inventory_balances").update({ quantity_on_hand: newQty }).eq("id", balance.id);
+      await supabase.from("inventory_balances").update({ quantity_on_hand: newQty }).eq("id", balance.id);
     } else {
-      await admin.from("inventory_balances").insert({
+      await supabase.from("inventory_balances").insert({
         organization_id: m.organization.id,
         branch_id: order.branch_id,
         inventory_item_id: c.inventoryItemId,
@@ -409,7 +408,7 @@ export async function payOrder(organizationId: string, input: unknown): Promise<
         low_stock_threshold: 0,
       });
     }
-    await admin.from("inventory_movements").insert({
+    await supabase.from("inventory_movements").insert({
       organization_id: m.organization.id,
       branch_id: order.branch_id,
       inventory_item_id: c.inventoryItemId,
@@ -425,7 +424,7 @@ export async function payOrder(organizationId: string, input: unknown): Promise<
   const status = classifyPaymentStatus(total, newPaid);
   const debtAmount = Math.max(0, total - newPaid);
 
-  await admin
+  await supabase
     .from("orders")
     .update({
       paid_amount: newPaid,
@@ -438,7 +437,11 @@ export async function payOrder(organizationId: string, input: unknown): Promise<
     })
     .eq("id", order.id);
 
-  await admin.from("audit_logs").insert({
+  if (status === "paid" && order.table_id) {
+    await supabase.from("dining_tables").update({ status: "occupied" }).eq("id", order.table_id);
+  }
+
+  await supabase.from("audit_logs").insert({
     organization_id: m.organization.id,
     branch_id: order.branch_id,
     actor_user_id: m.membership.user_id,
@@ -496,8 +499,8 @@ export async function cancelOrderItem(organizationId: string, input: unknown): P
   const m = await requireRole(organizationId, canPayOrder);
   const parsed = cancelOrderItemSchema.safeParse(input);
   if (!parsed.success) return actionFail("VALIDATION_ERROR", "Thiếu lý do hủy");
-  const admin = createSupabaseAdminClient();
-  const { data: item } = await admin
+  const supabase = createSupabaseServerClient();
+  const { data: item } = await supabase
     .from("order_items")
     .select("id, order_id, quantity, unit_price_snapshot, orders!inner(organization_id, status)")
     .eq("id", parsed.data.orderItemId)
@@ -506,7 +509,7 @@ export async function cancelOrderItem(organizationId: string, input: unknown): P
   if ((item as any).orders.status === "paid") {
     return actionFail("ORDER_LOCKED", "Đơn đã thanh toán, dùng luồng hoàn tiền.");
   }
-  await admin
+  await supabase
     .from("order_items")
     .update({
       kitchen_status: "cancelled",
@@ -515,7 +518,7 @@ export async function cancelOrderItem(organizationId: string, input: unknown): P
       cancelled_at: new Date().toISOString(),
     })
     .eq("id", parsed.data.orderItemId);
-  const { data: order } = await admin
+  const { data: order } = await supabase
     .from("orders")
     .select("subtotal, total_amount, discount_amount, tax_amount, service_fee_amount")
     .eq("id", (item as any).order_id)
@@ -523,12 +526,12 @@ export async function cancelOrderItem(organizationId: string, input: unknown): P
   if (order) {
     const newSubtotal = (order.subtotal ?? 0) - (item as any).unit_price_snapshot * (item as any).quantity;
     const newTotal = Math.max(0, newSubtotal - (order.discount_amount ?? 0) + (order.tax_amount ?? 0) + (order.service_fee_amount ?? 0));
-    await admin
+    await supabase
       .from("orders")
       .update({ subtotal: newSubtotal, total_amount: newTotal })
       .eq("id", (item as any).order_id);
   }
-  await admin.from("audit_logs").insert({
+  await supabase.from("audit_logs").insert({
     organization_id: m.organization.id,
     actor_user_id: m.membership.user_id,
     action: "order_item.cancel",
