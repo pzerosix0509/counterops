@@ -468,42 +468,32 @@ export async function updateKitchenStatus(
   const m = await requireRole(organizationId, canUpdateKitchen);
   const parsed = kitchenStatusSchema.safeParse(input);
   if (!parsed.success) return actionFail("VALIDATION_ERROR", "Trạng thái không hợp lệ");
+
   const supabase = createSupabaseServerClient();
-  const { data: item } = await supabase
-    .from("order_items")
-    .select("id, order_id, kitchen_status, orders!inner(organization_id, branch_id, status, table_id)")
-    .eq("id", orderItemId)
-    .maybeSingle();
-  if (!item) return actionFail("NOT_FOUND", "Không tìm thấy món");
-  const order = (item as any).orders;
-  if (order.organization_id !== m.organization.id) {
-    return actionFail("FORBIDDEN", "Bạn không có quyền cập nhật món này");
+  const { data: result, error: rpcErr } = await supabase.rpc("update_kitchen_status_rpc", {
+    p_item_id: orderItemId,
+    p_new_status: parsed.data.status,
+    p_allowed_roles: canUpdateKitchen,
+    p_caller_org_id: organizationId,
+    p_caller_branch_id: m.branch?.id ?? null,
+    p_caller_user_id: m.membership.user_id,
+  });
+
+  if (rpcErr) return actionFail("INTERNAL_ERROR", "Không cập nhật được trạng thái bếp: " + rpcErr.message);
+
+  const r = result as { ok: boolean; code?: string; message?: string; table_freed?: boolean; status: string };
+  if (!r.ok) {
+    const code = r.code ?? "INTERNAL_ERROR";
+    return actionFail(code as any, r.message ?? "Lỗi không xác định");
   }
-  if (order.status === "cancelled" || order.status === "refunded") {
-    return actionFail("ORDER_LOCKED", "Đơn đã đóng, không thể cập nhật bếp");
-  }
-  if (!canUpdateKitchen.includes(m.role) && parsed.data.status === "cancelled") {
-    return actionFail("FORBIDDEN", "Bạn không có quyền hủy món");
-  }
-  const { error } = await supabase
-    .from("order_items")
-    .update({ kitchen_status: parsed.data.status })
-    .eq("id", orderItemId);
-  if (error) return actionFail("INTERNAL_ERROR", "Không cập nhật được trạng thái bếp");
-  if (parsed.data.status === "served" && order.status === "paid" && order.table_id) {
-    const { count } = await supabase
-      .from("order_items")
-      .select("id", { count: "exact", head: true })
-      .eq("order_id", (item as any).order_id)
-      .in("kitchen_status", ["pending", "cooking", "ready"]);
-    if ((count ?? 0) === 0) {
-      await supabase.from("dining_tables").update({ status: "available" }).eq("id", order.table_id);
-    }
+
+  revalidatePath("/kitchen");
+  if (r.table_freed) {
     revalidatePath("/pos");
     revalidatePath("/tables");
   }
-  revalidatePath("/kitchen");
-  return actionOk({ id: orderItemId, status: parsed.data.status });
+
+  return actionOk({ id: orderItemId, status: r.status });
 }
 
 export async function cancelOrderItem(organizationId: string, input: unknown): Promise<ActionResult<{ id: string }>> {
