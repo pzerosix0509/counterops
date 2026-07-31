@@ -9,7 +9,7 @@ export default function NotFound() {
         <h1 className="mt-2 text-lg font-semibold">Không tìm thấy trang</h1>
         <p className="mt-1 text-sm text-muted-foreground">Trang bạn yêu cầu không tồn tại hoặc đã bị xoá.</p>
         <Button asChild className="mt-4">
-          <Link href="/dashboard">Về tổng quan</Link>
+          <Link href="/">Về trang chủ</Link>
         </Button>
       </div>
     </div>
