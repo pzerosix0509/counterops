@@ -53,7 +53,8 @@ export function TablesManager({
 }) {
   const router = useRouter();
   const [openTable, setOpenTable] = useState(false);
-
+  const [openArea, setOpenArea] = useState(false);
+  const [areaError, setAreaError] = useState<string | null>(null);
   const [statusOverrides, setStatusOverrides] = useState<Record<string, TableStatus>>({});
 
   // Clear overrides once the DB value has caught up with what we set
@@ -75,12 +76,23 @@ export function TablesManager({
   const [isPending, startTransition] = useTransition();
   const [activeArea, setActiveArea] = useState<string>("all");
 
-  function onAddArea() {
-    const name = window.prompt("Tên khu vực (ví dụ: Lầu 1, Sân vườn)");
-    if (!name) return;
+  function onCreateArea(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setAreaError(null);
+    const f = new FormData(e.currentTarget);
+    const name = String(f.get("name") || "").trim();
+    if (!name) {
+      setAreaError("Vui lòng nhập tên khu vực");
+      return;
+    }
     startTransition(async () => {
       const res = await createArea(organizationId, branchId, { name, sortOrder: areas.length });
-      if (res.ok) router.refresh();
+      if (!res.ok) {
+        setAreaError(res.error.message);
+        return;
+      }
+      setOpenArea(false);
+      router.refresh();
     });
   }
 
@@ -162,9 +174,30 @@ export function TablesManager({
         </div>
         {canManage ? (
           <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={onAddArea}>
-              <Plus className="h-4 w-4" /> Khu vực
-            </Button>
+            <Dialog open={openArea} onOpenChange={setOpenArea}>
+              <DialogTrigger asChild>
+                <Button variant="outline">
+                  <Plus className="h-4 w-4" /> Khu vực
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Thêm khu vực mới</DialogTitle>
+                  <DialogDescription>Ví dụ: Lầu 1, Sân vườn, Tầng trệt...</DialogDescription>
+                </DialogHeader>
+                <form className="space-y-3" onSubmit={onCreateArea}>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="areaName">Tên khu vực</Label>
+                    <Input id="areaName" name="name" required placeholder="Lầu 1, Sân vườn..." />
+                  </div>
+                  {areaError ? <p className="text-sm text-destructive">{areaError}</p> : null}
+                  <DialogFooter>
+                    <Button type="button" variant="ghost" onClick={() => setOpenArea(false)}>Huỷ</Button>
+                    <Button type="submit" disabled={isPending}>{isPending ? "Đang lưu..." : "Lưu"}</Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
             <Dialog open={openTable} onOpenChange={setOpenTable}>
               <DialogTrigger asChild>
                 <Button>
