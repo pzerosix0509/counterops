@@ -147,7 +147,7 @@ export async function requireActiveContext(): Promise<{ organizationId: string; 
   const orgId = await getActiveOrganizationId();
   if (!orgId) redirect("/onboarding");
   const branchId = await getActiveBranchId(orgId);
-  if (!branchId) redirect("/onboarding?error=missing_branch");
+  if (!branchId) redirect("/access-error?code=missing_branch");
   const m = await getMembershipForOrg(orgId);
   return {
     organizationId: orgId,
@@ -162,7 +162,7 @@ export async function requireRole(organizationId: string, allowed: MembershipRol
   const m = await getMembershipForOrg(organizationId);
   if (!m) redirect("/onboarding");
   if (!allowed.includes(m.role)) {
-    redirect("/dashboard?error=forbidden");
+    redirect("/access-error?code=forbidden");
   }
   return m;
 }
