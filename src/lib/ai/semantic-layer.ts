@@ -184,6 +184,18 @@ export function inferAiDateRange(question: string, now = new Date()): AiDateRang
   }
 
   const explicitDays = q.match(/(\d{1,3})\s*ngay/);
+  const explicitMonths = q.match(/(\d{1,2})\s*thang/);
+  if (explicitMonths) {
+    const months = Math.min(Math.max(Number(explicitMonths[1]), 1), 12);
+    const from = startOfDay(now);
+    from.setMonth(from.getMonth() - months);
+    from.setDate(from.getDate() + 1);
+    return {
+      from: from.toISOString(),
+      to: todayEnd.toISOString(),
+      label: months === 1 ? "1 tháng qua" : `${months} tháng qua`,
+    };
+  }
   const days = Math.min(Math.max(Number(explicitDays?.[1] ?? 7), 1), 366);
   const from = startOfDay(now);
   from.setDate(from.getDate() - (days - 1));
@@ -243,6 +255,12 @@ function inferIntent(question: string, mode: "chat" | "dashboard"): {
   }
   if (hasPhrase(q, ["tom tat cuoc tro chuyen", "tom tat hoi thoai", "ket luan chinh"])) {
     return { intent: "conversation_summary", confidence: 0.94, modelTier: "quality", deterministic: false, rationale: "Yêu cầu tổng hợp nhiều lượt hội thoại." };
+  }
+  if (
+    hasPhrase(q, ["tim kiem web", "tra cuu web", "thong tin tren web", "tin tuc", "gia vang", "thoi tiet", "bitcoin", "crypto", "chung khoan", "thi truong", "web search", "ronaldo", "messi", "ca si", "cau thu", "nguoi noi tieng"])
+    || /^(gia|thoi tiet|bitcoin|crypto|chung khoan|thoi tiet)\b/.test(q)
+  ) {
+    return { intent: "web_search", confidence: 0.9, modelTier: "fast", deterministic: false, rationale: "Yêu cầu tìm kiếm thông tin bên ngoài trên web." };
   }
   if (hasPhrase(q, ["du bao", "du doan", "tháng tới", "thang toi", "tuan toi", "ky toi", "forecast", "predict", "tuong lai"])) {
     return { intent: "forecast", confidence: 0.92, modelTier: "fast", deterministic: false, rationale: "Yêu cầu dự báo hoặc dự đoán tương lai." };
@@ -357,10 +375,9 @@ export function buildAiPlan(
 }
 
 /**
- * Async variant of buildAiPlan. When keyword heuristics are unsure
- * (out_of_scope or confidence < 0.6), asks the LLM to classify the intent so
- * ambiguous questions still get a smart response. Falls back to the
- * deterministic plan when the classifier is unavailable.
+ * Async variant of buildAiPlan. Uses the LLM to decide intent + date range in
+ * ONE call (smarter, understands paraphrase). Falls back to regex heuristics
+ * when the model is unavailable (no key, timeout, circuit open).
  */
 export async function buildAiPlanAsync(
   question: string,
@@ -368,21 +385,23 @@ export async function buildAiPlanAsync(
   now = new Date(),
   previousUserQuestions: string[] = [],
 ): Promise<AiPlan> {
-  const plan = buildAiPlan(question, mode, now, previousUserQuestions);
-  const shouldClassify = plan.intent === "out_of_scope" || plan.intentConfidence < 0.6;
-  if (!shouldClassify) return plan;
+  const fallback = buildAiPlan(question, mode, now, previousUserQuestions);
 
-  const { classifyIntentWithLlm } = await import("@/lib/ai/intent-classifier");
-  const llmResult = await classifyIntentWithLlm(question).catch(() => null);
-  if (!llmResult || llmResult.intent === plan.intent) return plan;
+  const { planWithLlm } = await import("@/lib/ai/llm-planner");
+  const llmPlan = await planWithLlm(question, mode, now).catch(() => null);
+  if (!llmPlan) return fallback;
 
-  // Greeting stays deterministic (no model call). Other intents — including
-  // out_of_scope — use the model to answer naturally.
-  const tools = toolsForIntent(llmResult.intent).map((name, index) => {
-    const common = { from: plan.range.from, to: plan.range.to, rangeLabel: plan.range.label };
+  const deterministic = llmPlan.intent === "greeting";
+  const range = {
+    from: llmPlan.from,
+    to: llmPlan.to,
+    label: llmPlan.rangeLabel,
+  };
+  const tools = toolsForIntent(llmPlan.intent).map((name, index) => {
+    const common = { from: range.from, to: range.to, rangeLabel: range.label };
     const argumentsByTool: Record<AiToolName, Record<string, string | number | boolean | null>> = {
       sales_summary: common,
-      sales_timeseries: { ...common, granularity: chooseGranularity(plan.range, question) },
+      sales_timeseries: { ...common, granularity: chooseGranularity(range, question) },
       top_products: { ...common, limit: 10 },
       category_summary: { ...common, limit: 20 },
       channel_summary: common,
@@ -398,14 +417,13 @@ export async function buildAiPlanAsync(
       arguments: argumentsByTool[name],
     };
   });
-  const deterministic = llmResult.intent === "greeting";
   return {
-    ...plan,
-    intent: llmResult.intent,
-    intentConfidence: llmResult.confidence,
+    intent: llmPlan.intent,
+    intentConfidence: llmPlan.confidence,
     modelTier: deterministic ? "none" : "fast",
     deterministic,
-    rationale: llmResult.rationale || `LLM phân loại: ${llmResult.intent}`,
+    rationale: llmPlan.rationale || `LLM lập kế hoạch: ${llmPlan.intent}`,
+    range,
     tools,
   };
 }
