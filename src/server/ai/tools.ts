@@ -2,6 +2,7 @@ import "server-only";
 import { z } from "zod";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { aggregateToDailyPoints, computeForecast } from "@/lib/ai/forecast";
+import { searchWeb } from "@/lib/ai/web-search";
 import { searchAiDocumentChunks } from "@/server/queries/ai";
 import { aiToolCacheKey, withAiToolCache } from "@/server/ai/cache";
 import type { AiSource, AiToolCall, AiToolExecution, AiToolName } from "@/types/ai";
@@ -32,12 +33,16 @@ const toolArgumentSchemas = {
     query: z.string().trim().min(2).max(1000),
     limit: z.number().int().min(1).max(12),
   }).strict(),
+  search_web: z.object({
+    query: z.string().trim().min(2).max(500),
+    limit: z.number().int().min(1).max(10).optional(),
+  }).strict(),
   forecast_revenue: rangeArgumentsSchema.extend({
     horizon_days: z.number().int().min(7).max(90).optional(),
   }).strict(),
 } satisfies Record<AiToolName, z.ZodType>;
 
-const sourceLabels: Record<Exclude<AiToolName, "search_documents">, string> = {
+const sourceLabels: Record<Exclude<AiToolName, "search_documents" | "search_web">, string> = {
   sales_summary: "Tổng hợp bán hàng",
   sales_timeseries: "Doanh thu theo thời gian",
   top_products: "Hiệu quả theo món",
@@ -210,6 +215,27 @@ export async function executeAiTool(
       };
     }
 
+    if (call.name === "search_web") {
+      const results = await searchWeb(
+        String(call.arguments.query),
+        Number(call.arguments.limit ?? 5),
+      );
+      const sources: AiSource[] = results.map((result, index) => ({
+        id: `web-${index + 1}`,
+        type: "web",
+        label: result.title,
+        detail: result.url,
+        excerpt: result.content,
+        meta: { tool: "search_web", url: result.url },
+      }));
+      return {
+        call,
+        rows: results.map((result) => ({ title: result.title, url: result.url, content: result.content })),
+        sources,
+        durationMs: Date.now() - startedAt,
+      };
+    }
+
     if (call.name === "inventory_risk") {
       const cached = await executeInventoryRisk(context);
       return { call, rows: cached.value, cacheHit: cached.hit, durationMs: Date.now() - startedAt };
@@ -257,7 +283,7 @@ export function buildSourcesFromToolExecutions(executions: AiToolExecution[]): A
   const pending: Omit<AiSource, "id">[] = [];
 
   for (const execution of executions) {
-    if (execution.call.name === "search_documents") {
+    if (execution.call.name === "search_documents" || execution.call.name === "search_web") {
       for (const source of execution.sources ?? []) {
         const { id: _id, ...withoutId } = source;
         pending.push(withoutId);
@@ -266,7 +292,7 @@ export function buildSourcesFromToolExecutions(executions: AiToolExecution[]): A
     }
 
     if (execution.error || execution.rows.length === 0) continue;
-    const toolName = execution.call.name as Exclude<AiToolName, "search_documents">;
+    const toolName = execution.call.name as Exclude<AiToolName, "search_documents" | "search_web">;
     pending.push({
       type: "analytics",
       label: sourceLabels[toolName],

@@ -1,7 +1,7 @@
 export interface AiSource {
   id: string;
   label: string;
-  type: "analytics" | "document";
+  type: "analytics" | "document" | "web";
   detail?: string;
   excerpt?: string;
   meta?: Record<string, unknown>;
@@ -17,6 +17,7 @@ export type AiIntent =
   | "channel_analysis"
   | "inventory_risk"
   | "document_search"
+  | "web_search"
   | "dashboard"
   | "diagnosis"
   | "forecast"
@@ -204,6 +205,7 @@ export type AiToolName =
   | "period_comparison"
   | "inventory_risk"
   | "search_documents"
+  | "search_web"
   | "forecast_revenue";
 
 export interface AiToolCall {

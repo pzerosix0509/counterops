@@ -204,20 +204,20 @@ export const AI_GOLDEN_QUESTIONS: AiGoldenQuestion[] = [
   {
     question: "Giá vàng hôm nay bao nhiêu?",
     mode: "chat",
-    expectedIntent: "out_of_scope",
-    expectedTools: [],
+    expectedIntent: "web_search",
+    expectedTools: ["search_web"],
     expectedRangeLabel: "Hôm nay",
-    expectedDeterministic: true,
-    expectedModelTier: "none",
+    expectedDeterministic: false,
+    expectedModelTier: "fast",
   },
   {
     question: "Thời tiết ngày mai thế nào?",
     mode: "chat",
-    expectedIntent: "out_of_scope",
-    expectedTools: [],
+    expectedIntent: "web_search",
+    expectedTools: ["search_web"],
     expectedRangeLabel: "7 ngày qua",
-    expectedDeterministic: true,
-    expectedModelTier: "none",
+    expectedDeterministic: false,
+    expectedModelTier: "fast",
   },
   {
     question: "Có mặt hàng tồn nào cần chú ý?",
@@ -331,15 +331,15 @@ export const AI_GOLDEN_QUESTIONS: AiGoldenQuestion[] = [
     expectedDeterministic: false,
     expectedModelTier: "fast",
   },
-  // Out-of-scope: must not call any tool or model
+  // Web search cases
   {
     question: "Bitcoin hôm nay bao nhiêu?",
     mode: "chat",
-    expectedIntent: "out_of_scope",
-    expectedTools: [],
+    expectedIntent: "web_search",
+    expectedTools: ["search_web"],
     expectedRangeLabel: "Hôm nay",
-    expectedDeterministic: true,
-    expectedModelTier: "none",
+    expectedDeterministic: false,
+    expectedModelTier: "fast",
   },
 ];
 

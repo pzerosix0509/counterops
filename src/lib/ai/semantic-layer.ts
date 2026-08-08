@@ -265,6 +265,12 @@ function inferIntent(question: string, mode: "chat" | "dashboard"): {
     return { intent: "product_ranking", confidence: 0.88, modelTier: "none", deterministic: true, rationale: "Yêu cầu xếp hạng món hoặc sản phẩm." };
   }
   if (
+    hasPhrase(q, ["tim kiem web", "tra cuu web", "thong tin tren web", "tin tuc", "gia vang", "thoi tiet", "bitcoin", "crypto", "chung khoan", "web search"])
+    || /^(gia|thoi tiet|bitcoin|crypto|chung khoan|thoi tiet)\b/.test(q)
+  ) {
+    return { intent: "web_search", confidence: 0.9, modelTier: "fast", deterministic: false, rationale: "Yêu cầu tìm kiếm thông tin bên ngoài trên web." };
+  }
+  if (
     hasPhrase(q, ["xu huong", "theo ngay", "theo gio", "bien dong", "bieu do"])
     || hasToken(q, ["trend", "chart"])
   ) {
@@ -287,6 +293,7 @@ function toolsForIntent(intent: AiIntent): AiToolName[] {
     channel_analysis: ["sales_summary", "channel_summary"],
     inventory_risk: ["inventory_risk"],
     document_search: ["search_documents"],
+    web_search: ["search_web"],
     forecast: ["sales_summary", "sales_timeseries", "forecast_revenue"],
     dashboard: ["sales_summary", "sales_timeseries", "period_comparison", "top_products", "category_summary", "channel_summary"],
     diagnosis: ["sales_summary", "sales_timeseries", "period_comparison", "top_products", "channel_summary"],
@@ -322,6 +329,7 @@ export function buildAiPlan(
       period_comparison: common,
       inventory_risk: { status: "attention" },
       search_documents: { query: question, limit: 6 },
+      search_web: { query: question, limit: 5 },
       forecast_revenue: { ...common, horizon_days: 30 },
     };
     return {
