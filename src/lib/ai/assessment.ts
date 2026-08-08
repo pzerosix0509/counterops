@@ -153,7 +153,17 @@ export function assessAiEvidence(
     });
   }
 
+  // Confidence should reflect how well the answer is grounded in evidence,
+  // not start at a fixed 95% for every request.
+  // Base depends on whether we actually have data to answer with.
   let score = 0.95;
+  if (!summary) {
+    score -= 0.1; // no sales summary fetched/found
+  } else if (summary.total_orders === 0) {
+    score -= 0.25; // answering "0 đ / 0 đơn" cannot be high confidence
+  } else if (summary.total_orders < 5) {
+    score -= 0.12;
+  }
   for (const issue of qualityIssues) {
     score -= issue.severity === "critical" ? 0.3 : issue.severity === "warning" ? 0.12 : 0.04;
   }

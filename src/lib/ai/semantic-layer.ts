@@ -228,7 +228,8 @@ function inferIntent(question: string, mode: "chat" | "dashboard"): {
   rationale: string;
 } {
   const q = normalizeIntentText(question);
-  const isGreeting = /^(hi|hello|chao|xin chao|hey)\b/.test(q);
+  const isGreeting = /^(hi|hello|chao|xin chao|hey|ban la ai|ban lam duoc gi|ban co the giup|cam on|thank)\b/.test(q)
+    || hasPhrase(q, ["giup minh", "giup toi", "lam duoc gi", "co the lam gi", "tinh nang gi", "ban la ai"]);
   const documentIntent = hasPhrase(q, ["tai lieu", "da upload", "quy dinh", "huong dan", "document"]);
 
   if (mode === "dashboard" || isDashboardIntent(question)) {
@@ -337,6 +338,59 @@ export function buildAiPlan(
     deterministic: classification.deterministic,
     rationale: classification.rationale,
     range,
+    tools,
+  };
+}
+
+/**
+ * Async variant of buildAiPlan. When keyword heuristics are unsure
+ * (out_of_scope or confidence < 0.6), asks the LLM to classify the intent so
+ * ambiguous questions still get a smart response. Falls back to the
+ * deterministic plan when the classifier is unavailable.
+ */
+export async function buildAiPlanAsync(
+  question: string,
+  mode: "chat" | "dashboard",
+  now = new Date(),
+  previousUserQuestions: string[] = [],
+): Promise<AiPlan> {
+  const plan = buildAiPlan(question, mode, now, previousUserQuestions);
+  const shouldClassify = plan.intent === "out_of_scope" || plan.intentConfidence < 0.6;
+  if (!shouldClassify) return plan;
+
+  const { classifyIntentWithLlm } = await import("@/lib/ai/intent-classifier");
+  const llmResult = await classifyIntentWithLlm(question).catch(() => null);
+  if (!llmResult || llmResult.intent === plan.intent) return plan;
+
+  // Rebuild tools for the LLM-chosen intent. Greeting/out_of_scope stay
+  // deterministic (no model call); other intents use the model to answer.
+  const tools = toolsForIntent(llmResult.intent).map((name, index) => {
+    const common = { from: plan.range.from, to: plan.range.to, rangeLabel: plan.range.label };
+    const argumentsByTool: Record<AiToolName, Record<string, string | number | boolean | null>> = {
+      sales_summary: common,
+      sales_timeseries: { ...common, granularity: chooseGranularity(plan.range, question) },
+      top_products: { ...common, limit: 10 },
+      category_summary: { ...common, limit: 20 },
+      channel_summary: common,
+      period_comparison: common,
+      inventory_risk: { status: "attention" },
+      search_documents: { query: question, limit: 6 },
+      forecast_revenue: { ...common, horizon_days: 30 },
+    };
+    return {
+      id: `tool-${index + 1}`,
+      name,
+      arguments: argumentsByTool[name],
+    };
+  });
+  const deterministic = llmResult.intent === "greeting" || llmResult.intent === "out_of_scope";
+  return {
+    ...plan,
+    intent: llmResult.intent,
+    intentConfidence: llmResult.confidence,
+    modelTier: deterministic ? "none" : "fast",
+    deterministic,
+    rationale: llmResult.rationale || `LLM phân loại: ${llmResult.intent}`,
     tools,
   };
 }

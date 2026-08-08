@@ -6,6 +6,7 @@ import { canViewReports, requireActiveContext, requireRole } from "@/lib/auth/pe
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { chunkText, normalizeDocumentText } from "@/lib/ai/chunk";
 import { embedTexts, vectorToSql } from "@/lib/ai/embeddings";
+import { imageToText } from "@/lib/ai/image-to-text";
 import { actionFail, actionOk, type ActionResult } from "@/lib/utils/action-result";
 
 const uploadDocumentSchema = z.object({
@@ -13,8 +14,45 @@ const uploadDocumentSchema = z.object({
   title: z.string().trim().min(1).max(160),
   fileName: z.string().trim().min(1).max(240),
   mimeType: z.string().trim().max(120).nullable().optional(),
-  content: z.string().min(1),
+  content: z.string().min(1).optional(),
+  binary: z.object({
+    data: z.string().min(1).max(20_000_000), // base64
+    mime: z.string().trim().min(1).max(120),
+  }).optional(),
+}).refine((value) => Boolean(value.content || value.binary), {
+  message: "Cần content hoặc binary.",
 });
+
+async function extractDocumentText(input: {
+  content?: string;
+  binary?: { data: string; mime: string };
+  title: string;
+}): Promise<{ content: string; mimeType: string | null }> {
+  if (input.content) return { content: input.content, mimeType: null };
+  const binary = input.binary!;
+  const mime = binary.mime.toLowerCase();
+
+  if (mime === "application/pdf" || input.title.toLowerCase().endsWith(".pdf")) {
+    // Lazy import to keep server action bundle lean (pdf-parse v2 API)
+    const { PDFParse } = await import("pdf-parse");
+    const parser = new PDFParse({ data: Buffer.from(binary.data, "base64") });
+    try {
+      const result = await parser.getText();
+      return { content: result?.text ?? "", mimeType: "application/pdf" };
+    } finally {
+      await parser.destroy().catch(() => {});
+    }
+  }
+
+  if (mime.startsWith("image/")) {
+    const text = await imageToText({ data: binary.data, mime }, input.title);
+    return { content: text, mimeType: mime };
+  }
+
+  // Fallback: treat as UTF-8 text
+  const text = Buffer.from(binary.data, "base64").toString("utf-8");
+  return { content: text, mimeType: mime };
+}
 
 export async function uploadAiDocument(
   organizationId: string,
@@ -31,8 +69,22 @@ export async function uploadAiDocument(
     return actionFail("FORBIDDEN", "Bạn không có quyền upload tài liệu cho chi nhánh này.");
   }
 
-  const content = normalizeDocumentText(parsed.data.content);
-  if (content.length < 20) return actionFail("VALIDATION_ERROR", "Tài liệu quá ngắn để tạo ngữ cảnh AI.");
+  let extracted: { content: string; mimeType: string | null };
+  try {
+    extracted = await extractDocumentText({
+      content: parsed.data.content,
+      binary: parsed.data.binary,
+      title: parsed.data.fileName,
+    });
+  } catch {
+    return actionFail("VALIDATION_ERROR", "Không trích được văn bản từ tệp. Vui lòng dùng tệp text, PDF hoặc ảnh rõ nét.");
+  }
+
+  const content = normalizeDocumentText(extracted.content);
+  const isImage = extracted.mimeType?.startsWith("image/") ?? false;
+  const minLength = isImage ? 5 : 20;
+  if (content.length === 0) return actionFail("VALIDATION_ERROR", "Không trích được văn bản từ tệp. Vui lòng dùng tệp text, PDF hoặc ảnh rõ nét.");
+  if (content.length < minLength) return actionFail("VALIDATION_ERROR", `Tài liệu quá ngắn để tạo ngữ cảnh AI (tối thiểu ${minLength} ký tự).`);
   if (content.length > 500_000) return actionFail("VALIDATION_ERROR", "Tài liệu quá lớn. Vui lòng chia nhỏ trước khi upload.");
 
   const chunks = chunkText(content);
@@ -48,7 +100,7 @@ export async function uploadAiDocument(
       branch_id: branchId,
       title: parsed.data.title,
       file_name: parsed.data.fileName,
-      mime_type: parsed.data.mimeType ?? null,
+      mime_type: parsed.data.mimeType ?? extracted.mimeType,
       source_type: "upload",
       uploaded_by: membership.membership.user_id,
     })

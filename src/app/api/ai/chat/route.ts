@@ -22,19 +22,26 @@ export async function POST(request: NextRequest) {
   }
 
   const context = await requireActiveContext();
+  const question = parsed.data.question ?? "[Xem ảnh đính kèm]";
   let imageText: string | undefined;
   if (parsed.data.image) {
-    imageText = await imageToText(
-      { data: parsed.data.image.data, mime: parsed.data.image.mime },
-      parsed.data.question,
-    );
+    try {
+      imageText = await imageToText(
+        { data: parsed.data.image.data, mime: parsed.data.image.mime },
+        question,
+      );
+    } catch (error) {
+      return NextResponse.json({
+        error: error instanceof Error ? error.message : "Không trích được văn bản từ ảnh.",
+      }, { status: 422 });
+    }
   }
   const runInput = {
     organizationId: context.organizationId,
     branchId: context.branchId,
     userId: context.userId,
     timezone: active.branch?.timezone ?? active.organization.timezone,
-    question: parsed.data.question,
+    question,
     mode: parsed.data.mode ?? "chat",
     sessionId: parsed.data.sessionId,
     requestId: parsed.data.requestId,

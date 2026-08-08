@@ -32,6 +32,7 @@
     "exceljs": "^4.4.0",
     "lucide-react": "^1.21.0",
     "next": "14.2.35",
+    "pdf-parse": "^2.4.5",
     "react": "^18",
     "react-dom": "^18",
     "recharts": "^3.8.1",
@@ -52,7 +53,7 @@
     "jsdom": "^29.1.1",
     "postcss": "^8",
     "tailwindcss": "^3.4.1",
-    "typescript": "^5",
+    "typescript": "https://registry.npmjs.org/typescript/-/typescript-5.9.3.tgz",
     "vitest": "^4.1.9"
   }
 }

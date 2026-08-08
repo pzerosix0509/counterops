@@ -1,7 +1,7 @@
 import "server-only";
 import { assessAiEvidence } from "@/lib/ai/assessment";
 import { aiDashboardSpecSchema } from "@/lib/ai/schemas";
-import { buildAiPlan, isDashboardIntent } from "@/lib/ai/semantic-layer";
+import { buildAiPlanAsync, isDashboardIntent } from "@/lib/ai/semantic-layer";
 import {
   buildAnalyticsContext,
   buildChartForQuestion,
@@ -20,7 +20,7 @@ import {
 } from "@/server/ai/conversations";
 import { generateAiModelAnswer, type AiProviderResult } from "@/server/ai/provider";
 import { buildSourcesFromToolExecutions, executeAiToolPlan } from "@/server/ai/tools";
-import type { AiChatResponse, AiProgressStage, AiToolCall } from "@/types/ai";
+import type { AiChatResponse, AiProgressStage, AiSource, AiToolCall } from "@/types/ai";
 
 export interface RunAiAnalysisInput {
   organizationId: string;
@@ -82,13 +82,41 @@ export async function runAiAnalysis(input: RunAiAnalysisInput): Promise<AiChatRe
 
   emitProgress(input.onProgress, "planning", "Đang hiểu câu hỏi và chọn nguồn dữ liệu...");
   const plannerStartedAt = Date.now();
-  const plan = buildAiPlan(
+  const plan = await buildAiPlanAsync(
     input.question,
     effectiveMode,
     new Date(),
     memory.turns.filter((turn) => turn.role === "user").map((turn) => turn.content),
   );
   const plannerMs = Date.now() - plannerStartedAt;
+
+  // If the user attached an image, force the pipeline to use the LLM so the
+  // extracted image text is actually consumed (deterministic intents skip the model).
+  const imageSource: AiSource | null = input.imageText
+    ? {
+      id: "IMG1",
+      label: "Ảnh người dùng gửi",
+      type: "document",
+      detail: "Văn bản trích từ ảnh đính kèm",
+      excerpt: input.imageText.slice(0, 4_000),
+      meta: { tool: "image_to_text", source: "attachment" },
+    }
+    : null;
+  const effectivePlan = input.imageText && plan.deterministic
+    ? {
+      ...plan,
+      intent: "document_search" as const,
+      intentConfidence: 0.9,
+      modelTier: "fast" as const,
+      deterministic: false,
+      rationale: "Có ảnh đính kèm — cần mô hình để đọc nội dung ảnh.",
+      tools: [{
+        id: "tool-1",
+        name: "search_documents" as const,
+        arguments: { query: input.question, limit: 6 },
+      }],
+    }
+    : plan;
 
   emitProgress(input.onProgress, "querying", "Đang truy vấn dữ liệu đã được phân quyền...");
   const toolsStartedAt = Date.now();
@@ -97,14 +125,14 @@ export async function runAiAnalysis(input: RunAiAnalysisInput): Promise<AiChatRe
     branchId: input.branchId,
     timezone: input.timezone,
   };
-  let executions = await executeAiToolPlan(plan.tools, toolContext);
+  let executions = await executeAiToolPlan(effectivePlan.tools, toolContext);
 
   // Agentic loop: if confidence is low after first pass, run supplemental tools
   // that weren't in the original plan (up to 1 refinement round).
   const firstPassAnalytics = buildAnalyticsContext(executions);
   const firstPassAssessment = assessAiEvidence(firstPassAnalytics, executions, buildSourcesFromToolExecutions(executions));
-  if (firstPassAssessment.confidence.score < 0.6 && plan.modelTier !== "none") {
-    const rangeCall = plan.tools.find((tool) => "from" in tool.arguments);
+  if (firstPassAssessment.confidence.score < 0.6 && effectivePlan.modelTier !== "none") {
+    const rangeCall = effectivePlan.tools.find((tool) => "from" in tool.arguments);
     const rangeArgs = rangeCall?.arguments as { from: string; to: string; rangeLabel: string } | undefined;
     const executedNames = new Set(executions.map((execution) => execution.call.name));
     const supplementalCalls: AiToolCall[] = [];
@@ -151,14 +179,14 @@ export async function runAiAnalysis(input: RunAiAnalysisInput): Promise<AiChatRe
   ).length;
 
   emitProgress(input.onProgress, "assessing", "Đang kiểm tra chất lượng và độ tin cậy...");
-  const sources = buildSourcesFromToolExecutions(executions);
+  const sources = [...buildSourcesFromToolExecutions(executions), ...(imageSource ? [imageSource] : [])];
   const analytics = buildAnalyticsContext(executions);
   const assessment = assessAiEvidence(analytics, executions, sources);
   const chart = buildChartForQuestion(input.question, analytics);
 
   let modelResult = emptyProviderResult();
   let providerMs = 0;
-  if (!plan.deterministic && plan.modelTier !== "none") {
+  if (!effectivePlan.deterministic && effectivePlan.modelTier !== "none") {
     emitProgress(input.onProgress, "generating", "Đang tổng hợp câu trả lời...");
     const providerStartedAt = Date.now();
     modelResult = await generateAiModelAnswer({
@@ -171,7 +199,7 @@ export async function runAiAnalysis(input: RunAiAnalysisInput): Promise<AiChatRe
       qualityIssues: assessment.qualityIssues,
       anomalies: assessment.anomalies,
       imageText: input.imageText,
-    }, plan.modelTier).catch((error) => ({
+    }, effectivePlan.modelTier).catch((error) => ({
       ...emptyProviderResult(),
       error: error instanceof Error ? error.message : "Không gọi được AI provider.",
     }));
@@ -179,26 +207,26 @@ export async function runAiAnalysis(input: RunAiAnalysisInput): Promise<AiChatRe
   }
 
   const deterministic = buildDeterministicAnswer(
-    plan,
+    effectivePlan,
     analytics,
     executions,
     sources,
     assessment,
   );
   const fallback = buildFallbackAnswer(input.question, analytics, sources);
-  const responseMode = plan.deterministic
+  const responseMode = effectivePlan.deterministic
     ? "deterministic"
     : modelResult.answer ? "model" : "fallback";
-  const answer = plan.deterministic
+  const answer = effectivePlan.deterministic
     ? deterministic.answer
     : modelResult.answer?.answer ?? fallback.answer;
-  const bullets = plan.deterministic
+  const bullets = effectivePlan.deterministic
     ? deterministic.bullets
     : modelResult.answer?.bullets ?? fallback.bullets;
   const modelDashboard = modelResult.answer?.dashboard
     ? aiDashboardSpecSchema.safeParse(modelResult.answer.dashboard)
     : null;
-  const dashboard = plan.intent === "dashboard"
+  const dashboard = effectivePlan.intent === "dashboard"
     ? modelDashboard?.success ? modelDashboard.data : buildDashboardSpec(analytics)
     : modelDashboard?.success ? modelDashboard.data : null;
   const usedFallback = responseMode === "fallback";
@@ -218,11 +246,11 @@ export async function runAiAnalysis(input: RunAiAnalysisInput): Promise<AiChatRe
     sessionId: session.id,
     messageId: assistantMessageId,
     runId,
-    toolCalls: plan.tools,
+    toolCalls: effectivePlan.tools,
     usage: modelResult.usage,
     responseMode,
-    intent: plan.intent,
-    intentConfidence: plan.intentConfidence,
+    intent: effectivePlan.intent,
+    intentConfidence: effectivePlan.intentConfidence,
     confidence: assessment.confidence,
     qualityIssues: assessment.qualityIssues,
     anomalies: assessment.anomalies,
@@ -267,7 +295,7 @@ export async function runAiAnalysis(input: RunAiAnalysisInput): Promise<AiChatRe
       provider: modelResult.provider,
       model: modelResult.model,
       status: usedFallback ? "fallback" : "success",
-      intent: plan.intent,
+      intent: effectivePlan.intent,
       responseMode,
       confidenceScore: assessment.confidence.score,
       telemetry: response.telemetry,

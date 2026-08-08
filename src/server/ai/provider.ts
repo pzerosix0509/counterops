@@ -350,7 +350,7 @@ export async function generateAiModelAnswer(
   const attempts: AiProviderAttempt[] = [];
   const errors: string[] = [];
   const breaker = circuitBreaker();
-  const timeoutMs = Number(process.env.AI_PROVIDER_TIMEOUT_MS ?? 8_000);
+  const timeoutMs = Number(process.env.AI_PROVIDER_TIMEOUT_MS ?? 25_000);
   const configs = providerOrder(tier);
 
   for (const config of configs) {

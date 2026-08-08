@@ -51,7 +51,7 @@ export const aiModelAnswerSchema = z.object({
 }).strict();
 
 export const aiChatRequestSchema = z.object({
-  question: z.string().trim().min(2).max(1000),
+  question: z.string().trim().max(1000).optional(),
   mode: z.enum(["chat", "dashboard"]).optional(),
   sessionId: z.string().uuid().optional(),
   requestId: z.string().uuid().optional(),
@@ -60,6 +60,9 @@ export const aiChatRequestSchema = z.object({
     data: z.string().max(4_000_000),
     mime: z.string().regex(/^image\/(jpeg|png|webp|gif)$/),
   }).optional(),
+}).refine((value) => (value.question?.trim().length ?? 0) >= 2 || Boolean(value.image), {
+  message: "Cần câu hỏi (ít nhất 2 ký tự) hoặc ảnh đính kèm.",
+  path: ["question"],
 }).strict();
 
 export type AiModelAnswerPayload = z.infer<typeof aiModelAnswerSchema>;

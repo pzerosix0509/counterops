@@ -13,10 +13,10 @@ afterEach(() => {
 });
 
 describe("imageToText", () => {
-  it("returns empty string when no NVIDIA key is configured", async () => {
+  it("throws when no NVIDIA key is configured", async () => {
     delete process.env.NVIDIA_API_KEY;
-    const result = await imageToText({ data: "abc", mime: "image/png" }, "câu hỏi");
-    expect(result).toBe("");
+    await expect(imageToText({ data: "abc", mime: "image/png" }, "câu hỏi"))
+      .rejects.toThrow("Thiếu NVIDIA_API_KEY");
   });
 
   it("calls NVIDIA vision model and returns extracted text", async () => {
@@ -36,17 +36,29 @@ describe("imageToText", () => {
     expect(body.messages[0].content[1].image_url.url).toContain("data:image/png;base64,abc");
   });
 
-  it("returns empty string when API errors", async () => {
+  it("parses array content parts", async () => {
     process.env.NVIDIA_API_KEY = "test-key";
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 500 }));
-    const result = await imageToText({ data: "abc", mime: "image/jpeg" }, "câu hỏi");
-    expect(result).toBe("");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        choices: [{ message: { content: [{ type: "text", text: "A" }, { type: "text", text: "B" }] } }],
+      }),
+    }));
+    const result = await imageToText({ data: "abc", mime: "image/png" }, "đọc");
+    expect(result).toBe("A B");
   });
 
-  it("returns empty string when fetch throws", async () => {
+  it("throws when API errors", async () => {
+    process.env.NVIDIA_API_KEY = "test-key";
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+    await expect(imageToText({ data: "abc", mime: "image/jpeg" }, "câu hỏi"))
+      .rejects.toThrow("NVIDIA vision trả lỗi HTTP 500.");
+  });
+
+  it("throws when fetch throws", async () => {
     process.env.NVIDIA_API_KEY = "test-key";
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network")));
-    const result = await imageToText({ data: "abc", mime: "image/webp" }, "câu hỏi");
-    expect(result).toBe("");
+    await expect(imageToText({ data: "abc", mime: "image/webp" }, "câu hỏi"))
+      .rejects.toThrow("network");
   });
 });

@@ -393,7 +393,7 @@ export function AiAssistant({
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        question: text,
+        question: text || undefined,
         mode: "chat",
         sessionId: sessionId ?? undefined,
         requestId,
@@ -450,13 +450,27 @@ export function AiAssistant({
     if (!file) return;
     startUpload(async () => {
       try {
-        const content = await file.text();
+        const isBinary = file.type === "application/pdf" || file.type.startsWith("image/");
+        let content: string | undefined;
+        let binary: { data: string; mime: string } | undefined;
+        if (isBinary) {
+          const dataUrl = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(String(reader.result ?? ""));
+            reader.onerror = () => reject(new Error("Không đọc được tệp."));
+            reader.readAsDataURL(file);
+          });
+          binary = { data: dataUrl.split(",")[1] ?? "", mime: file.type };
+        } else {
+          content = await file.text();
+        }
         const result = await uploadAiDocument(organizationId, {
           branchId,
           title: file.name.replace(/\.[^.]+$/, ""),
           fileName: file.name,
           mimeType: file.type || null,
           content,
+          binary,
         });
         if (!result.ok) {
           notifyError("Upload tài liệu thất bại", result.error.message);
@@ -562,7 +576,7 @@ export function AiAssistant({
             </CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-3 px-4 pb-4">
-            <Input ref={fileInputRef} type="file" accept=".txt,.md,.csv,.json,text/plain,text/markdown,text/csv,application/json" onChange={(event) => onUpload(event.target.files?.[0])} disabled={isUploading} className="hidden" />
+            <Input ref={fileInputRef} type="file" accept=".txt,.md,.csv,.json,.pdf,.png,.jpg,.jpeg,.webp,.gif,text/plain,text/markdown,text/csv,application/json,application/pdf,image/*" onChange={(event) => onUpload(event.target.files?.[0])} disabled={isUploading} className="hidden" />
             <Button type="button" variant="outline" className="w-full rounded-xl border-dashed bg-muted/30 hover:bg-muted/60" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>
               {isUploading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
               Upload tài liệu mới
