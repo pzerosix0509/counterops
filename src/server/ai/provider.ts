@@ -36,6 +36,7 @@ interface ProviderPayload {
   confidence: AiConfidence;
   qualityIssues: AiDataQualityIssue[];
   anomalies: AiAnomaly[];
+  imageText?: string;
 }
 
 type ProviderName = "nvidia" | "minimax" | "openai";
@@ -196,6 +197,7 @@ function buildMessages(payload: ProviderPayload) {
       content: [
         payload.memory.summary ? `TÓM TẮT HỘI THOẠI:\n${payload.memory.summary}` : "",
         history ? `CÁC LƯỢT GẦN NHẤT:\n${history}` : "",
+        payload.imageText ? `VĂN BẢN TRÍCH TỪ ẢNH NGƯỜI DÙNG GỬI:\n${payload.imageText.slice(0, 4_000)}` : "",
         `CÂU HỎI HIỆN TẠI:\n${payload.question}`,
         `CONFIDENCE:\n${JSON.stringify(payload.confidence)}`,
         `DATA QUALITY:\n${JSON.stringify(payload.qualityIssues)}`,

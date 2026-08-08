@@ -31,6 +31,7 @@ export interface RunAiAnalysisInput {
   mode: "chat" | "dashboard";
   sessionId?: string;
   requestId?: string;
+  imageText?: string;
   onProgress?: (stage: AiProgressStage, message: string) => void;
 }
 
@@ -169,6 +170,7 @@ export async function runAiAnalysis(input: RunAiAnalysisInput): Promise<AiChatRe
       confidence: assessment.confidence,
       qualityIssues: assessment.qualityIssues,
       anomalies: assessment.anomalies,
+      imageText: input.imageText,
     }, plan.modelTier).catch((error) => ({
       ...emptyProviderResult(),
       error: error instanceof Error ? error.message : "Không gọi được AI provider.",
