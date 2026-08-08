@@ -482,9 +482,31 @@ export function buildFallbackAnswer(
   const topProduct = analytics.topProducts[0];
   const topChannel = analytics.channelSummary[0];
   const documentSources = sources.filter((source) => source.type === "document");
+  const webSources = sources.filter((source) => source.type === "web");
   let bullets: string[];
 
-  if (/^(hi|hello|chào|xin chào)\b/.test(q)) {
+  if (webSources.length > 0) {
+    // Web search fallback: summarize the best/most trusted source instead of
+    // reporting "no sales data" which is meaningless for a web question.
+    const TRUSTED_DOMAINS = [
+      "tuoitre.vn", "vnexpress.net", "thanhnien.vn", "dantri.com.vn",
+      "investing.com", "baomoi.com", "24h.com.vn", "vietnamnet.vn",
+      "zingnews.vn", "cafef.vn", "vietstock.vn", "nhandan.vn",
+    ];
+    const scoreSource = (source: AiSource) => {
+      const metaScore = Number(source.meta?.score ?? 0);
+      const domain = (source.detail ?? source.label ?? "").toLowerCase();
+      const trusted = TRUSTED_DOMAINS.some((d) => domain.includes(d)) ? 1 : 0;
+      const hasToday = /hôm nay|hom nay|today|hôm qua|nay/i.test(`${source.label} ${source.excerpt ?? ""}`) ? 0.3 : 0;
+      const lengthScore = Math.min((source.excerpt?.length ?? 0) / 800, 0.4);
+      return metaScore + trusted + hasToday + lengthScore;
+    };
+    const best = [...webSources].sort((a, b) => scoreSource(b) - scoreSource(a))[0];
+    bullets = [
+      best?.label ? `Kết quả từ ${best.label}${best.detail ? ` (${best.detail})` : ""}:` : "Kết quả tìm kiếm web:",
+      best?.excerpt ? best.excerpt.slice(0, 600) : "Không lấy được nội dung chi tiết.",
+    ];
+  } else if (/^(hi|hello|chào|xin chào)\b/.test(q)) {
     bullets = [
       "Mình có thể phân tích doanh thu, lợi nhuận, món bán chạy, kênh bán, tồn kho và tài liệu đã upload.",
       "Bạn cũng có thể yêu cầu tạo dashboard hoặc so sánh với kỳ trước.",

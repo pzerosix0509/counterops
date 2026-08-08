@@ -211,6 +211,15 @@ export const AI_GOLDEN_QUESTIONS: AiGoldenQuestion[] = [
     expectedModelTier: "none",
   },
   {
+    question: "m là ai?",
+    mode: "chat",
+    expectedIntent: "greeting",
+    expectedTools: [],
+    expectedRangeLabel: "7 ngày qua",
+    expectedDeterministic: true,
+    expectedModelTier: "none",
+  },
+  {
     question: "Bạn có thể giúp mình những gì?",
     mode: "chat",
     expectedIntent: "greeting",

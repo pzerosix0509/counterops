@@ -3,7 +3,7 @@ export interface AiImageInput {
   mime: string;
 }
 
-const IMAGE_TIMEOUT_MS = Number(process.env.AI_IMAGE_TIMEOUT_MS ?? 20_000);
+const IMAGE_TIMEOUT_MS = Number(process.env.AI_IMAGE_TIMEOUT_MS ?? 30_000);
 const NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1/chat/completions";
 const NVIDIA_DEFAULT_MODEL = "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning";
 

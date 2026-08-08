@@ -29,11 +29,12 @@ export async function listAiChatSessions(
   const supabase = createSupabaseServerClient();
   const { data, error } = await supabase
     .from("ai_chat_sessions")
-    .select("id, title, mode, message_count, last_message_at, created_at")
+    .select("id, title, mode, message_count, last_message_at, created_at, is_pinned")
     .eq("organization_id", organizationId)
     .eq("branch_id", branchId)
     .eq("user_id", userId)
     .is("archived_at", null)
+    .order("is_pinned", { ascending: false })
     .order("last_message_at", { ascending: false })
     .limit(30);
   if (error) return [];
@@ -44,6 +45,7 @@ export async function listAiChatSessions(
     messageCount: row.message_count,
     lastMessageAt: row.last_message_at,
     createdAt: row.created_at,
+    isPinned: row.is_pinned ?? false,
   }));
 }
 

@@ -192,6 +192,7 @@ export async function runAiAnalysis(input: RunAiAnalysisInput): Promise<AiChatRe
     modelResult = await generateAiModelAnswer({
       question: input.question,
       mode: effectiveMode,
+      intent: effectivePlan.intent,
       sources,
       executions,
       memory,

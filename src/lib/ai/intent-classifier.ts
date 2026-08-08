@@ -64,7 +64,7 @@ function providerConfig() {
   const baseUrl = process.env.NVIDIA_BASE_URL || "https://integrate.api.nvidia.com/v1";
   const model = process.env.AI_CLASSIFIER_MODEL
     || process.env.AI_FAST_MODEL
-    || "minimaxai/minimax-m3";
+    || "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning";
   return { apiKey, baseUrl, model };
 }
 

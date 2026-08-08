@@ -228,8 +228,8 @@ function inferIntent(question: string, mode: "chat" | "dashboard"): {
   rationale: string;
 } {
   const q = normalizeIntentText(question);
-  const isGreeting = /^(hi|hello|chao|xin chao|hey|ban la ai|ban lam duoc gi|ban co the giup|cam on|thank)\b/.test(q)
-    || hasPhrase(q, ["giup minh", "giup toi", "lam duoc gi", "co the lam gi", "tinh nang gi", "ban la ai"]);
+  const isGreeting = /^(hi|hello|chao|xin chao|hey|m la ai|m là ai|m lam duoc gi|m làm được gì|ban la ai|ban lam duoc gi|ban co the giup|cam on|thank)\b/.test(q)
+    || hasPhrase(q, ["giup minh", "giup toi", "lam duoc gi", "co the lam gi", "tinh nang gi", "ban la ai", "m giup", "m la ai"]);
   const documentIntent = hasPhrase(q, ["tai lieu", "da upload", "quy dinh", "huong dan", "document"]);
 
   if (mode === "dashboard" || isDashboardIntent(question)) {
@@ -280,7 +280,13 @@ function inferIntent(question: string, mode: "chat" | "dashboard"): {
   if (hasToken(q, ["doanh", "thu", "loi", "nhuan", "don", "cogs", "margin"])) {
     return { intent: "metric_lookup", confidence: 0.84, modelTier: "none", deterministic: true, rationale: "Yêu cầu tra cứu chỉ số kinh doanh." };
   }
-  return { intent: "out_of_scope", confidence: 0.72, modelTier: "none", deterministic: true, rationale: "Không nhận diện được ý định dữ liệu thuộc phạm vi CounterOps." };
+  return {
+    intent: "out_of_scope",
+    confidence: 0.72,
+    modelTier: "fast",
+    deterministic: false,
+    rationale: "Câu hỏi không thuộc dữ liệu kinh doanh — dùng mô hình để trả lời tự nhiên.",
+  };
 }
 
 function toolsForIntent(intent: AiIntent): AiToolName[] {
@@ -370,8 +376,8 @@ export async function buildAiPlanAsync(
   const llmResult = await classifyIntentWithLlm(question).catch(() => null);
   if (!llmResult || llmResult.intent === plan.intent) return plan;
 
-  // Rebuild tools for the LLM-chosen intent. Greeting/out_of_scope stay
-  // deterministic (no model call); other intents use the model to answer.
+  // Greeting stays deterministic (no model call). Other intents — including
+  // out_of_scope — use the model to answer naturally.
   const tools = toolsForIntent(llmResult.intent).map((name, index) => {
     const common = { from: plan.range.from, to: plan.range.to, rangeLabel: plan.range.label };
     const argumentsByTool: Record<AiToolName, Record<string, string | number | boolean | null>> = {
@@ -392,7 +398,7 @@ export async function buildAiPlanAsync(
       arguments: argumentsByTool[name],
     };
   });
-  const deterministic = llmResult.intent === "greeting" || llmResult.intent === "out_of_scope";
+  const deterministic = llmResult.intent === "greeting";
   return {
     ...plan,
     intent: llmResult.intent,
