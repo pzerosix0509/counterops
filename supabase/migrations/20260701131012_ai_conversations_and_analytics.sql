@@ -308,8 +308,10 @@ as $$
       coalesce(sum(oi.cost_price_snapshot * oi.quantity)
         filter (where oi.cancelled_at is null), 0)::bigint as cost_of_goods
     from public.order_items oi
+    join public.orders o on o.id = oi.order_id
     where oi.organization_id = p_org_id
       and oi.branch_id = p_branch_id
+      and o.status = 'paid'
     group by oi.order_id
   ),
   paid_orders as (
@@ -478,8 +480,10 @@ as $$
       coalesce(sum(oi.cost_price_snapshot * oi.quantity)
         filter (where oi.cancelled_at is null), 0)::bigint as cost_of_goods
     from public.order_items oi
+    join public.orders o on o.id = oi.order_id
     where oi.organization_id = p_org_id
       and oi.branch_id = p_branch_id
+      and o.status = 'paid'
     group by oi.order_id
   ),
   facts as (
