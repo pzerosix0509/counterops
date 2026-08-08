@@ -136,6 +136,7 @@ export async function listAiDashboardTemplates(organizationId: string): Promise<
 
 async function keywordSearchAiDocumentChunks(
   organizationId: string,
+  branchId: string,
   question: string,
   limit: number,
 ): Promise<AiSource[]> {
@@ -148,6 +149,7 @@ async function keywordSearchAiDocumentChunks(
     .from("ai_document_chunks")
     .select("id, document_id, chunk_index, content, ai_documents!inner(title, file_name)")
     .eq("organization_id", organizationId)
+    .or(`branch_id.is.null,branch_id.eq.${branchId}`)
     .or(orFilter)
     .limit(limit);
   if (error) return [];
@@ -224,5 +226,5 @@ export async function searchAiDocumentChunks(
     }));
   }
 
-  return keywordSearchAiDocumentChunks(organizationId, expandedQuery, limit);
+  return keywordSearchAiDocumentChunks(organizationId, branchId, expandedQuery, limit);
 }
