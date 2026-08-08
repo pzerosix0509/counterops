@@ -383,6 +383,7 @@ export async function buildAiPlanAsync(
       period_comparison: common,
       inventory_risk: { status: "attention" },
       search_documents: { query: question, limit: 6 },
+      search_web: { query: question, limit: 5 },
       forecast_revenue: { ...common, horizon_days: 30 },
     };
     return {
