@@ -310,6 +310,7 @@ export function AiAssistant({
   const [renameTarget, setRenameTarget] = useState<AiChatSessionSummary | null>(null);
   const [renameTitle, setRenameTitle] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<AiChatSessionSummary | null>(null);
+  const [imageLoading, setImageLoading] = useState(false);
   const draftKey = `counterops:ai-draft:${branchId}`;
 
   useEffect(() => {
@@ -394,17 +395,23 @@ export function AiAssistant({
       notifyError("Ảnh quá lớn", "Ảnh tối đa 4MB.");
       return;
     }
+    setImageLoading(true);
     const reader = new FileReader();
     reader.onload = () => {
       const data = String(reader.result ?? "").split(",")[1] ?? "";
       setAttachedImage({ data, mime: file.type, name: file.name });
+      setImageLoading(false);
+    };
+    reader.onerror = () => {
+      setImageLoading(false);
+      notifyError("Đọc ảnh thất bại", "Không đọc được tệp ảnh.");
     };
     reader.readAsDataURL(file);
   }
 
   function ask(nextQuestion = question) {
     const text = nextQuestion.trim();
-    if ((!text && !attachedImage) || isAsking) return;
+    if ((!text && !attachedImage) || isAsking || imageLoading) return;
     const image = attachedImage ?? undefined;
     setQuestion("");
     setAttachedImage(null);
@@ -966,7 +973,7 @@ export function AiAssistant({
                     size="icon"
                     className="h-10 w-10 shrink-0 rounded-full mb-1 mr-1 transition-transform active:scale-95"
                     onClick={() => ask()}
-                    disabled={isAsking || (!question.trim() && !attachedImage)}
+                    disabled={isAsking || imageLoading || (!question.trim() && !attachedImage)}
                   >
                     {isAsking ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-4 w-4" />}
                   </Button>

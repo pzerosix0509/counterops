@@ -9,8 +9,8 @@ const NVIDIA_DEFAULT_MODEL = "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning";
 
 /**
  * Extract text from an image via the NVIDIA vision model.
- * Throws on failure instead of silently returning "" so callers can surface
- * a clear error ("ảnh không đọc được") instead of pretending there is no text.
+ * If the image has no readable text, returns a short visual description so the
+ * assistant can still reason about the image. Throws only on API failure.
  */
 export async function imageToText(image: AiImageInput, question: string): Promise<string> {
   const apiKey = process.env.NVIDIA_API_KEY;
@@ -34,7 +34,7 @@ export async function imageToText(image: AiImageInput, question: string): Promis
             content: [
               {
                 type: "text",
-                text: `Trích xuất toàn bộ văn bản trong ảnh. Bối cảnh câu hỏi của người dùng: ${question}`,
+                text: `Phân tích ảnh này: nếu có văn bản (hóa đơn, biên lai, chữ) hãy trích xuất toàn bộ; nếu không có văn bản, hãy mô tả ngắn gọn nội dung ảnh (đồ vật, món ăn, khung cảnh...). Bối cảnh câu hỏi của người dùng: ${question}`,
               },
               {
                 type: "image_url",
@@ -60,7 +60,7 @@ export async function imageToText(image: AiImageInput, question: string): Promis
       ? content.map((part) => part?.text ?? "").join(" ")
       : typeof content === "string" ? content : "";
     const trimmed = text.trim();
-    if (!trimmed) throw new Error("NVIDIA vision không trích được văn bản từ ảnh.");
+    if (!trimmed) throw new Error("NVIDIA vision không phân tích được ảnh.");
     return trimmed;
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
