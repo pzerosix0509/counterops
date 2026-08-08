@@ -19,6 +19,7 @@ import {
   updateAiSessionMemory,
 } from "@/server/ai/conversations";
 import { generateAiModelAnswer, type AiProviderResult } from "@/server/ai/provider";
+import { executeMcpPlan } from "@/server/ai/mcp-plan";
 import { buildSourcesFromToolExecutions, executeAiToolPlan } from "@/server/ai/tools";
 import type { AiChatResponse, AiProgressStage, AiToolCall } from "@/types/ai";
 
@@ -98,6 +99,17 @@ export async function runAiAnalysis(input: RunAiAnalysisInput): Promise<AiChatRe
   };
   let executions = await executeAiToolPlan(plan.tools, toolContext);
 
+  // MCP plan: optional external tool execution per intent (via env-configured MCP server).
+  const mcpPlan = await executeMcpPlan(plan);
+  const mcpSources = mcpPlan.toolCalls.map((call, index) => ({
+    id: `MCP${index + 1}`,
+    label: `MCP tool: ${call.name}`,
+    type: "mcp" as const,
+    detail: `Kết quả MCP ${call.name}`,
+    excerpt: JSON.stringify(call.result),
+    meta: { tool: "mcp", name: call.name, arguments: call.arguments },
+  }));
+
   // Agentic loop: if confidence is low after first pass, run supplemental tools
   // that weren't in the original plan (up to 1 refinement round).
   const firstPassAnalytics = buildAnalyticsContext(executions);
@@ -150,7 +162,7 @@ export async function runAiAnalysis(input: RunAiAnalysisInput): Promise<AiChatRe
   ).length;
 
   emitProgress(input.onProgress, "assessing", "Đang kiểm tra chất lượng và độ tin cậy...");
-  const sources = buildSourcesFromToolExecutions(executions);
+  const sources = [...buildSourcesFromToolExecutions(executions), ...mcpSources];
   const analytics = buildAnalyticsContext(executions);
   const assessment = assessAiEvidence(analytics, executions, sources);
   const chart = buildChartForQuestion(input.question, analytics);

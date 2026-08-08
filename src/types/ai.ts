@@ -1,7 +1,7 @@
 export interface AiSource {
   id: string;
   label: string;
-  type: "analytics" | "document";
+  type: "analytics" | "document" | "mcp";
   detail?: string;
   excerpt?: string;
   meta?: Record<string, unknown>;

@@ -237,7 +237,9 @@ function SourcesPanel({ sources }: { sources: AiSource[] }) {
                 {source.detail ? <p className="text-xs text-muted-foreground">{source.detail}</p> : null}
               </div>
               <div className="flex items-center gap-2">
-                <Badge variant={source.type === "analytics" ? "info" : "secondary"}>{source.type === "analytics" ? "Dữ liệu" : "Tài liệu"}</Badge>
+                <Badge variant={source.type === "analytics" ? "info" : "secondary"}>
+                  {source.type === "analytics" ? "Dữ liệu" : source.type === "document" ? "Tài liệu" : "MCP"}
+                </Badge>
                 <SourceDetailDialog source={source} />
               </div>
             </div>
