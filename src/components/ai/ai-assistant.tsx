@@ -135,6 +135,21 @@ function sourceColumns(rows: Array<Record<string, unknown>>) {
 
 function SourcePreview({ source }: { source: AiSource }) {
   const parsed = parseSourceExcerpt(source);
+  if (source.type === "web") {
+    return (
+      <div className="mt-3">
+        <a
+          href={source.detail}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-xs font-medium text-primary hover:underline"
+        >
+          {source.detail}
+        </a>
+        <p className="mt-1 line-clamp-4 rounded-md bg-muted/40 p-3 text-xs leading-5 text-muted-foreground">{source.excerpt ?? ""}</p>
+      </div>
+    );
+  }
   if (source.type === "document") {
     return <p className="mt-3 line-clamp-4 rounded-md bg-muted/40 p-3 text-xs leading-5 text-muted-foreground">{typeof parsed === "string" ? parsed : source.excerpt}</p>;
   }
@@ -237,7 +252,9 @@ function SourcesPanel({ sources }: { sources: AiSource[] }) {
                 {source.detail ? <p className="text-xs text-muted-foreground">{source.detail}</p> : null}
               </div>
               <div className="flex items-center gap-2">
-                <Badge variant={source.type === "analytics" ? "info" : "secondary"}>{source.type === "analytics" ? "Dữ liệu" : "Tài liệu"}</Badge>
+                <Badge variant={source.type === "analytics" ? "info" : "secondary"}>
+                  {source.type === "analytics" ? "Dữ liệu" : source.type === "document" ? "Tài liệu" : "Web"}
+                </Badge>
                 <SourceDetailDialog source={source} />
               </div>
             </div>
