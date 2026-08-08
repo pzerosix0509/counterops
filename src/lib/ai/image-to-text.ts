@@ -4,18 +4,21 @@ export interface AiImageInput {
 }
 
 const IMAGE_TIMEOUT_MS = 12_000;
+const NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1/chat/completions";
+const NVIDIA_DEFAULT_MODEL = "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning";
 
 export async function imageToText(image: AiImageInput, question: string): Promise<string> {
-  const apiKey = process.env.OPENAI_API_KEY;
+  const apiKey = process.env.NVIDIA_API_KEY;
   if (!apiKey) return "";
-  const model = process.env.AI_VISION_MODEL || "gpt-4o-mini";
+  const model = process.env.AI_VISION_MODEL || NVIDIA_DEFAULT_MODEL;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), IMAGE_TIMEOUT_MS);
   try {
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    const response = await fetch(NVIDIA_BASE_URL, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
+        Accept: "application/json",
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
@@ -36,7 +39,9 @@ export async function imageToText(image: AiImageInput, question: string): Promis
           },
         ],
         max_tokens: 1_000,
-        temperature: 0,
+        stream: false,
+        temperature: 0.6,
+        top_p: 0.95,
       }),
       signal: controller.signal,
     });
