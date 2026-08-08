@@ -56,6 +56,10 @@ export const aiChatRequestSchema = z.object({
   sessionId: z.string().uuid().optional(),
   requestId: z.string().uuid().optional(),
   stream: z.boolean().optional(),
+  image: z.object({
+    data: z.string().max(4_000_000),
+    mime: z.string().regex(/^image\/(jpeg|png|webp|gif)$/),
+  }).optional(),
 }).strict();
 
 export type AiModelAnswerPayload = z.infer<typeof aiModelAnswerSchema>;

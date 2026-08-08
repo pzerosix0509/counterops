@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { aiChatRequestSchema } from "@/lib/ai/schemas";
+import { imageToText } from "@/lib/ai/image-to-text";
 import { canViewReports, getActiveMembership, requireActiveContext } from "@/lib/auth/permissions";
 import { runAiAnalysis } from "@/server/ai/orchestrator";
 import type { AiStreamEvent } from "@/types/ai";
@@ -21,6 +22,13 @@ export async function POST(request: NextRequest) {
   }
 
   const context = await requireActiveContext();
+  let imageText: string | undefined;
+  if (parsed.data.image) {
+    imageText = await imageToText(
+      { data: parsed.data.image.data, mime: parsed.data.image.mime },
+      parsed.data.question,
+    );
+  }
   const runInput = {
     organizationId: context.organizationId,
     branchId: context.branchId,
@@ -30,6 +38,7 @@ export async function POST(request: NextRequest) {
     mode: parsed.data.mode ?? "chat",
     sessionId: parsed.data.sessionId,
     requestId: parsed.data.requestId,
+    imageText,
   } as const;
 
   if (parsed.data.stream) {

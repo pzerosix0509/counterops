@@ -270,7 +270,9 @@ export function AiAssistant({
 }) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const imageInputRef = useRef<HTMLInputElement | null>(null);
   const [question, setQuestion] = useState("");
+  const [attachedImage, setAttachedImage] = useState<{ data: string; mime: string; name: string } | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>(() => initialMessages.map((message) => ({
     id: message.id,
     role: message.role,
@@ -359,14 +361,34 @@ export function AiAssistant({
     }));
   }
 
+  function onImageSelect(file: File | undefined) {
+    if (!file) return;
+    if (!/^image\/(jpeg|png|webp|gif)$/.test(file.type)) {
+      notifyError("Ảnh không hợp lệ", "Chỉ chấp nhận JPG, PNG, WebP hoặc GIF.");
+      return;
+    }
+    if (file.size > 4 * 1024 * 1024) {
+      notifyError("Ảnh quá lớn", "Ảnh tối đa 4MB.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const data = String(reader.result ?? "").split(",")[1] ?? "";
+      setAttachedImage({ data, mime: file.type, name: file.name });
+    };
+    reader.readAsDataURL(file);
+  }
+
   function ask(nextQuestion = question) {
     const text = nextQuestion.trim();
-    if (!text || isAsking) return;
+    if ((!text && !attachedImage) || isAsking) return;
+    const image = attachedImage ?? undefined;
     setQuestion("");
+    setAttachedImage(null);
     setIsAsking(true);
     setProgressMessage("Đang chuẩn bị phân tích...");
     const requestId = crypto.randomUUID();
-    setMessages((current) => [...current, { id: requestId, role: "user", content: text, feedback: null }]);
+    setMessages((current) => [...current, { id: requestId, role: "user", content: text || "[Ảnh đã gửi]", feedback: null }]);
     fetch("/api/ai/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -376,6 +398,7 @@ export function AiAssistant({
         sessionId: sessionId ?? undefined,
         requestId,
         stream: true,
+        image: image ? { data: image.data, mime: image.mime } : undefined,
       }),
     })
       .then(async (res) => {
@@ -784,6 +807,23 @@ export function AiAssistant({
                 </div>
 
                 <div className="relative flex items-end gap-2 bg-muted/30 border rounded-3xl p-1.5 pl-4 shadow-sm focus-within:ring-1 focus-within:ring-primary focus-within:border-primary transition-all duration-200">
+                  {attachedImage ? (
+                    <div className="relative flex items-center gap-2 pr-1">
+                      <img
+                        src={`data:${attachedImage.mime};base64,${attachedImage.data}`}
+                        alt="Ảnh đính kèm"
+                        className="h-10 w-10 rounded-lg object-cover border"
+                      />
+                      <button
+                        type="button"
+                        aria-label="Gỡ ảnh"
+                        onClick={() => setAttachedImage(null)}
+                        className="absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full bg-destructive text-white text-[10px] leading-none flex items-center justify-center hover:bg-destructive/80"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ) : null}
                   <Textarea
                     value={question}
                     onChange={(event) => setQuestion(event.target.value)}
@@ -799,10 +839,28 @@ export function AiAssistant({
                   />
                   <Button
                     type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-10 w-10 shrink-0 rounded-full mb-1 text-muted-foreground hover:text-foreground"
+                    onClick={() => imageInputRef.current?.click()}
+                    disabled={isAsking}
+                    title="Đính kèm ảnh"
+                  >
+                    <FileText className="h-4 w-4" />
+                  </Button>
+                  <input
+                    ref={imageInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    className="hidden"
+                    onChange={(event) => onImageSelect(event.target.files?.[0])}
+                  />
+                  <Button
+                    type="button"
                     size="icon"
                     className="h-10 w-10 shrink-0 rounded-full mb-1 mr-1 transition-transform active:scale-95"
                     onClick={() => ask()}
-                    disabled={isAsking || !question.trim()}
+                    disabled={isAsking || (!question.trim() && !attachedImage)}
                   >
                     {isAsking ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-4 w-4" />}
                   </Button>
