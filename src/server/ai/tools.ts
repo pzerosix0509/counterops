@@ -7,10 +7,15 @@ import { searchAiDocumentChunks } from "@/server/queries/ai";
 import { aiToolCacheKey, withAiToolCache } from "@/server/ai/cache";
 import type { AiSource, AiToolCall, AiToolExecution, AiToolName } from "@/types/ai";
 
+const isoDateTime = z.string().refine((value) => !Number.isNaN(Date.parse(value)), {
+  message: "phải là ISO datetime hợp lệ",
+});
+
 const rangeArgumentsSchema = z.object({
-  from: z.string().datetime(),
-  to: z.string().datetime(),
+  from: isoDateTime,
+  to: isoDateTime,
   rangeLabel: z.string().min(1).max(80),
+  timezone: z.string().min(1).max(80),
 }).strict();
 
 const toolArgumentSchemas = {
@@ -86,7 +91,7 @@ async function executeRpcTool(
     sales_timeseries: {
       ...common,
       p_granularity: args.granularity,
-      p_timezone: context.timezone,
+      p_timezone: args.timezone,
     },
     top_products: { ...common, p_limit: args.limit },
     category_summary: { ...common, p_limit: args.limit },
@@ -168,7 +173,7 @@ async function executeForecast(
       p_from: args.from,
       p_to: args.to,
       p_granularity: "day",
-      p_timezone: context.timezone,
+      p_timezone: args.timezone,
     });
     if (error) throw new Error(error.message);
     const daily = aggregateToDailyPoints(

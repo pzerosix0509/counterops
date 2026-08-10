@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { AI_GOLDEN_QUESTIONS, evaluateGoldenQuestions } from "@/lib/ai/golden-questions";
 import { aiDashboardSpecSchema } from "@/lib/ai/schemas";
-import { planAnalyticsTools } from "@/lib/ai/semantic-layer";
+import { buildAiPlan, inferAiDateRange, planAnalyticsTools } from "@/lib/ai/semantic-layer";
 import { buildDashboardSpec } from "@/server/ai/analytics";
 import type { AiAnalyticsContext } from "@/types/ai";
 
@@ -22,6 +22,23 @@ describe("AI analytics golden questions", () => {
     );
     expect(plan[0]?.arguments.rangeLabel).toBe("Tháng trước");
     expect(plan.map((call) => call.name)).toContain("top_products");
+  });
+});
+
+describe("AI timezone handling", () => {
+  it("derives Hôm nay in the org timezone, not server UTC", () => {
+    // Server time is UTC: 2026-07-01T17:00:00Z, but in Asia/Ho_Chi_Minh it is
+    // already 2026-07-02 00:00. Without a timezone the range would be 2026-07-01,
+    // which is the previous day for the branch.
+    const range = inferAiDateRange("Doanh thu hôm nay?", new Date("2026-07-01T17:00:00Z"), "Asia/Ho_Chi_Minh");
+    expect(range.from).toBe("2026-07-01T17:00:00.000Z");
+    expect(range.to).toBe("2026-07-02T16:59:59.999Z");
+  });
+
+  it("writes the timezone into every analytics tool argument", () => {
+    const plan = buildAiPlan("Doanh thu hôm nay?", "chat", new Date("2026-07-01T12:00:00+07:00"), [], "Asia/Ho_Chi_Minh");
+    expect(plan.tools[0]?.arguments.timezone).toBe("Asia/Ho_Chi_Minh");
+    expect(plan.tools.every((tool) => "timezone" in tool.arguments || tool.name === "inventory_risk")).toBe(true);
   });
 });
 

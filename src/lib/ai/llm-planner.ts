@@ -80,6 +80,7 @@ export async function planWithLlm(
   question: string,
   mode: "chat" | "dashboard",
   now: Date,
+  timezone = "Asia/Ho_Chi_Minh",
 ): Promise<LlmPlanResult | null> {
   const { apiKey, baseUrl, model } = providerConfig();
   if (!apiKey) return null;
@@ -91,7 +92,7 @@ export async function planWithLlm(
 
   const todayISO = now.toISOString();
   const prompt = [
-    `Hôm nay là ${todayISO.slice(0, 10)}. Bạn là bộ lập kế hoạch cho trợ lý phân tích quán cafe/nhà hàng.`,
+    `Hôm nay là ${todayISO.slice(0, 10)} (múi giờ quán: ${timezone}). Bạn là bộ lập kế hoạch cho trợ lý phân tích quán cafe/nhà hàng.`,
     `Chọn ĐÚNG MỘT intent cho câu hỏi. Các intent:`,
     ...VALID_INTENTS.map((i) => `- ${i}: ${INTENT_DESCRIPTIONS[i]}`),
     "Quy tắc:",
@@ -131,8 +132,9 @@ export async function planWithLlm(
     let from = parsed.from ?? "";
     let to = parsed.to ?? "";
     const validDate = (s: string) => !Number.isNaN(Date.parse(s));
-    if (!validDate(from) || !validDate(to) || !rangeLabel) {
-      const fallback = inferAiDateRange(question, now);
+    const rangeValid = validDate(from) && validDate(to) && Date.parse(from) <= Date.parse(to);
+    if (!rangeValid || !rangeLabel) {
+      const fallback = inferAiDateRange(question, now, timezone);
       rangeLabel = fallback.label;
       from = fallback.from;
       to = fallback.to;
