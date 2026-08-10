@@ -161,6 +161,21 @@ export function inferAiDateRange(question: string, now = new Date()): AiDateRang
     return { from: from.toISOString(), to: to.toISOString(), label: "Tháng trước" };
   }
 
+  if (q.includes("thang toi") || q.includes("next month")) {
+    // Future month: we have no future data, so use the last 30 days of history
+    // as the training window for forecasting.
+    const from = startOfDay(now);
+    from.setDate(from.getDate() - 29);
+    return { from: from.toISOString(), to: todayEnd.toISOString(), label: "30 ngày qua" };
+  }
+
+  if (q.includes("tuan toi") || q.includes("next week")) {
+    // Future week: same idea, use the last 14 days of history (>= MIN_DAYS_REQUIRED).
+    const from = startOfDay(now);
+    from.setDate(from.getDate() - 13);
+    return { from: from.toISOString(), to: todayEnd.toISOString(), label: "14 ngày qua" };
+  }
+
   if (q.includes("thang nay") || q.includes("this month")) {
     const from = new Date(now.getFullYear(), now.getMonth(), 1);
     return { from: from.toISOString(), to: todayEnd.toISOString(), label: "Tháng này" };
@@ -392,11 +407,16 @@ export async function buildAiPlanAsync(
   if (!llmPlan) return fallback;
 
   const deterministic = llmPlan.intent === "greeting";
-  const range = {
-    from: llmPlan.from,
-    to: llmPlan.to,
-    label: llmPlan.rangeLabel,
-  };
+  // Forecast needs historical data as training input. The LLM may return a
+  // future range for "tháng tới" — that would query an empty future window.
+  // Always use the regex-derived range (past window) for forecast.
+  const range = llmPlan.intent === "forecast"
+    ? fallback.range
+    : {
+      from: llmPlan.from,
+      to: llmPlan.to,
+      label: llmPlan.rangeLabel,
+    };
   const tools = toolsForIntent(llmPlan.intent).map((name, index) => {
     const common = { from: range.from, to: range.to, rangeLabel: range.label };
     const argumentsByTool: Record<AiToolName, Record<string, string | number | boolean | null>> = {
