@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { AI_GOLDEN_QUESTIONS, evaluateGoldenQuestions } from "@/lib/ai/golden-questions";
 import { aiDashboardSpecSchema } from "@/lib/ai/schemas";
-import { planAnalyticsTools } from "@/lib/ai/semantic-layer";
+import { buildAiPlan, planAnalyticsTools } from "@/lib/ai/semantic-layer";
 import { buildDashboardSpec } from "@/server/ai/analytics";
 import type { AiAnalyticsContext } from "@/types/ai";
 
@@ -22,6 +22,18 @@ describe("AI analytics golden questions", () => {
     );
     expect(plan[0]?.arguments.rangeLabel).toBe("Tháng trước");
     expect(plan.map((call) => call.name)).toContain("top_products");
+  });
+});
+
+describe("AI intent edge cases", () => {
+  it("does not treat 'kho' as inventory keyword when it is part of another word", () => {
+    const plan = buildAiPlan("Cách tính lợi nhuận khó không?", "chat", new Date("2026-07-01T12:00:00+07:00"));
+    expect(plan.intent).not.toBe("inventory_risk");
+  });
+
+  it("keeps inventory intent for 'tồn kho'", () => {
+    const plan = buildAiPlan("Nguyên liệu nào đang tồn kho thấp?", "chat", new Date("2026-07-01T12:00:00+07:00"));
+    expect(plan.intent).toBe("inventory_risk");
   });
 });
 

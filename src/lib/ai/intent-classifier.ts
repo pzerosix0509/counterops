@@ -9,6 +9,7 @@ export interface LlmIntentResult {
 
 const VALID_INTENTS: AiIntent[] = [
   "greeting",
+  "capability",
   "metric_lookup",
   "trend",
   "comparison",
@@ -26,7 +27,8 @@ const VALID_INTENTS: AiIntent[] = [
 ];
 
 const INTENT_DESCRIPTIONS: Record<AiIntent, string> = {
-  greeting: "Lời chào, hỏi thăm, hỏi trợ lý là ai / làm được gì",
+  greeting: "Chào hỏi, hỏi thăm lịch sự (Xin chào, Chào bạn, Hello)",
+  capability: "Hỏi trợ lý là ai, làm được gì, có thể giúp gì",
   metric_lookup: "Hỏi số liệu doanh thu, lợi nhuận, số đơn trong kỳ",
   trend: "Hỏi xu hướng, biến động theo thời gian, biểu đồ",
   comparison: "So sánh hai kỳ, tăng/giảm so với kỳ trước",
