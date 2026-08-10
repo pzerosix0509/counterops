@@ -87,6 +87,7 @@ export async function runAiAnalysis(input: RunAiAnalysisInput): Promise<AiChatRe
     effectiveMode,
     new Date(),
     memory.turns.filter((turn) => turn.role === "user").map((turn) => turn.content),
+    input.timezone,
   );
   const plannerMs = Date.now() - plannerStartedAt;
 
@@ -192,6 +193,7 @@ export async function runAiAnalysis(input: RunAiAnalysisInput): Promise<AiChatRe
     modelResult = await generateAiModelAnswer({
       question: input.question,
       mode: effectiveMode,
+      intent: effectivePlan.intent,
       sources,
       executions,
       memory,
@@ -199,6 +201,7 @@ export async function runAiAnalysis(input: RunAiAnalysisInput): Promise<AiChatRe
       qualityIssues: assessment.qualityIssues,
       anomalies: assessment.anomalies,
       imageText: input.imageText,
+      timezone: input.timezone,
     }, effectivePlan.modelTier).catch((error) => ({
       ...emptyProviderResult(),
       error: error instanceof Error ? error.message : "Không gọi được AI provider.",

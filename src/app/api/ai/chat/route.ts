@@ -31,9 +31,15 @@ export async function POST(request: NextRequest) {
         question,
       );
     } catch (error) {
-      return NextResponse.json({
-        error: error instanceof Error ? error.message : "Không trích được văn bản từ ảnh.",
-      }, { status: 422 });
+      // If the user also typed a question, don't fail the whole request —
+      // answer from text and drop the image gracefully.
+      if (parsed.data.question?.trim()) {
+        imageText = undefined;
+      } else {
+        return NextResponse.json({
+          error: error instanceof Error ? error.message : "Không trích được văn bản từ ảnh.",
+        }, { status: 422 });
+      }
     }
   }
   const runInput = {

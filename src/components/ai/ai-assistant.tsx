@@ -2,10 +2,11 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Bot, Database, FileText, History, Loader2, Plus, Save, Send, ThumbsDown, ThumbsUp, Upload } from "lucide-react";
+import { Bot, Database, FileText, History, Loader2, Pencil, Pin, PinOff, Plus, Save, Send, ThumbsDown, ThumbsUp, Trash2, Upload } from "lucide-react";
 import { uploadAiDocument } from "@/server/actions/ai-documents";
 import { saveAiDashboardTemplate } from "@/server/actions/ai-dashboards";
 import { submitAiMessageFeedback } from "@/server/actions/ai-feedback";
+import { deleteAiChatSession, renameAiChatSession, togglePinAiChatSession } from "@/server/actions/ai-sessions";
 import { AiDashboardRenderer } from "@/components/ai/ai-dashboard-renderer";
 import { ChartSpecRenderer } from "@/components/ai/chart-spec-renderer";
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +16,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -305,6 +307,10 @@ export function AiAssistant({
   const [isLoadingSession, setIsLoadingSession] = useState(false);
   const [isUploading, startUpload] = useTransition();
   const [isSaving, startSave] = useTransition();
+  const [renameTarget, setRenameTarget] = useState<AiChatSessionSummary | null>(null);
+  const [renameTitle, setRenameTitle] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<AiChatSessionSummary | null>(null);
+  const [imageLoading, setImageLoading] = useState(false);
   const draftKey = `counterops:ai-draft:${branchId}`;
 
   useEffect(() => {
@@ -363,6 +369,7 @@ export function AiAssistant({
           messageCount: 2,
           lastMessageAt: now,
           createdAt: now,
+          isPinned: false,
         };
       return [updated, ...current.filter((session) => session.id !== response.sessionId)];
     });
@@ -388,17 +395,23 @@ export function AiAssistant({
       notifyError("Ảnh quá lớn", "Ảnh tối đa 4MB.");
       return;
     }
+    setImageLoading(true);
     const reader = new FileReader();
     reader.onload = () => {
       const data = String(reader.result ?? "").split(",")[1] ?? "";
       setAttachedImage({ data, mime: file.type, name: file.name });
+      setImageLoading(false);
+    };
+    reader.onerror = () => {
+      setImageLoading(false);
+      notifyError("Đọc ảnh thất bại", "Không đọc được tệp ảnh.");
     };
     reader.readAsDataURL(file);
   }
 
   function ask(nextQuestion = question) {
     const text = nextQuestion.trim();
-    if ((!text && !attachedImage) || isAsking) return;
+    if ((!text && !attachedImage) || isAsking || imageLoading) return;
     const image = attachedImage ?? undefined;
     setQuestion("");
     setAttachedImage(null);
@@ -516,6 +529,57 @@ export function AiAssistant({
     });
   }
 
+  function togglePin(session: AiChatSessionSummary) {
+    startSave(async () => {
+      const result = await togglePinAiChatSession(organizationId, { sessionId: session.id });
+      if (!result.ok) {
+        notifyError("Không ghim được hội thoại", result.error.message);
+        return;
+      }
+      setSessions((current) => current.map((item) =>
+        item.id === session.id ? { ...item, isPinned: result.data.isPinned } : item,
+      ));
+      notifySuccess(result.data.isPinned ? "Đã ghim hội thoại" : "Đã bỏ ghim");
+    });
+  }
+
+  function confirmRename() {
+    if (!renameTarget || !renameTitle.trim()) return;
+    const target = renameTarget;
+    const title = renameTitle.trim();
+    startSave(async () => {
+      const result = await renameAiChatSession(organizationId, { sessionId: target.id, title });
+      if (!result.ok) {
+        notifyError("Đổi tên thất bại", result.error.message);
+        return;
+      }
+      setSessions((current) => current.map((item) =>
+        item.id === target.id ? { ...item, title } : item,
+      ));
+      setRenameTarget(null);
+      notifySuccess("Đã đổi tên hội thoại");
+    });
+  }
+
+  function confirmDelete() {
+    if (!deleteTarget) return;
+    const target = deleteTarget;
+    startSave(async () => {
+      const result = await deleteAiChatSession(organizationId, { sessionId: target.id });
+      if (!result.ok) {
+        notifyError("Xóa hội thoại thất bại", result.error.message);
+        return;
+      }
+      setSessions((current) => current.filter((item) => item.id !== target.id));
+      if (sessionId === target.id) {
+        setSessionId(null);
+        setMessages([]);
+      }
+      setDeleteTarget(null);
+      notifySuccess("Đã xóa hội thoại");
+    });
+  }
+
   return (
     <div className="flex min-h-[600px] flex-col-reverse gap-6 xl:h-[calc(100vh-10rem)] xl:flex-row">
       {/* Sidebar: History, Stats, v.v */}
@@ -563,18 +627,36 @@ export function AiAssistant({
             {sessions.length === 0 ? (
               <p className="rounded-lg border border-dashed p-3 text-center text-xs text-muted-foreground m-2">Chưa có hội thoại.</p>
             ) : sessions.map((session) => (
-              <button
+              <div
                 key={session.id}
-                type="button"
-                onClick={() => loadConversation(session.id)}
-                className={`rounded-lg px-3 py-2.5 text-left transition-all hover:bg-muted group ${session.id === sessionId ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground"}`}
+                className={`group relative rounded-lg transition-all hover:bg-muted ${session.id === sessionId ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground"}`}
               >
-                <span className="block truncate text-sm mb-0.5 group-hover:text-foreground">{session.title}</span>
-                <span className="text-[10px] opacity-70 flex justify-between">
-                  <span>{session.messageCount} tin</span>
-                  <span>{formatDateTime(session.lastMessageAt)}</span>
-                </span>
-              </button>
+                <button
+                  type="button"
+                  onClick={() => loadConversation(session.id)}
+                  className="w-full px-3 py-2.5 text-left"
+                >
+                  <span className="block truncate text-sm mb-0.5 group-hover:text-foreground flex items-center gap-1">
+                    {session.isPinned ? <Pin className="h-3 w-3 shrink-0" /> : null}
+                    <span className="truncate">{session.title}</span>
+                  </span>
+                  <span className="text-[10px] opacity-70 flex justify-between">
+                    <span>{session.messageCount} tin</span>
+                    <span>{formatDateTime(session.lastMessageAt)}</span>
+                  </span>
+                </button>
+                <div className="absolute right-1 top-1.5 flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                  <Button type="button" variant="ghost" size="icon" className="h-6 w-6 rounded-full" title={session.isPinned ? "Bỏ ghim" : "Ghim"} onClick={() => togglePin(session)}>
+                    {session.isPinned ? <PinOff className="h-3 w-3" /> : <Pin className="h-3 w-3" />}
+                  </Button>
+                  <Button type="button" variant="ghost" size="icon" className="h-6 w-6 rounded-full" title="Đổi tên" onClick={() => { setRenameTitle(session.title); setRenameTarget(session); }}>
+                    <Pencil className="h-3 w-3" />
+                  </Button>
+                  <Button type="button" variant="ghost" size="icon" className="h-6 w-6 rounded-full" title="Xóa" onClick={() => setDeleteTarget(session)}>
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                </div>
+              </div>
             ))}
             {isLoadingSession ? (
               <div className="flex items-center justify-center gap-2 py-3 text-xs text-muted-foreground">
@@ -891,7 +973,7 @@ export function AiAssistant({
                     size="icon"
                     className="h-10 w-10 shrink-0 rounded-full mb-1 mr-1 transition-transform active:scale-95"
                     onClick={() => ask()}
-                    disabled={isAsking || (!question.trim() && !attachedImage)}
+                    disabled={isAsking || imageLoading || (!question.trim() && !attachedImage)}
                   >
                     {isAsking ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-4 w-4" />}
                   </Button>
@@ -903,6 +985,42 @@ export function AiAssistant({
             </div>
           </div>
       </div>
+
+      <Dialog open={renameTarget !== null} onOpenChange={(open) => { if (!open) setRenameTarget(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Đổi tên hội thoại</DialogTitle>
+            <DialogDescription>Nhập tên mới cho hội thoại này.</DialogDescription>
+          </DialogHeader>
+          <Input
+            value={renameTitle}
+            onChange={(event) => setRenameTitle(event.target.value)}
+            onKeyDown={(event) => { if (event.key === "Enter") confirmRename(); }}
+            placeholder="Tên hội thoại"
+            maxLength={160}
+            autoFocus
+          />
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setRenameTarget(null)}>Hủy</Button>
+            <Button type="button" onClick={confirmRename} disabled={!renameTitle.trim() || isSaving}>Lưu</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deleteTarget !== null} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Xóa hội thoại</DialogTitle>
+            <DialogDescription>
+              Bạn có chắc muốn xóa &quot;{deleteTarget?.title}&quot;? Toàn bộ tin nhắn trong hội thoại này sẽ bị xóa vĩnh viễn.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setDeleteTarget(null)}>Hủy</Button>
+            <Button type="button" variant="destructive" onClick={confirmDelete} disabled={isSaving}>Xóa</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

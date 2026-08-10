@@ -128,27 +128,42 @@ function normalizeIntentText(value: string) {
     .trim();
 }
 
-function startOfDay(date: Date) {
-  const value = new Date(date);
-  value.setHours(0, 0, 0, 0);
-  return value;
+function startOfDayInZone(date: Date, timezone: string) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).formatToParts(date);
+  const get = (type: string) => Number(parts.find((part) => part.type === type)?.value ?? 0);
+  // Local wall-clock in the target zone, treated as if it were UTC, minus the
+  // zone offset gives the true epoch of 00:00 local in that zone.
+  const localAsUTC = Date.UTC(get("year"), get("month") - 1, get("day"), get("hour"), get("minute"), get("second"));
+  const offsetMs = localAsUTC - date.getTime();
+  return new Date(Date.UTC(get("year"), get("month") - 1, get("day")) - offsetMs);
 }
 
-function endOfDay(date: Date) {
-  const value = new Date(date);
-  value.setHours(23, 59, 59, 999);
-  return value;
+function endOfDayInZone(date: Date, timezone: string) {
+  const start = startOfDayInZone(date, timezone);
+  return new Date(start.getTime() + 86_400_000 - 1);
 }
 
-export function inferAiDateRange(question: string, now = new Date()): AiDateRange {
+export function inferAiDateRange(
+  question: string,
+  now = new Date(),
+  timezone = "Asia/Ho_Chi_Minh",
+): AiDateRange {
   const q = normalizeIntentText(question);
-  const todayStart = startOfDay(now);
-  const todayEnd = endOfDay(now);
+  const todayStart = startOfDayInZone(now, timezone);
+  const todayEnd = endOfDayInZone(now, timezone);
 
   if (q.includes("hom qua") || q.includes("yesterday")) {
-    const date = new Date(now);
-    date.setDate(date.getDate() - 1);
-    return { from: startOfDay(date).toISOString(), to: endOfDay(date).toISOString(), label: "Hôm qua" };
+    const date = new Date(todayStart.getTime() - 86_400_000);
+    return { from: date.toISOString(), to: new Date(date.getTime() + 86_400_000 - 1).toISOString(), label: "Hôm qua" };
   }
 
   if (q.includes("hom nay") || q.includes("today")) {
@@ -156,37 +171,51 @@ export function inferAiDateRange(question: string, now = new Date()): AiDateRang
   }
 
   if (q.includes("thang truoc") || q.includes("last month")) {
-    const from = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const to = endOfDay(new Date(now.getFullYear(), now.getMonth(), 0));
+    const year = todayStart.getUTCFullYear();
+    const month = todayStart.getUTCMonth();
+    const from = new Date(Date.UTC(year, month - 1, 1));
+    const to = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999));
     return { from: from.toISOString(), to: to.toISOString(), label: "Tháng trước" };
   }
 
   if (q.includes("thang nay") || q.includes("this month")) {
-    const from = new Date(now.getFullYear(), now.getMonth(), 1);
+    const year = todayStart.getUTCFullYear();
+    const month = todayStart.getUTCMonth();
+    const from = new Date(Date.UTC(year, month, 1));
     return { from: from.toISOString(), to: todayEnd.toISOString(), label: "Tháng này" };
   }
 
   if (q.includes("tuan truoc") || q.includes("last week")) {
-    const day = now.getDay() || 7;
-    const currentMonday = startOfDay(now);
-    currentMonday.setDate(currentMonday.getDate() - day + 1);
-    const from = new Date(currentMonday);
-    from.setDate(from.getDate() - 7);
+    const dayIndex = (todayStart.getUTCDay() + 6) % 7; // 0 = Monday
+    const currentMonday = new Date(todayStart.getTime() - dayIndex * 86_400_000);
+    const from = new Date(currentMonday.getTime() - 7 * 86_400_000);
     const to = new Date(currentMonday.getTime() - 1);
     return { from: from.toISOString(), to: to.toISOString(), label: "Tuần trước" };
   }
 
   if (q.includes("tuan nay") || q.includes("this week")) {
-    const day = now.getDay() || 7;
-    const from = startOfDay(now);
-    from.setDate(from.getDate() - day + 1);
+    const dayIndex = (todayStart.getUTCDay() + 6) % 7; // 0 = Monday
+    const from = new Date(todayStart.getTime() - dayIndex * 86_400_000);
     return { from: from.toISOString(), to: todayEnd.toISOString(), label: "Tuần này" };
   }
 
   const explicitDays = q.match(/(\d{1,3})\s*ngay/);
+  const explicitMonths = q.match(/(\d{1,2})\s*thang/);
+  if (explicitMonths) {
+    const months = Math.min(Math.max(Number(explicitMonths[1]), 1), 12);
+    const from = new Date(Date.UTC(
+      todayStart.getUTCFullYear(),
+      todayStart.getUTCMonth() - months,
+      todayStart.getUTCDate(),
+    ));
+    return {
+      from: from.toISOString(),
+      to: todayEnd.toISOString(),
+      label: months === 1 ? "1 tháng qua" : `${months} tháng qua`,
+    };
+  }
   const days = Math.min(Math.max(Number(explicitDays?.[1] ?? 7), 1), 366);
-  const from = startOfDay(now);
-  from.setDate(from.getDate() - (days - 1));
+  const from = new Date(todayStart.getTime() - (days - 1) * 86_400_000);
   return {
     from: from.toISOString(),
     to: todayEnd.toISOString(),
@@ -228,8 +257,8 @@ function inferIntent(question: string, mode: "chat" | "dashboard"): {
   rationale: string;
 } {
   const q = normalizeIntentText(question);
-  const isGreeting = /^(hi|hello|chao|xin chao|hey|ban la ai|ban lam duoc gi|ban co the giup|cam on|thank)\b/.test(q)
-    || hasPhrase(q, ["giup minh", "giup toi", "lam duoc gi", "co the lam gi", "tinh nang gi", "ban la ai"]);
+  const isGreeting = /^(hi|hello|chao|xin chao|hey|m la ai|m là ai|m lam duoc gi|m làm được gì|ban la ai|ban lam duoc gi|ban co the giup|cam on|thank)\b/.test(q)
+    || hasPhrase(q, ["giup minh", "giup toi", "lam duoc gi", "co the lam gi", "tinh nang gi", "ban la ai", "m giup", "m la ai"]);
   const documentIntent = hasPhrase(q, ["tai lieu", "da upload", "quy dinh", "huong dan", "document"]);
 
   if (mode === "dashboard" || isDashboardIntent(question)) {
@@ -243,6 +272,12 @@ function inferIntent(question: string, mode: "chat" | "dashboard"): {
   }
   if (hasPhrase(q, ["tom tat cuoc tro chuyen", "tom tat hoi thoai", "ket luan chinh"])) {
     return { intent: "conversation_summary", confidence: 0.94, modelTier: "quality", deterministic: false, rationale: "Yêu cầu tổng hợp nhiều lượt hội thoại." };
+  }
+  if (
+    hasPhrase(q, ["tim kiem web", "tra cuu web", "thong tin tren web", "tin tuc", "gia vang", "thoi tiet", "bitcoin", "crypto", "chung khoan", "thi truong", "web search", "ronaldo", "messi", "ca si", "cau thu", "nguoi noi tieng"])
+    || /^(gia|thoi tiet|bitcoin|crypto|chung khoan|thoi tiet)\b/.test(q)
+  ) {
+    return { intent: "web_search", confidence: 0.9, modelTier: "fast", deterministic: false, rationale: "Yêu cầu tìm kiếm thông tin bên ngoài trên web." };
   }
   if (hasPhrase(q, ["du bao", "du doan", "tháng tới", "thang toi", "tuan toi", "ky toi", "forecast", "predict", "tuong lai"])) {
     return { intent: "forecast", confidence: 0.92, modelTier: "fast", deterministic: false, rationale: "Yêu cầu dự báo hoặc dự đoán tương lai." };
@@ -266,12 +301,6 @@ function inferIntent(question: string, mode: "chat" | "dashboard"): {
     return { intent: "product_ranking", confidence: 0.88, modelTier: "none", deterministic: true, rationale: "Yêu cầu xếp hạng món hoặc sản phẩm." };
   }
   if (
-    hasPhrase(q, ["tim kiem web", "tra cuu web", "thong tin tren web", "tin tuc", "gia vang", "thoi tiet", "bitcoin", "crypto", "chung khoan", "web search"])
-    || /^(gia|thoi tiet|bitcoin|crypto|chung khoan|thoi tiet)\b/.test(q)
-  ) {
-    return { intent: "web_search", confidence: 0.9, modelTier: "fast", deterministic: false, rationale: "Yêu cầu tìm kiếm thông tin bên ngoài trên web." };
-  }
-  if (
     hasPhrase(q, ["xu huong", "theo ngay", "theo gio", "bien dong", "bieu do"])
     || hasToken(q, ["trend", "chart"])
   ) {
@@ -280,7 +309,13 @@ function inferIntent(question: string, mode: "chat" | "dashboard"): {
   if (hasToken(q, ["doanh", "thu", "loi", "nhuan", "don", "cogs", "margin"])) {
     return { intent: "metric_lookup", confidence: 0.84, modelTier: "none", deterministic: true, rationale: "Yêu cầu tra cứu chỉ số kinh doanh." };
   }
-  return { intent: "out_of_scope", confidence: 0.72, modelTier: "none", deterministic: true, rationale: "Không nhận diện được ý định dữ liệu thuộc phạm vi CounterOps." };
+  return {
+    intent: "out_of_scope",
+    confidence: 0.72,
+    modelTier: "fast",
+    deterministic: false,
+    rationale: "Câu hỏi không thuộc dữ liệu kinh doanh — dùng mô hình để trả lời tự nhiên.",
+  };
 }
 
 function toolsForIntent(intent: AiIntent): AiToolName[] {
@@ -309,6 +344,7 @@ export function buildAiPlan(
   mode: "chat" | "dashboard",
   now = new Date(),
   previousUserQuestions: string[] = [],
+  timezone = "Asia/Ho_Chi_Minh",
 ): AiPlan {
   const normalizedQuestion = normalizeIntentText(question);
   const hasCurrentDateContext = /hom nay|hom qua|tuan nay|tuan truoc|thang nay|thang truoc|\d{1,3}\s*ngay|today|yesterday|this (week|month)|last (week|month)/i.test(normalizedQuestion);
@@ -317,10 +353,10 @@ export function buildAiPlan(
     : [...previousUserQuestions].reverse().find((item) =>
       /hom nay|hom qua|tuan nay|tuan truoc|thang nay|thang truoc|\d{1,3}\s*ngay|today|yesterday|this (week|month)|last (week|month)/i.test(normalizeIntentText(item)),
     ) ?? "";
-  const range = inferAiDateRange(`${question} ${inheritedDateQuestion}`, now);
+  const range = inferAiDateRange(`${question} ${inheritedDateQuestion}`, now, timezone);
   const classification = inferIntent(question, mode);
   const tools = toolsForIntent(classification.intent).map((name, index) => {
-    const common = { from: range.from, to: range.to, rangeLabel: range.label };
+    const common = { from: range.from, to: range.to, rangeLabel: range.label, timezone };
     const argumentsByTool: Record<AiToolName, Record<string, string | number | boolean | null>> = {
       sales_summary: common,
       sales_timeseries: { ...common, granularity: chooseGranularity(range, question) },
@@ -351,32 +387,39 @@ export function buildAiPlan(
 }
 
 /**
- * Async variant of buildAiPlan. When keyword heuristics are unsure
- * (out_of_scope or confidence < 0.6), asks the LLM to classify the intent so
- * ambiguous questions still get a smart response. Falls back to the
- * deterministic plan when the classifier is unavailable.
+ * Async variant of buildAiPlan. Uses the LLM to decide intent + date range in
+ * ONE call (smarter, understands paraphrase). Falls back to regex heuristics
+ * when the model is unavailable (no key, timeout, circuit open).
  */
 export async function buildAiPlanAsync(
   question: string,
   mode: "chat" | "dashboard",
   now = new Date(),
   previousUserQuestions: string[] = [],
+  timezone = "Asia/Ho_Chi_Minh",
 ): Promise<AiPlan> {
-  const plan = buildAiPlan(question, mode, now, previousUserQuestions);
-  const shouldClassify = plan.intent === "out_of_scope" || plan.intentConfidence < 0.6;
-  if (!shouldClassify) return plan;
+  const fallback = buildAiPlan(question, mode, now, previousUserQuestions, timezone);
 
-  const { classifyIntentWithLlm } = await import("@/lib/ai/intent-classifier");
-  const llmResult = await classifyIntentWithLlm(question).catch(() => null);
-  if (!llmResult || llmResult.intent === plan.intent) return plan;
+  const { planWithLlm } = await import("@/lib/ai/llm-planner");
+  const llmPlan = await planWithLlm(question, mode, now, timezone).catch(() => null);
+  if (!llmPlan) return fallback;
 
-  // Rebuild tools for the LLM-chosen intent. Greeting/out_of_scope stay
-  // deterministic (no model call); other intents use the model to answer.
-  const tools = toolsForIntent(llmResult.intent).map((name, index) => {
-    const common = { from: plan.range.from, to: plan.range.to, rangeLabel: plan.range.label };
+  const llmRange = {
+    from: llmPlan.from,
+    to: llmPlan.to,
+    label: llmPlan.rangeLabel,
+  };
+  const range = {
+    from: llmRange.from,
+    to: llmRange.to,
+    label: llmRange.label,
+  };
+  const rangeArgs = { from: range.from, to: range.to, rangeLabel: range.label, timezone };
+  const tools = toolsForIntent(llmPlan.intent).map((name, index) => {
+    const common = rangeArgs;
     const argumentsByTool: Record<AiToolName, Record<string, string | number | boolean | null>> = {
       sales_summary: common,
-      sales_timeseries: { ...common, granularity: chooseGranularity(plan.range, question) },
+      sales_timeseries: { ...common, granularity: chooseGranularity(range, question) },
       top_products: { ...common, limit: 10 },
       category_summary: { ...common, limit: 20 },
       channel_summary: common,
@@ -392,14 +435,15 @@ export async function buildAiPlanAsync(
       arguments: argumentsByTool[name],
     };
   });
-  const deterministic = llmResult.intent === "greeting" || llmResult.intent === "out_of_scope";
+
+  const deterministic = llmPlan.intent === "greeting";
   return {
-    ...plan,
-    intent: llmResult.intent,
-    intentConfidence: llmResult.confidence,
+    intent: llmPlan.intent,
+    intentConfidence: llmPlan.confidence,
     modelTier: deterministic ? "none" : "fast",
     deterministic,
-    rationale: llmResult.rationale || `LLM phân loại: ${llmResult.intent}`,
+    rationale: llmPlan.rationale || `LLM lập kế hoạch: ${llmPlan.intent}`,
+    range,
     tools,
   };
 }
@@ -409,6 +453,7 @@ export function planAnalyticsTools(
   mode: "chat" | "dashboard",
   now = new Date(),
   previousUserQuestions: string[] = [],
+  timezone = "Asia/Ho_Chi_Minh",
 ): AiToolCall[] {
-  return buildAiPlan(question, mode, now, previousUserQuestions).tools;
+  return buildAiPlan(question, mode, now, previousUserQuestions, timezone).tools;
 }

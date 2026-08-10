@@ -268,6 +268,7 @@ export interface AiChatSessionSummary {
   messageCount: number;
   lastMessageAt: string;
   createdAt: string;
+  isPinned: boolean;
 }
 
 export interface AiStoredChatMessage {
