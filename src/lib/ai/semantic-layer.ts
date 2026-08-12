@@ -141,11 +141,25 @@ function startOfDayInZone(date: Date, timezone: string) {
     hourCycle: "h23",
   }).formatToParts(date);
   const get = (type: string) => Number(parts.find((part) => part.type === type)?.value ?? 0);
+  // Some ICU builds render midnight as "24:00" even with hourCycle: "h23".
+  // Normalize it to 00:00 of the following day so the offset stays correct.
+  let year = get("year");
+  let month = get("month") - 1;
+  let day = get("day");
+  let hour = get("hour");
+  if (hour === 24) {
+    hour = 0;
+    day += 1;
+    const next = new Date(Date.UTC(year, month, day));
+    year = next.getUTCFullYear();
+    month = next.getUTCMonth();
+    day = next.getUTCDate();
+  }
   // Local wall-clock in the target zone, treated as if it were UTC, minus the
   // zone offset gives the true epoch of 00:00 local in that zone.
-  const localAsUTC = Date.UTC(get("year"), get("month") - 1, get("day"), get("hour"), get("minute"), get("second"));
+  const localAsUTC = Date.UTC(year, month, day, hour, get("minute"), get("second"));
   const offsetMs = localAsUTC - date.getTime();
-  return new Date(Date.UTC(get("year"), get("month") - 1, get("day")) - offsetMs);
+  return new Date(Date.UTC(year, month, day) - offsetMs);
 }
 
 function endOfDayInZone(date: Date, timezone: string) {
