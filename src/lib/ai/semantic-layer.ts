@@ -255,11 +255,7 @@ export function inferAiDateRange(
 
 export function isDashboardIntent(question: string): boolean {
   const q = normalizeIntentText(question);
-  return [
-    "dashboard",
-    "bang dieu khien",
-    "kpi",
-  ].some((keyword) => q.includes(keyword));
+  return /(^|\s)(dashboard|bang dieu khien|kpi)\b/.test(q);
 }
 
 function hasPhrase(question: string, phrases: string[]) {
@@ -287,15 +283,20 @@ function inferIntent(question: string, mode: "chat" | "dashboard"): {
   rationale: string;
 } {
   const q = normalizeIntentText(question);
-  const isGreeting = /^(hi|hello|chao|xin chao|hey|m la ai|m là ai|m lam duoc gi|m làm được gì|ban la ai|ban lam duoc gi|ban co the giup|cam on|thank)\b/.test(q)
-    || hasPhrase(q, ["giup minh", "giup toi", "lam duoc gi", "co the lam gi", "tinh nang gi", "ban la ai", "m giup", "m la ai"]);
+  const isPureGreeting = /^(hi|hello|chao|xin chao|hey|ban on khong|cam on|thank)\b/.test(q)
+    || hasPhrase(q, ["chao ban", "chao em", "chao anh", "chao chi", "chao ong", "chao ba", "xin chao", "hello moi nguoi", "chao moi nguoi"]);
+  const isCapability = /^(m|ban|bạn|em)\s*(la ai|là ai|lam duoc gi|làm được gì|co the giup gi|có thể giúp gì|giup duoc gi)\b/.test(q)
+    || hasPhrase(q, ["lam duoc gi", "lam duoc nhung gi", "co the lam gi", "giup duoc gi", "giup duoc nhung gi", "giup minh nhung gi", "giup toi nhung gi", "tinh nang gi", "ban la ai", "ban lam duoc gi", "m giup", "m la ai", "em la ai", "em lam duoc gi"]);
   const documentIntent = hasPhrase(q, ["tai lieu", "da upload", "quy dinh", "huong dan", "document"]);
 
-  if (mode === "dashboard" || isDashboardIntent(question)) {
+  if (mode === "dashboard" || /(^|\s)(dashboard|bang dieu khien|kpi)\b/.test(q)) {
     return { intent: "dashboard", confidence: 0.99, modelTier: "none", deterministic: true, rationale: "Yêu cầu trực quan hóa có cấu trúc." };
   }
-  if (isGreeting) {
-    return { intent: "greeting", confidence: 0.99, modelTier: "none", deterministic: true, rationale: "Lời chào không cần truy vấn dữ liệu." };
+  if (isPureGreeting) {
+    return { intent: "greeting", confidence: 0.99, modelTier: "none", deterministic: true, rationale: "Lời chào lịch sự không cần truy vấn dữ liệu." };
+  }
+  if (isCapability) {
+    return { intent: "capability", confidence: 0.97, modelTier: "quality", deterministic: false, rationale: "Người dùng hỏi về khả năng của trợ lý." };
   }
   if (documentIntent) {
     return { intent: "document_search", confidence: 0.96, modelTier: "fast", deterministic: false, rationale: "Câu hỏi yêu cầu tra cứu tài liệu." };
@@ -315,7 +316,7 @@ function inferIntent(question: string, mode: "chat" | "dashboard"): {
   if (hasPhrase(q, ["tai sao", "nguyen nhan", "de xuat", "khuyen nghi", "can lam gi", "nen lam gi", "bat thuong"])) {
     return { intent: "diagnosis", confidence: 0.9, modelTier: "quality", deterministic: false, rationale: "Yêu cầu suy luận nguyên nhân hoặc khuyến nghị." };
   }
-  if (hasToken(q, ["kho", "ton", "inventory"]) || hasPhrase(q, ["nguyen lieu", "het hang", "am kho", "sap het"])) {
+  if (hasToken(q, ["ton", "inventory"]) || hasPhrase(q, ["ton kho", "am kho", "het kho", "kho hang", "nguyen lieu", "het hang", "sap het"])) {
     return { intent: "inventory_risk", confidence: 0.94, modelTier: "none", deterministic: true, rationale: "Yêu cầu trạng thái hoặc rủi ro tồn kho." };
   }
   if (hasPhrase(q, ["so sanh", "ky truoc"]) || hasToken(q, ["tang", "giam", "compare"])) {
@@ -351,6 +352,7 @@ function inferIntent(question: string, mode: "chat" | "dashboard"): {
 function toolsForIntent(intent: AiIntent): AiToolName[] {
   const tools: Record<AiIntent, AiToolName[]> = {
     greeting: [],
+    capability: [],
     metric_lookup: ["sales_summary"],
     trend: ["sales_summary", "sales_timeseries"],
     comparison: ["sales_summary", "period_comparison"],

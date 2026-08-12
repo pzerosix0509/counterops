@@ -380,6 +380,12 @@ export function buildDeterministicAnswer(
     }
     case "greeting":
       bullets = [
+        "Chào bạn! Mình là trợ lý AI của quán bạn.",
+        "Bạn muốn tra cứu gì hôm nay? Mình có thể hỗ trợ doanh thu, lợi nhuận, món bán chạy, kênh bán, tồn kho và hơn thế nữa.",
+      ];
+      break;
+    case "capability":
+      bullets = [
         "Mình có thể tra cứu doanh thu, lợi nhuận, món bán chạy, kênh bán và tồn kho.",
         "Bạn cũng có thể yêu cầu so sánh kỳ, tìm trong tài liệu hoặc tạo dashboard.",
       ];
@@ -481,7 +487,11 @@ export function buildFallbackAnswer(
   analytics: AiAnalyticsContext,
   sources: AiSource[],
 ) {
-  const q = question.toLocaleLowerCase("vi");
+  const q = question
+    .toLocaleLowerCase("vi")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d");
   const summary = analytics.salesSummary;
   const topProduct = analytics.topProducts[0];
   const topChannel = analytics.channelSummary[0];
@@ -510,12 +520,17 @@ export function buildFallbackAnswer(
       best?.label ? `Kết quả từ ${best.label}${best.detail ? ` (${best.detail})` : ""}:` : "Kết quả tìm kiếm web:",
       best?.excerpt ? best.excerpt.slice(0, 600) : "Không lấy được nội dung chi tiết.",
     ];
-  } else if (/^(hi|hello|chào|xin chào)\b/.test(q)) {
+  } else if (/^(hi|hello|chao|xin chao)\b/.test(q) || q.includes("chao ban") || q.includes("chao em") || q.includes("xin chao")) {
     bullets = [
-      "Mình có thể phân tích doanh thu, lợi nhuận, món bán chạy, kênh bán, tồn kho và tài liệu đã upload.",
+      "Chào bạn! Mình có thể phân tích doanh thu, lợi nhuận, món bán chạy, kênh bán, tồn kho và tài liệu đã upload.",
       "Bạn cũng có thể yêu cầu tạo dashboard hoặc so sánh với kỳ trước.",
     ];
-  } else if (q.includes("tài liệu") || q.includes("upload") || q.includes("document")) {
+  } else if (q.includes("lam duoc gi") || q.includes("giup duoc gi") || q.includes("lam gi") || q.includes("la ai") || q.includes("tinh nang")) {
+    bullets = [
+      "Mình có thể phân tích doanh thu, lợi nhuận, món bán chạy, kênh bán, tồn kho và tài liệu đã upload.",
+      "Bạn cũng có thể yêu cầu tạo dashboard, so sánh với kỳ trước, hoặc hỏi các câu về dự báo.",
+    ];
+  } else if (q.includes("tai lieu") || q.includes("upload") || q.includes("document")) {
     bullets = documentSources.length > 0
       ? documentSources.slice(0, 4).map((source) => `${source.label}: ${source.excerpt ?? "Có dữ liệu liên quan."}`)
       : ["Chưa tìm thấy tài liệu phù hợp với câu hỏi."];

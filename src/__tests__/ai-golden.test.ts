@@ -25,6 +25,18 @@ describe("AI analytics golden questions", () => {
   });
 });
 
+describe("AI intent edge cases", () => {
+  it("does not treat 'kho' as inventory keyword when it is part of another word", () => {
+    const plan = buildAiPlan("Cách tính lợi nhuận khó không?", "chat", new Date("2026-07-01T12:00:00+07:00"));
+    expect(plan.intent).not.toBe("inventory_risk");
+  });
+
+  it("keeps inventory intent for 'tồn kho'", () => {
+    const plan = buildAiPlan("Nguyên liệu nào đang tồn kho thấp?", "chat", new Date("2026-07-01T12:00:00+07:00"));
+    expect(plan.intent).toBe("inventory_risk");
+  });
+});
+
 describe("AI chart keyword normalization", () => {
   const analytics: AiAnalyticsContext = {
     range: { from: "2026-06-25T00:00:00.000Z", to: "2026-07-01T23:59:59.999Z", label: "7 ngày qua" },
