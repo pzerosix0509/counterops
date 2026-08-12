@@ -2,6 +2,17 @@ import "server-only";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { DateRange } from "@/lib/date/ranges";
 import { calculateProfitTotals } from "@/lib/calculations/orders";
+import {
+  buildRevenueTrend,
+  buildMenuBreakdown,
+  buildChannelBreakdown,
+  buildTopProducts,
+  computeDashboardCore,
+  type DashboardOrderRow,
+  type DashboardItemRow,
+  type CancelledItemRow,
+  type ProductMeta,
+} from "@/lib/calculations/dashboard";
 
 export interface DashboardSummary {
   revenueToday: number;
@@ -76,9 +87,9 @@ export async function getDashboardSummary(opts: {
     { count: todayCount },
     { count: tableCount },
     { count: occupied },
-    { data: rangeOrders },
+    { data: rangeOrdersRaw },
     { data: rangeItems },
-    { data: cancelledItems },
+    { data: cancelledItemsRaw },
     { data: cancelledOrders },
   ] = await Promise.all([
     supabase
@@ -132,54 +143,30 @@ export async function getDashboardSummary(opts: {
       .lte("opened_at", range.to.toISOString()),
   ]);
 
-  const revenueToday = (todayPaid ?? []).reduce((s, o) => s + (o.total_amount || 0), 0);
-  const ordersToday = todayCount ?? 0;
-  const totalTables = tableCount ?? 0;
-  const occupiedTables = occupied ?? 0;
-  const selectedOrders = (rangeOrders ?? []).length;
-  const selectedNetRevenue = (rangeOrders ?? [])
-    .filter((o) => o.status === "paid")
-    .reduce((s, o) => s + (o.total_amount || 0), 0);
-  const paidOrders = (rangeOrders ?? []).filter((o) => o.status === "paid").length;
+  const rangeOrders = (rangeOrdersRaw ?? []) as unknown as DashboardOrderRow[];
+  const cancelledItems = (cancelledItemsRaw ?? []) as unknown as CancelledItemRow[];
+  const allItems = ((rangeItems ?? []).filter((it: any) => it.orders?.status === "paid") as unknown) as DashboardItemRow[];
 
-  const allItems = (rangeItems ?? []).filter((it: any) => it.orders?.status === "paid");
-  const totalItemRevenue = allItems.reduce((s, it) => s + it.unit_price_snapshot * it.quantity, 0);
   const profitTotals = calculateProfitTotals(
-    allItems.map((it: any) => ({ costPrice: Number(it.cost_price_snapshot ?? 0), quantity: Number(it.quantity ?? 0) })),
-    selectedNetRevenue
+    allItems.map((it) => ({ costPrice: Number(it.cost_price_snapshot ?? 0), quantity: Number(it.quantity ?? 0) })),
+    rangeOrders.filter((o) => o.status === "paid").reduce((s, o) => s + (o.total_amount || 0), 0)
   );
+  const totalItemRevenue = allItems.reduce((s, it) => s + it.unit_price_snapshot * it.quantity, 0);
   const totalItemQty = allItems.reduce((s, it) => s + Number(it.quantity), 0);
   const averageItemValue = totalItemQty > 0 ? Math.round(totalItemRevenue / totalItemQty) : 0;
-  // foodItems aggregated for average calculations (reserved for future menu_type breakdown)
 
-  const foodAverage = averageItemValue;
+  const core = computeDashboardCore({
+    todayPaid: todayPaid ?? [],
+    todayCount,
+    tableCount,
+    occupied,
+    rangeOrders,
+    cancelledItems,
+    cancelledOrders: cancelledOrders ?? [],
+    averageItemValue,
+  });
 
-  // menu type averages require product lookup; keep them tied to snapshot for MVP
-  const drinkAverage = averageItemValue;
-
-  // Cancellations
-  const cancelledItemsCount = (cancelledItems ?? []).length;
-  const cancelledOrdersCount = (cancelledOrders ?? []).length;
-  const cancelledAfterKitchen = (cancelledItems ?? []).filter((it: any) => it.cancellation_stage === "after_kitchen").length;
-  const cancelledAfterTempBill = (cancelledItems ?? []).filter((it: any) => it.cancellation_stage === "after_temp_bill").length;
-  const cancelledOutOfStock = (cancelledItems ?? []).filter((it: any) => it.cancellation_stage === "out_of_stock").length;
-
-  // Revenue trend
-  const trendMap = new Map<string, { revenue: number; orders: number }>();
-  for (const o of rangeOrders ?? []) {
-    if (o.status !== "paid") continue;
-    const d = new Date(o.opened_at);
-    const key = granularity === "hour"
-      ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:00`
-      : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-    const cur = trendMap.get(key) ?? { revenue: 0, orders: 0 };
-    cur.revenue += o.total_amount || 0;
-    cur.orders += 1;
-    trendMap.set(key, cur);
-  }
-  const revenueTrend = Array.from(trendMap.entries())
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([bucket, v]) => ({ bucket, revenue: v.revenue, orders: v.orders }));
+  const revenueTrend = buildRevenueTrend(rangeOrders, granularity);
 
   // Menu breakdown
   const { data: categories } = await supabase
@@ -206,85 +193,31 @@ export async function getDashboardSummary(opts: {
       }, 0)
   );
   const selectedNetProfit = profitTotals.grossProfit - selectedChannelFees;
-  const menuMap = new Map<string, { revenue: number; orders: number }>();
-  for (const it of allItems) {
-    const meta = it.product_id ? productMeta.get(it.product_id) : null;
-    const categoryId = meta?.category_id ?? null;
-    const categoryName = categoryId ? catMap.get(categoryId) ?? "Khác" : "Chưa phân loại";
-    const cur = menuMap.get(categoryName) ?? { revenue: 0, orders: 0 };
-    cur.revenue += it.unit_price_snapshot * it.quantity;
-    cur.orders += 1;
-    menuMap.set(categoryName, cur);
-  }
-  const menuBreakdown = Array.from(menuMap.entries())
-    .map(([categoryName, v]) => ({ categoryId: null, categoryName, revenue: v.revenue, orders: v.orders }))
-    .sort((a, b) => b.revenue - a.revenue);
-
-  // Channel breakdown uses the actual order fulfillment type. The sales channel
-  // dropdown can drift from dine-in/takeaway, but order_type is the source of truth
-  // for "Tại quán", "Mang đi", "Giao hàng", and "Online" reporting.
-  const orderTypeLabel: Record<string, string> = {
-    dine_in: "Tại quán",
-    takeaway: "Mang đi",
-    delivery: "Giao hàng",
-    online: "Online",
-  };
-  const chMap = new Map<string, { revenue: number; orders: number }>();
-  for (const o of rangeOrders ?? []) {
-    if (o.status !== "paid") continue;
-    const name = orderTypeLabel[o.order_type as string] ?? "Khác";
-    const cur = chMap.get(name) ?? { revenue: 0, orders: 0 };
-    cur.revenue += o.total_amount || 0;
-    cur.orders += 1;
-    chMap.set(name, cur);
-  }
-  const channelBreakdown = Array.from(chMap.entries())
-    .map(([channelName, v]) => ({ channelId: null, channelName, revenue: v.revenue, orders: v.orders }))
-    .sort((a, b) => b.revenue - a.revenue);
-
-  // Top products
-  const productMap = new Map<string, { quantity: number; revenue: number; costOfGoods: number; name: string }>();
-  for (const it of allItems) {
-    const key = it.product_id ?? it.product_name_snapshot;
-    const cur = productMap.get(key) ?? { quantity: 0, revenue: 0, costOfGoods: 0, name: it.product_name_snapshot };
-    cur.quantity += Number(it.quantity);
-    cur.revenue += it.unit_price_snapshot * it.quantity;
-    cur.costOfGoods += Number(it.cost_price_snapshot ?? 0) * Number(it.quantity);
-    productMap.set(key, cur);
-  }
-  const topProducts = Array.from(productMap.values())
-    .map((p, idx) => ({
-      productId: idx.toString(),
-      name: p.name,
-      quantity: p.quantity,
-      revenue: p.revenue,
-      costOfGoods: Math.round(p.costOfGoods),
-      grossProfit: p.revenue - Math.round(p.costOfGoods),
-    }))
-    .sort((a, b) => b.revenue - a.revenue)
-    .slice(0, 10);
+  const menuBreakdown = buildMenuBreakdown(allItems, productMeta as Map<string, ProductMeta>, catMap);
+  const channelBreakdown = buildChannelBreakdown(rangeOrders);
+  const topProducts = buildTopProducts(allItems);
 
   return {
-    revenueToday,
-    ordersToday,
-    occupiedTables,
-    totalTables,
-    selectedNetRevenue,
+    revenueToday: core.revenueToday,
+    ordersToday: core.ordersToday,
+    occupiedTables: core.occupiedTables,
+    totalTables: core.totalTables,
+    selectedNetRevenue: core.selectedNetRevenue,
     selectedCostOfGoods: profitTotals.costOfGoods,
     selectedGrossProfit: profitTotals.grossProfit,
     selectedGrossMarginPercent: profitTotals.grossMarginPercent,
     selectedChannelFees,
     selectedNetProfit,
-    selectedOrders,
-    paidOrders,
-    averageItemValue,
-    foodAverage,
-    drinkAverage,
-    cancelledItems: cancelledItemsCount,
-    cancelledOrders: cancelledOrdersCount,
-    cancelledAfterKitchen,
-    cancelledAfterTempBill,
-    cancelledOutOfStock,
+    selectedOrders: core.selectedOrders,
+    paidOrders: core.paidOrders,
+    averageItemValue: core.averageItemValue,
+    foodAverage: core.foodAverage,
+    drinkAverage: core.drinkAverage,
+    cancelledItems: core.cancelledItems,
+    cancelledOrders: core.cancelledOrders,
+    cancelledAfterKitchen: core.cancelledAfterKitchen,
+    cancelledAfterTempBill: core.cancelledAfterTempBill,
+    cancelledOutOfStock: core.cancelledOutOfStock,
     revenueTrend,
     menuBreakdown,
     channelBreakdown,

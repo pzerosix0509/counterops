@@ -1,27 +1,14 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { z } from "zod";
 import { canViewReports, requireActiveContext, requireRole } from "@/lib/auth/permissions";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { chunkText, normalizeDocumentText } from "@/lib/ai/chunk";
 import { embedTexts, vectorToSql } from "@/lib/ai/embeddings";
 import { imageToText } from "@/lib/ai/image-to-text";
+import { validateDocumentContentLength } from "@/lib/ai/upload";
+import { uploadDocumentSchema } from "@/lib/validation/upload";
 import { actionFail, actionOk, type ActionResult } from "@/lib/utils/action-result";
-
-const uploadDocumentSchema = z.object({
-  branchId: z.string().uuid().nullable().optional(),
-  title: z.string().trim().min(1).max(160),
-  fileName: z.string().trim().min(1).max(240),
-  mimeType: z.string().trim().max(120).nullable().optional(),
-  content: z.string().min(1).optional(),
-  binary: z.object({
-    data: z.string().min(1).max(20_000_000), // base64
-    mime: z.string().trim().min(1).max(120),
-  }).optional(),
-}).refine((value) => Boolean(value.content || value.binary), {
-  message: "Cần content hoặc binary.",
-});
 
 async function extractDocumentText(input: {
   content?: string;
@@ -81,11 +68,9 @@ export async function uploadAiDocument(
   }
 
   const content = normalizeDocumentText(extracted.content);
-  const isImage = extracted.mimeType?.startsWith("image/") ?? false;
-  const minLength = isImage ? 5 : 20;
+  const tooShort = validateDocumentContentLength(content, extracted.mimeType);
+  if (tooShort) return actionFail("VALIDATION_ERROR", tooShort);
   if (content.length === 0) return actionFail("VALIDATION_ERROR", "Không trích được văn bản từ tệp. Vui lòng dùng tệp text, PDF hoặc ảnh rõ nét.");
-  if (content.length < minLength) return actionFail("VALIDATION_ERROR", `Tài liệu quá ngắn để tạo ngữ cảnh AI (tối thiểu ${minLength} ký tự).`);
-  if (content.length > 500_000) return actionFail("VALIDATION_ERROR", "Tài liệu quá lớn. Vui lòng chia nhỏ trước khi upload.");
 
   const chunks = chunkText(content);
   if (chunks.length === 0) return actionFail("VALIDATION_ERROR", "Không tạo được đoạn dữ liệu từ tài liệu.");
