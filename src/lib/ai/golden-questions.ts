@@ -367,6 +367,25 @@ export const AI_GOLDEN_QUESTIONS: AiGoldenQuestion[] = [
     expectedDeterministic: false,
     expectedModelTier: "fast",
   },
+  // Forecast cases
+  {
+    question: "Dự đoán doanh thu tháng tới",
+    mode: "chat",
+    expectedIntent: "forecast",
+    expectedTools: ["sales_summary", "sales_timeseries", "forecast_revenue"],
+    expectedRangeLabel: "30 ngày qua",
+    expectedDeterministic: false,
+    expectedModelTier: "fast",
+  },
+  {
+    question: "Dự báo doanh thu tuần tới",
+    mode: "chat",
+    expectedIntent: "forecast",
+    expectedTools: ["sales_summary", "sales_timeseries", "forecast_revenue"],
+    expectedRangeLabel: "14 ngày qua",
+    expectedDeterministic: false,
+    expectedModelTier: "fast",
+  },
   // Web search cases
   {
     question: "Bitcoin hôm nay bao nhiêu?",

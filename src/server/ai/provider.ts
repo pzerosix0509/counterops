@@ -39,6 +39,7 @@ interface ProviderPayload {
   qualityIssues: AiDataQualityIssue[];
   anomalies: AiAnomaly[];
   imageText?: string;
+  timezone: string;
 }
 
 type ProviderName = "nvidia" | "minimax" | "openai";
@@ -206,6 +207,7 @@ function buildMessages(payload: ProviderPayload) {
         "Trả đúng một JSON object gồm answer, bullets và dashboard; không thêm markdown fence.",
         dashboardInstruction,
         `Định nghĩa metric chuẩn: ${JSON.stringify(SEMANTIC_METRICS)}`,
+        `Múi giờ quán: ${payload.timezone}. Quy đổi mọi mốc thời gian sang múi giờ này khi trả lời.`,
       ].join("\n"),
     },
     {

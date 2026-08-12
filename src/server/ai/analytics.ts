@@ -260,8 +260,12 @@ export function buildDashboardSpec(analytics: AiAnalyticsContext): AiDashboardSp
 }
 
 export function buildChartForQuestion(question: string, analytics: AiAnalyticsContext): AiChartSpec | null {
-  const q = question.toLocaleLowerCase("vi");
-  if ((q.includes("du bao") || q.includes("du doan") || q.includes("forecast") || q.includes("tuong lai") || q.includes("tháng tới") || q.includes("thang toi")) && analytics.forecastRevenue && !analytics.forecastRevenue.insufficient_data) {
+  const q = question
+    .toLocaleLowerCase("vi")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d");
+  if ((q.includes("du bao") || q.includes("du doan") || q.includes("forecast") || q.includes("tuong lai") || q.includes("thang toi")) && analytics.forecastRevenue && !analytics.forecastRevenue.insufficient_data) {
     return {
       type: "area",
       title: `Dự báo doanh thu ${analytics.forecastRevenue.horizon_days} ngày tới`,
@@ -275,7 +279,7 @@ export function buildChartForQuestion(question: string, analytics: AiAnalyticsCo
       })),
     };
   }
-  if ((q.includes("theo ngày") || q.includes("xu hướng") || q.includes("biểu đồ")) && analytics.salesTimeseries.length > 0) {
+  if ((q.includes("theo ngay") || q.includes("xu huong") || q.includes("bieu do")) && analytics.salesTimeseries.length > 0) {
     return {
       type: "composed",
       title: `Doanh thu và lợi nhuận - ${analytics.range.label}`,
@@ -289,7 +293,7 @@ export function buildChartForQuestion(question: string, analytics: AiAnalyticsCo
       })),
     };
   }
-  if ((q.includes("nhóm") || q.includes("danh mục")) && analytics.categorySummary.length > 0) {
+  if ((q.includes("nhom") || q.includes("danh muc")) && analytics.categorySummary.length > 0) {
     return {
       type: "donut",
       title: `Doanh thu theo nhóm món - ${analytics.range.label}`,
@@ -301,7 +305,7 @@ export function buildChartForQuestion(question: string, analytics: AiAnalyticsCo
       })),
     };
   }
-  if ((q.includes("kênh") || q.includes("channel")) && analytics.channelSummary.length > 0) {
+  if ((q.includes("kenh") || q.includes("channel")) && analytics.channelSummary.length > 0) {
     return {
       type: "bar",
       title: `Doanh thu theo kênh bán - ${analytics.range.label}`,
@@ -314,7 +318,7 @@ export function buildChartForQuestion(question: string, analytics: AiAnalyticsCo
       })),
     };
   }
-  if ((q.includes("món") || q.includes("top")) && analytics.topProducts.length > 0) {
+  if ((q.includes("mon") || q.includes("top")) && analytics.topProducts.length > 0) {
     return {
       type: "composed",
       title: `Top món - ${analytics.range.label}`,
