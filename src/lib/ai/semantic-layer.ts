@@ -138,13 +138,28 @@ function startOfDayInZone(date: Date, timezone: string) {
     minute: "2-digit",
     second: "2-digit",
     hour12: false,
+    hourCycle: "h23",
   }).formatToParts(date);
   const get = (type: string) => Number(parts.find((part) => part.type === type)?.value ?? 0);
+  // Some ICU builds render midnight as "24:00" even with hourCycle: "h23".
+  // Normalize it to 00:00 of the following day so the offset stays correct.
+  let year = get("year");
+  let month = get("month") - 1;
+  let day = get("day");
+  let hour = get("hour");
+  if (hour === 24) {
+    hour = 0;
+    day += 1;
+    const next = new Date(Date.UTC(year, month, day));
+    year = next.getUTCFullYear();
+    month = next.getUTCMonth();
+    day = next.getUTCDate();
+  }
   // Local wall-clock in the target zone, treated as if it were UTC, minus the
   // zone offset gives the true epoch of 00:00 local in that zone.
-  const localAsUTC = Date.UTC(get("year"), get("month") - 1, get("day"), get("hour"), get("minute"), get("second"));
+  const localAsUTC = Date.UTC(year, month, day, hour, get("minute"), get("second"));
   const offsetMs = localAsUTC - date.getTime();
-  return new Date(Date.UTC(get("year"), get("month") - 1, get("day")) - offsetMs);
+  return new Date(Date.UTC(year, month, day) - offsetMs);
 }
 
 function endOfDayInZone(date: Date, timezone: string) {
@@ -176,6 +191,21 @@ export function inferAiDateRange(
     const from = new Date(Date.UTC(year, month - 1, 1));
     const to = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999));
     return { from: from.toISOString(), to: to.toISOString(), label: "Tháng trước" };
+  }
+
+  if (q.includes("thang toi") || q.includes("next month")) {
+    // Future month: we have no future data, so use the last 30 days of history
+    // as the training window for forecasting.
+    const from = startOfDayInZone(now, timezone);
+    from.setDate(from.getDate() - 29);
+    return { from: from.toISOString(), to: todayEnd.toISOString(), label: "30 ngày qua" };
+  }
+
+  if (q.includes("tuan toi") || q.includes("next week")) {
+    // Future week: same idea, use the last 14 days of history (>= MIN_DAYS_REQUIRED).
+    const from = startOfDayInZone(now, timezone);
+    from.setDate(from.getDate() - 13);
+    return { from: from.toISOString(), to: todayEnd.toISOString(), label: "14 ngày qua" };
   }
 
   if (q.includes("thang nay") || q.includes("this month")) {
@@ -404,16 +434,17 @@ export async function buildAiPlanAsync(
   const llmPlan = await planWithLlm(question, mode, now, timezone).catch(() => null);
   if (!llmPlan) return fallback;
 
-  const llmRange = {
-    from: llmPlan.from,
-    to: llmPlan.to,
-    label: llmPlan.rangeLabel,
-  };
-  const range = {
-    from: llmRange.from,
-    to: llmRange.to,
-    label: llmRange.label,
-  };
+  const deterministic = llmPlan.intent === "greeting";
+  // Forecast needs historical data as training input. The LLM may return a
+  // future range for "tháng tới" — that would query an empty future window.
+  // Always use the regex-derived range (past window) for forecast.
+  const range = llmPlan.intent === "forecast"
+    ? fallback.range
+    : {
+      from: llmPlan.from,
+      to: llmPlan.to,
+      label: llmPlan.rangeLabel,
+    };
   const rangeArgs = { from: range.from, to: range.to, rangeLabel: range.label, timezone };
   const tools = toolsForIntent(llmPlan.intent).map((name, index) => {
     const common = rangeArgs;
@@ -436,7 +467,6 @@ export async function buildAiPlanAsync(
     };
   });
 
-  const deterministic = llmPlan.intent === "greeting";
   return {
     intent: llmPlan.intent,
     intentConfidence: llmPlan.confidence,
