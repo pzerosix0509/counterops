@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { Plus, Search, History, FileUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -238,19 +239,17 @@ export function InventoryManager({
                       </div>
                       <div className="space-y-1.5">
                         <Label htmlFor="costPrice">Giá vốn</Label>
-                        <Input id="costPrice" name="costPrice" type="number" min="0" step="100" defaultValue={0} required />
+                        <NumberInput id="costPrice" name="costPrice" defaultValue={0} required />
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1.5">
                         <Label htmlFor="initialQuantity">Tồn kho ban đầu</Label>
-                        <Input
+                        <NumberInput
                           id="initialQuantity"
                           name="initialQuantity"
-                          type="number"
-                          min="0"
-                          step="0.1"
                           defaultValue={0}
+                          decimals={1}
                           aria-describedby="initialQuantityHint"
                         />
                         <p id="initialQuantityHint" className="text-xs text-muted-foreground">
@@ -259,13 +258,11 @@ export function InventoryManager({
                       </div>
                       <div className="space-y-1.5">
                         <Label htmlFor="lowStockThreshold">Ngưỡng cảnh báo sắp hết</Label>
-                        <Input
+                        <NumberInput
                           id="lowStockThreshold"
                           name="lowStockThreshold"
-                          type="number"
-                          min="0"
-                          step="0.1"
                           defaultValue={defaultLowStockThreshold}
+                          decimals={1}
                           aria-describedby="lowStockThresholdHint"
                         />
                         <p id="lowStockThresholdHint" className="text-xs text-muted-foreground">
@@ -428,7 +425,7 @@ export function InventoryManager({
               </div>
               <div className="space-y-1">
                 <Label>Số lượng ({activeMovementItem?.unit ?? ""})</Label>
-                <Input name="quantity" type="number" step="0.1" min="0" placeholder="Số lượng" defaultValue={1} required />
+                <NumberInput name="quantity" defaultValue={1} decimals={1} placeholder="Số lượng" required />
               </div>
               <Input name="note" placeholder="Ghi chú" className="sm:col-span-2" />
               <p className="text-xs text-muted-foreground sm:col-span-2">
