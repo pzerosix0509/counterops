@@ -138,6 +138,7 @@ function startOfDayInZone(date: Date, timezone: string) {
     minute: "2-digit",
     second: "2-digit",
     hour12: false,
+    hourCycle: "h23",
   }).formatToParts(date);
   const get = (type: string) => Number(parts.find((part) => part.type === type)?.value ?? 0);
   // Local wall-clock in the target zone, treated as if it were UTC, minus the
