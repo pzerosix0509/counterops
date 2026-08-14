@@ -19,7 +19,6 @@ function scoreMetric(
   const idx = unique.indexOf(value);
 
   if (m < 5) {
-    if (m === 1) return 1;
     const rank = higherIsBetter ? idx + 1 : m - idx;
     return clamp(Math.round((rank / m) * 5), 1, 5);
   }

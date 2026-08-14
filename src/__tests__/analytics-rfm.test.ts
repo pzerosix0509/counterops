@@ -19,12 +19,18 @@ describe("scoreRfm", () => {
     expect(champ?.segment).toBe("Champions");
   });
 
-  it("maps Lost when R is low", () => {
-    const scored = scoreRfm(
-      [{ customerId: "x", recencyDays: 120, frequency: 1, monetary: 10_000 }],
-      asOf,
-      DEFAULT_RFM_RULES,
-    );
-    expect(scored[0].segment).toBe("Lost");
+  it("maps Lost when R and F are low relative to cohort", () => {
+    const customers = [
+      { customerId: "stale", recencyDays: 120, frequency: 1, monetary: 10_000 },
+      { customerId: "c1", recencyDays: 90, frequency: 2, monetary: 50_000 },
+      { customerId: "c2", recencyDays: 60, frequency: 3, monetary: 100_000 },
+      { customerId: "c3", recencyDays: 30, frequency: 4, monetary: 200_000 },
+      { customerId: "c4", recencyDays: 10, frequency: 5, monetary: 500_000 },
+    ];
+    const scored = scoreRfm(customers, asOf, DEFAULT_RFM_RULES);
+    const lost = scored.find((row) => row.customerId === "stale");
+    expect(lost?.rScore).toBe(1);
+    expect(lost?.fScore).toBe(1);
+    expect(lost?.segment).toBe("Lost");
   });
 });
