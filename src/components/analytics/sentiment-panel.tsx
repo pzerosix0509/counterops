@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { notifyError, notifySuccess } from "@/hooks/use-notify";
 import { ratingIsNotSentiment } from "@/lib/analytics/sentiment";
 import { createCustomerFeedback } from "@/server/actions/feedback";
-import type { FeedbackListRow } from "@/types/analytics";
+import type { FeedbackListRow, SentimentSummary } from "@/types/analytics";
 
 const SENTIMENT_LABELS = {
   positive: "Tích cực",
@@ -52,15 +52,17 @@ function mismatchWarning(row: FeedbackListRow) {
   return "Điểm và cảm xúc không khớp";
 }
 
-export function SentimentPanel({ rows }: { rows: FeedbackListRow[] }) {
+export function SentimentPanel({
+  rows,
+  summary,
+}: {
+  rows: FeedbackListRow[];
+  summary: SentimentSummary;
+}) {
   const [isPending, startTransition] = useTransition();
   const [rating, setRating] = useState(5);
   const [feedbackText, setFeedbackText] = useState("");
   const [orderId, setOrderId] = useState("");
-  const counts = { positive: 0, neutral: 0, negative: 0 };
-  for (const row of rows) {
-    if (isSentimentLabel(row.sentimentLabel)) counts[row.sentimentLabel] += 1;
-  }
 
   function onSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -96,8 +98,8 @@ export function SentimentPanel({ rows }: { rows: FeedbackListRow[] }) {
               <Badge variant={variant}>{key}</Badge>
             </CardHeader>
             <CardContent>
-              <p className="text-2xl font-semibold">{counts[key].toLocaleString("vi-VN")}</p>
-              <p className="text-xs text-muted-foreground">phản hồi đã chấm</p>
+              <p className="text-2xl font-semibold">{summary[key].toLocaleString("vi-VN")}</p>
+              <p className="text-xs text-muted-foreground">phản hồi đã chấm (90 ngày)</p>
             </CardContent>
           </Card>
         ))}

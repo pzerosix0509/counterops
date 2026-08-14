@@ -55,3 +55,9 @@ export interface FeedbackListRow {
   sentimentScore: number | null;
   createdAt: string;
 }
+
+export interface SentimentSummary {
+  positive: number;
+  neutral: number;
+  negative: number;
+}
