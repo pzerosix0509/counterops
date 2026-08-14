@@ -9,6 +9,7 @@ import {
   DEMAND_MIN_OBSERVED_DAYS,
   explodeBom,
   fillDailySeries,
+  pickLatestRecipeVersion,
   purchaseHint,
   vnYmd,
   type RecipeBomLine,
@@ -335,7 +336,7 @@ export async function computeAndPersistDemandForecasts(
     }),
     supabase
       .from("recipes")
-      .select("product_id, recipe_items(inventory_item_id, quantity, unit)")
+      .select("product_id, version, recipe_items(inventory_item_id, quantity, unit)")
       .eq("organization_id", organizationId)
       .eq("is_active", true),
   ]);
@@ -343,7 +344,7 @@ export async function computeAndPersistDemandForecasts(
   if (recipeError) throw new Error(recipeError.message);
 
   const bom: RecipeBomLine[] = [];
-  for (const recipe of recipes ?? []) {
+  for (const recipe of pickLatestRecipeVersion(recipes ?? [])) {
     for (const item of (recipe.recipe_items ?? []) as Array<{
       inventory_item_id: string;
       quantity: number;
@@ -436,16 +437,19 @@ export async function computeAndPersistDemandForecasts(
     }
   }
 
-  const { error: deleteError } = await supabase
-    .from("demand_forecasts")
-    .delete()
-    .eq("organization_id", organizationId)
-    .eq("branch_id", branchId);
-  if (deleteError) throw new Error(deleteError.message);
-
   if (inserts.length > 0) {
-    const { error: insertError } = await supabase.from("demand_forecasts").insert(inserts);
-    if (insertError) throw new Error(insertError.message);
+    const { error: upsertError } = await supabase.from("demand_forecasts").upsert(inserts, {
+      onConflict: "branch_id,target_date,product_id,inventory_item_id",
+    });
+    if (upsertError) throw new Error(upsertError.message);
+
+    const { error: pruneError } = await supabase
+      .from("demand_forecasts")
+      .delete()
+      .eq("organization_id", organizationId)
+      .eq("branch_id", branchId)
+      .lt("computed_at", computedAt);
+    if (pruneError) throw new Error(pruneError.message);
   }
 
   return {

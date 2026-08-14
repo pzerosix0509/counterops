@@ -46,6 +46,7 @@ function formatScore(value: number | null) {
 }
 
 export function RefreshAnalyticsButton({ canRefresh }: { canRefresh: boolean }) {
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
   if (!canRefresh) return null;
@@ -58,6 +59,7 @@ export function RefreshAnalyticsButton({ canRefresh }: { canRefresh: boolean }) 
         return;
       }
       notifySuccess("Đã cập nhật dữ liệu phân tích", `${res.data.updated.toLocaleString("vi-VN")} khách`);
+      router.refresh();
     });
   }
 

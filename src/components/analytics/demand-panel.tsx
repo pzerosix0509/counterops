@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 import { Loader2, RefreshCw } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,6 +23,7 @@ export function DemandPanel({
   view: DemandForecastView;
   canRefresh: boolean;
 }) {
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
   function onRefresh() {
@@ -35,6 +37,7 @@ export function DemandPanel({
         "Đã cập nhật dự báo nhu cầu",
         `${res.data.dishes.toLocaleString("vi-VN")} món, ${res.data.ingredients.toLocaleString("vi-VN")} nguyên liệu`,
       );
+      router.refresh();
     });
   }
 

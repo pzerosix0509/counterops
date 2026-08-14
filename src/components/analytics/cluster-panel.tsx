@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 import { Loader2, RefreshCw } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -40,6 +41,7 @@ export function ClusterPanel({
   canRefresh: boolean;
   fittedAt: string | null;
 }) {
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
   function onFit() {
@@ -50,6 +52,7 @@ export function ClusterPanel({
         return;
       }
       notifySuccess("Đã phân cụm khách", `${res.data.k} nhóm, ${res.data.updated.toLocaleString("vi-VN")} khách`);
+      router.refresh();
     });
   }
 

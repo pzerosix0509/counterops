@@ -136,11 +136,12 @@ function ruleSpecificity(
   organizationId: string,
   branchId?: string | null,
 ): number {
+  if (row.branch_id != null && row.branch_id !== branchId) return 0;
   if (row.organization_id === organizationId && branchId && row.branch_id === branchId) {
     return 3;
   }
-  if (row.organization_id === organizationId) return 2;
-  if (row.organization_id == null) return 1;
+  if (row.organization_id === organizationId && row.branch_id == null) return 2;
+  if (row.organization_id == null && row.branch_id == null) return 1;
   return 0;
 }
 
