@@ -14,7 +14,7 @@ function scoreMetric(
   value: number,
   higherIsBetter: boolean,
 ): number {
-  const unique = [...new Set(values)].sort((a, b) => a - b);
+  const unique = Array.from(new Set(values)).sort((a, b) => a - b);
   const m = unique.length;
   const idx = unique.indexOf(value);
 
@@ -158,7 +158,7 @@ export function pickRfmRules(
       bySegment.set(row.segment, row);
     }
   }
-  return [...bySegment.values()].map((row) => ({
+  return Array.from(bySegment.values()).map((row) => ({
     segment: row.segment as RfmSegment,
     rMin: row.r_min,
     rMax: row.r_max,
