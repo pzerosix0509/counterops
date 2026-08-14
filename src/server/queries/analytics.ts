@@ -36,7 +36,7 @@ export async function getRfmSummary(
     groups.set(key, group);
   }
 
-  return [...groups.entries()].map(([key, group]) => ({
+  return Array.from(groups.entries()).map(([key, group]) => ({
     segment: asSegment(key || null),
     customerCount: group.count,
     avgMonetary: group.count === 0 ? 0 : group.monetary / group.count,

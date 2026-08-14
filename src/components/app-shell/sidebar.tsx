@@ -30,7 +30,8 @@ const ITEMS: NavItem[] = [
   { href: "/tables", label: "Bàn / phòng", icon: Table2, allowed: ["owner", "admin", "manager", "cashier", "reception"] },
   { href: "/menu", label: "Thực đơn", icon: UtensilsCrossed, allowed: ["owner", "admin", "manager", "cashier", "reception", "kitchen"] },
   { href: "/inventory", label: "Kho hàng", icon: Boxes, allowed: ["owner", "admin", "manager", "cashier"] },
-  { href: "/reports", label: "Báo cáo", icon: FileBarChart, allowed: ["owner", "admin", "manager", "cashier"] },
+  { href: "/analytics", label: "Phân tích", icon: Sparkles, allowed: ["owner", "admin", "manager", "cashier"] },
+  { href: "/reports/end-of-day", label: "Báo cáo", icon: FileBarChart, allowed: ["owner", "admin", "manager", "cashier"] },
   { href: "/ai", label: "AI trợ lý", icon: Bot, allowed: ["owner", "admin", "manager", "cashier"] },
   { href: "/settings", label: "Cài đặt", icon: Settings, allowed: ["owner", "admin", "manager"] },
 ];
