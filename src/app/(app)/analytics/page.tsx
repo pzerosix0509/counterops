@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { canRefreshAnalytics, canViewReports, getActiveMembership, requireActiveContext } from "@/lib/auth/permissions";
-import { getRfmCustomers, getRfmSummary } from "@/server/queries/analytics";
+import { getRecentFeedback, getRfmCustomers, getRfmSummary } from "@/server/queries/analytics";
 import { RefreshAnalyticsButton, RfmPanel } from "@/components/analytics/rfm-panel";
+import { SentimentPanel } from "@/components/analytics/sentiment-panel";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { RfmSegment } from "@/types/analytics";
 
@@ -50,13 +51,15 @@ export default async function AnalyticsPage({ searchParams }: PageProps) {
   const segment = parseSegment(searchParams.segment);
   const canRefresh = canRefreshAnalytics.includes(active.role);
 
-  const [summary, customers] =
-    tab === "rfm"
-      ? await Promise.all([
-          getRfmSummary(ctx.organizationId, ctx.branchId),
-          getRfmCustomers(ctx.organizationId, ctx.branchId, segment),
-        ])
-      : [[], []];
+  const summary = tab === "rfm"
+    ? await getRfmSummary(ctx.organizationId, ctx.branchId)
+    : [];
+  const customers = tab === "rfm"
+    ? await getRfmCustomers(ctx.organizationId, ctx.branchId, segment)
+    : [];
+  const feedback = tab === "sentiment"
+    ? await getRecentFeedback(ctx.organizationId, ctx.branchId)
+    : [];
 
   return (
     <div className="space-y-4">
@@ -81,9 +84,7 @@ export default async function AnalyticsPage({ searchParams }: PageProps) {
       {tab === "rfm" ? (
         <RfmPanel summary={summary} customers={customers} segment={segment} />
       ) : tab === "sentiment" ? (
-        <div className="rounded-md border border-dashed bg-card p-8 text-center text-sm text-muted-foreground">
-          Phân tích cảm xúc sẽ có trong bản cập nhật tiếp theo.
-        </div>
+        <SentimentPanel rows={feedback} />
       ) : tab === "clusters" ? (
         <div className="rounded-md border border-dashed bg-card p-8 text-center text-sm text-muted-foreground">
           Phân cụm khách hàng sẽ có trong bản cập nhật tiếp theo.
