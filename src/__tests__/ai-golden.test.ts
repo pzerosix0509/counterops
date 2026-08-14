@@ -35,6 +35,19 @@ describe("AI intent edge cases", () => {
     const plan = buildAiPlan("Nguyên liệu nào đang tồn kho thấp?", "chat", new Date("2026-07-01T12:00:00+07:00"));
     expect(plan.intent).toBe("inventory_risk");
   });
+
+  it("routes feedback and sentiment questions to sentiment_summary", () => {
+    const now = new Date("2026-07-01T12:00:00+07:00");
+    for (const question of [
+      "Phản hồi khách gần đây tích cực hay tiêu cực?",
+      "Cảm xúc review tuần này?",
+      "Tóm tắt feedback sentiment",
+    ]) {
+      const plan = buildAiPlan(question, "chat", now);
+      expect(plan.intent).toBe("sentiment");
+      expect(plan.tools.map((call) => call.name)).toEqual(["sentiment_summary"]);
+    }
+  });
 });
 
 describe("AI chart keyword normalization", () => {

@@ -45,6 +45,7 @@ const toolArgumentSchemas = {
   forecast_revenue: rangeArgumentsSchema.extend({
     horizon_days: z.number().int().min(7).max(90).optional(),
   }).strict(),
+  sentiment_summary: rangeArgumentsSchema,
 } satisfies Record<AiToolName, z.ZodType>;
 
 const sourceLabels: Record<Exclude<AiToolName, "search_documents" | "search_web">, string> = {
@@ -56,6 +57,7 @@ const sourceLabels: Record<Exclude<AiToolName, "search_documents" | "search_web"
   period_comparison: "So sánh với kỳ trước",
   inventory_risk: "Cảnh báo tồn kho",
   forecast_revenue: "Dự báo doanh thu",
+  sentiment_summary: "Tổng hợp cảm xúc phản hồi",
 };
 
 const rpcNames: Partial<Record<AiToolName, string>> = {
@@ -65,6 +67,7 @@ const rpcNames: Partial<Record<AiToolName, string>> = {
   category_summary: "ai_category_summary",
   channel_summary: "ai_channel_summary",
   period_comparison: "ai_period_comparison",
+  sentiment_summary: "ai_sentiment_summary",
 };
 
 export interface AiToolContext {
@@ -97,6 +100,7 @@ async function executeRpcTool(
     category_summary: { ...common, p_limit: args.limit },
     channel_summary: common,
     period_comparison: common,
+    sentiment_summary: common,
   };
   const rpc = rpcNames[call.name];
   if (!rpc) throw new Error(`Tool ${call.name} không có RPC.`);

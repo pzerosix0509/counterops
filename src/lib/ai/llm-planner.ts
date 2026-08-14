@@ -26,6 +26,7 @@ const VALID_INTENTS: AiIntent[] = [
   "dashboard",
   "diagnosis",
   "forecast",
+  "sentiment",
   "conversation_summary",
   "out_of_scope",
 ];
@@ -45,6 +46,7 @@ const INTENT_DESCRIPTIONS: Record<AiIntent, string> = {
   dashboard: "Yêu cầu tạo dashboard, bảng điều khiển, KPI",
   diagnosis: "Hỏi tại sao, nguyên nhân, đề xuất, khuyến nghị, bất thường",
   forecast: "Dự báo/dự đoán DOANH THU tương lai của quán",
+  sentiment: "Cảm xúc phản hồi khách, feedback, review. Không nhầm với điểm sao avg_rating",
   conversation_summary: "Tóm tắt cuộc trò chuyện",
   out_of_scope: "Câu hỏi lạ, không liên quan dữ liệu kinh doanh, không cần web",
 };

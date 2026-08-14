@@ -3,24 +3,53 @@
 import { useState, useTransition } from "react";
 import { Loader2 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input, Textarea } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { notifyError, notifySuccess } from "@/hooks/use-notify";
+import { ratingIsNotSentiment } from "@/lib/analytics/sentiment";
 import { createCustomerFeedback } from "@/server/actions/feedback";
 import type { FeedbackListRow } from "@/types/analytics";
+
+const SENTIMENT_LABELS = {
+  positive: "Tích cực",
+  neutral: "Trung lập",
+  negative: "Tiêu cực",
+} as const;
+
+type SentimentLabel = keyof typeof SENTIMENT_LABELS;
+
+function isSentimentLabel(value: string | null): value is SentimentLabel {
+  return value === "positive" || value === "neutral" || value === "negative";
+}
+
+function excerpt(text: string | null, max = 80) {
+  if (!text?.trim()) return "—";
+  const trimmed = text.trim();
+  return trimmed.length <= max ? trimmed : `${trimmed.slice(0, max)}…`;
+}
 
 function sentimentDisplay(row: FeedbackListRow) {
   if (!row.feedbackText?.trim()) return "—";
   if (!row.sentimentLabel) return "chưa chấm điểm";
-  const labels: Record<string, string> = {
-    positive: "Tích cực",
-    neutral: "Trung lập",
-    negative: "Tiêu cực",
-  };
-  const label = labels[row.sentimentLabel] ?? row.sentimentLabel;
+  const label = isSentimentLabel(row.sentimentLabel)
+    ? SENTIMENT_LABELS[row.sentimentLabel]
+    : row.sentimentLabel;
   return row.sentimentScore == null ? label : `${label} (${row.sentimentScore.toFixed(2)})`;
+}
+
+function mismatchWarning(row: FeedbackListRow) {
+  if (!isSentimentLabel(row.sentimentLabel)) return null;
+  if (!ratingIsNotSentiment(row.rating, row.sentimentLabel)) return null;
+  if (row.rating >= 4 && row.sentimentLabel === "negative") {
+    return "Điểm cao nhưng cảm xúc tiêu cực";
+  }
+  if (row.rating <= 2 && row.sentimentLabel === "positive") {
+    return "Điểm thấp nhưng cảm xúc tích cực";
+  }
+  return "Điểm và cảm xúc không khớp";
 }
 
 export function SentimentPanel({ rows }: { rows: FeedbackListRow[] }) {
@@ -28,6 +57,10 @@ export function SentimentPanel({ rows }: { rows: FeedbackListRow[] }) {
   const [rating, setRating] = useState(5);
   const [feedbackText, setFeedbackText] = useState("");
   const [orderId, setOrderId] = useState("");
+  const counts = { positive: 0, neutral: 0, negative: 0 };
+  for (const row of rows) {
+    if (isSentimentLabel(row.sentimentLabel)) counts[row.sentimentLabel] += 1;
+  }
 
   function onSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -49,6 +82,27 @@ export function SentimentPanel({ rows }: { rows: FeedbackListRow[] }) {
 
   return (
     <div className="space-y-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        {(
+          [
+            ["positive", "success", "Tích cực"],
+            ["neutral", "secondary", "Trung lập"],
+            ["negative", "danger", "Tiêu cực"],
+          ] as const
+        ).map(([key, variant, label]) => (
+          <Card key={key}>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-xs font-medium text-muted-foreground">{label}</CardTitle>
+              <Badge variant={variant}>{key}</Badge>
+            </CardHeader>
+            <CardContent>
+              <p className="text-2xl font-semibold">{counts[key].toLocaleString("vi-VN")}</p>
+              <p className="text-xs text-muted-foreground">phản hồi đã chấm</p>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
       <Card>
         <CardHeader>
           <CardTitle>Ghi nhận phản hồi</CardTitle>
@@ -120,13 +174,21 @@ export function SentimentPanel({ rows }: { rows: FeedbackListRow[] }) {
                   </TableCell>
                 </TableRow>
               ) : (
-                rows.map((row) => (
-                  <TableRow key={row.id}>
-                    <TableCell>{row.rating}</TableCell>
-                    <TableCell className="max-w-md truncate">{row.feedbackText ?? "—"}</TableCell>
-                    <TableCell>{sentimentDisplay(row)}</TableCell>
-                  </TableRow>
-                ))
+                rows.map((row) => {
+                  const warning = mismatchWarning(row);
+                  return (
+                    <TableRow key={row.id}>
+                      <TableCell>{row.rating}</TableCell>
+                      <TableCell className="max-w-md truncate">{excerpt(row.feedbackText)}</TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span>{sentimentDisplay(row)}</span>
+                          {warning ? <Badge variant="warning">{warning}</Badge> : null}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
               )}
             </TableBody>
           </Table>
