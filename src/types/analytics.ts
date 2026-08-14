@@ -46,3 +46,12 @@ export interface RfmCustomerRow {
   mScore: number | null;
   segment: RfmSegment | null;
 }
+
+export interface FeedbackListRow {
+  id: string;
+  rating: number;
+  feedbackText: string | null;
+  sentimentLabel: string | null;
+  sentimentScore: number | null;
+  createdAt: string;
+}

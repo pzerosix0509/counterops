@@ -1,6 +1,6 @@
 import "server-only";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import type { RfmCustomerRow, RfmSegment, RfmSummaryRow } from "@/types/analytics";
+import type { FeedbackListRow, RfmCustomerRow, RfmSegment, RfmSummaryRow } from "@/types/analytics";
 
 function asSegment(value: string | null): RfmSegment | null {
   if (
@@ -72,5 +72,28 @@ export async function getRfmCustomers(
     fScore: row.f_score,
     mScore: row.m_score,
     segment: asSegment(row.rfm_segment),
+  }));
+}
+
+export async function getRecentFeedback(
+  organizationId: string,
+  branchId: string,
+): Promise<FeedbackListRow[]> {
+  const supabase = createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("customer_feedback")
+    .select("id, rating, feedback_text, sentiment_label, sentiment_score, created_at")
+    .eq("organization_id", organizationId)
+    .eq("branch_id", branchId)
+    .order("created_at", { ascending: false })
+    .limit(20);
+  if (error || !data) return [];
+  return data.map((row) => ({
+    id: row.id,
+    rating: row.rating,
+    feedbackText: row.feedback_text,
+    sentimentLabel: row.sentiment_label,
+    sentimentScore: row.sentiment_score == null ? null : Number(row.sentiment_score),
+    createdAt: row.created_at,
   }));
 }
