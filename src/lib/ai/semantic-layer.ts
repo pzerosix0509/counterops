@@ -85,6 +85,13 @@ export const SEMANTIC_METRICS: SemanticMetricDefinition[] = [
     format: "number",
     source: "customer_clusters.profiles",
   },
+  {
+    key: "rfm_segment",
+    label: "Phân khúc RFM",
+    description: "Nhóm giá trị khách Champions/Loyal/At Risk/Lost. Tách khỏi cluster hành vi.",
+    format: "number",
+    source: "ai_rfm_summary.rfm_segment / customer_count",
+  },
 ];
 
 export const ANALYTICS_TOOL_DEFINITIONS: AnalyticsToolDefinition[] = [
@@ -135,6 +142,12 @@ export const ANALYTICS_TOOL_DEFINITIONS: AnalyticsToolDefinition[] = [
     description: "Đếm phản hồi theo nhãn cảm xúc và điểm sao trung bình trong kỳ. Tách khỏi avg_rating.",
     metrics: ["feedback_sentiment", "avg_rating"],
     dimensions: ["sentiment_label"],
+  },
+  {
+    name: "rfm_summary",
+    description: "Đếm khách và chi tiêu TB theo phân khúc RFM. Tách khỏi KMeans.",
+    metrics: ["rfm_segment"],
+    dimensions: ["rfm_segment"],
   },
   {
     name: "customer_segments",
@@ -349,6 +362,9 @@ function inferIntent(question: string, mode: "chat" | "dashboard"): {
   if (hasPhrase(q, ["cam xuc", "phan hoi", "feedback", "sentiment"]) || hasToken(q, ["review"])) {
     return { intent: "sentiment", confidence: 0.93, modelTier: "none", deterministic: true, rationale: "Yêu cầu tổng hợp cảm xúc phản hồi khách." };
   }
+  if (hasToken(q, ["rfm", "champions"]) || hasPhrase(q, ["phan khuc rfm", "khach rfm"])) {
+    return { intent: "rfm", confidence: 0.93, modelTier: "none", deterministic: true, rationale: "Yêu cầu phân khúc giá trị RFM, tách khỏi KMeans." };
+  }
   if (
     hasPhrase(q, ["phan cum", "nhom khach", "kmeans", "cluster", "hanh vi khach", "nhom hanh vi"])
     || hasToken(q, ["kmeans", "cluster"])
@@ -405,6 +421,7 @@ function toolsForIntent(intent: AiIntent): AiToolName[] {
     document_search: ["search_documents"],
     web_search: ["search_web"],
     forecast: ["sales_summary", "sales_timeseries", "forecast_revenue"],
+    rfm: ["rfm_summary"],
     sentiment: ["sentiment_summary"],
     segmentation: ["customer_segments"],
     dashboard: ["sales_summary", "sales_timeseries", "period_comparison", "top_products", "category_summary", "channel_summary"],
@@ -439,6 +456,7 @@ function toolArguments(
     search_web: { query: question, limit: 5 },
     forecast_revenue: { ...common, horizon_days: 30 },
     forecast_demand: { ...common, horizon_days: 14 },
+    rfm_summary: {},
     sentiment_summary: common,
     customer_segments: {},
   };

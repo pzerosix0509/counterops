@@ -22,6 +22,7 @@ export type AiIntent =
   | "dashboard"
   | "diagnosis"
   | "forecast"
+  | "rfm"
   | "sentiment"
   | "segmentation"
   | "conversation_summary"
@@ -211,6 +212,7 @@ export type AiToolName =
   | "search_web"
   | "forecast_revenue"
   | "forecast_demand"
+  | "rfm_summary"
   | "sentiment_summary"
   | "customer_segments";
 

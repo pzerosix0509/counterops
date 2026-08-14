@@ -471,6 +471,20 @@ export function buildDeterministicAnswer(
       }
       break;
     }
+    case "rfm": {
+      const rfmRows = executions.find((execution) => execution.call.name === "rfm_summary")?.rows ?? [];
+      if (rfmRows.length === 0) {
+        bullets = ["Chưa có phân khúc RFM. Hãy cập nhật dữ liệu trên trang Phân tích."];
+      } else {
+        bullets = rfmRows.map((row) => {
+          const segment = String(row.rfm_segment ?? "chưa gán");
+          const count = Number(row.customer_count ?? 0).toLocaleString("vi-VN");
+          return `${segment}: ${count} khách, chi tiêu TB ${formatVND(Number(row.avg_monetary ?? 0))}${citation("rfm_summary")}.`;
+        });
+        bullets.push("RFM là phân khúc giá trị, khác với nhóm hành vi KMeans.");
+      }
+      break;
+    }
     case "segmentation": {
       const segmentRows = executions.find((execution) => execution.call.name === "customer_segments")?.rows ?? [];
       const row = segmentRows[0];

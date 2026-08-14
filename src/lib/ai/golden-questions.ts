@@ -397,6 +397,24 @@ export const AI_GOLDEN_QUESTIONS: AiGoldenQuestion[] = [
     expectedModelTier: "fast",
   },
   {
+    question: "Nhóm khách RFM Champions đang thế nào?",
+    mode: "chat",
+    expectedIntent: "rfm",
+    expectedTools: ["rfm_summary"],
+    expectedRangeLabel: "7 ngày qua",
+    expectedDeterministic: true,
+    expectedModelTier: "none",
+  },
+  {
+    question: "Phản hồi khách gần đây tích cực hay tiêu cực?",
+    mode: "chat",
+    expectedIntent: "sentiment",
+    expectedTools: ["sentiment_summary"],
+    expectedRangeLabel: "7 ngày qua",
+    expectedDeterministic: true,
+    expectedModelTier: "none",
+  },
+  {
     question: "Các nhóm hành vi khách khác nhau ra sao?",
     mode: "chat",
     expectedIntent: "segmentation",
@@ -404,6 +422,15 @@ export const AI_GOLDEN_QUESTIONS: AiGoldenQuestion[] = [
     expectedRangeLabel: "7 ngày qua",
     expectedDeterministic: true,
     expectedModelTier: "none",
+  },
+  {
+    question: "Tuần tới cần đặt nguyên liệu gì?",
+    mode: "chat",
+    expectedIntent: "forecast",
+    expectedTools: ["sales_summary", "sales_timeseries", "forecast_revenue", "forecast_demand"],
+    expectedRangeLabel: "14 ngày qua",
+    expectedDeterministic: false,
+    expectedModelTier: "fast",
   },
 ];
 

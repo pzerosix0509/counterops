@@ -5,7 +5,7 @@ import { aggregateToDailyPoints, computeForecast } from "@/lib/ai/forecast";
 import { searchWeb } from "@/lib/ai/web-search";
 import { searchAiDocumentChunks } from "@/server/queries/ai";
 import { aiToolCacheKey, withAiToolCache } from "@/server/ai/cache";
-import { getCustomerClusters, getDemandForecasts, computeAndPersistDemandForecasts } from "@/server/queries/analytics";
+import { getCustomerClusters, getDemandForecasts, computeAndPersistDemandForecasts, getRfmSummary } from "@/server/queries/analytics";
 import { canRefreshAnalytics, getActiveMembership } from "@/lib/auth/permissions";
 import { DEMAND_STALE_MS } from "@/lib/analytics/demand";
 import type { AiSource, AiToolCall, AiToolExecution, AiToolName } from "@/types/ai";
@@ -51,6 +51,7 @@ const toolArgumentSchemas = {
   forecast_demand: rangeArgumentsSchema.extend({
     horizon_days: z.number().int().min(7).max(30).optional(),
   }).strict(),
+  rfm_summary: z.object({}).strict(),
   sentiment_summary: rangeArgumentsSchema,
   customer_segments: z.object({}).strict(),
 } satisfies Record<AiToolName, z.ZodType>;
@@ -65,6 +66,7 @@ const sourceLabels: Record<Exclude<AiToolName, "search_documents" | "search_web"
   inventory_risk: "Cảnh báo tồn kho",
   forecast_revenue: "Dự báo doanh thu",
   forecast_demand: "Dự báo nhu cầu món và nguyên liệu",
+  rfm_summary: "Phân khúc giá trị RFM",
   sentiment_summary: "Tổng hợp cảm xúc phản hồi",
   customer_segments: "Nhóm hành vi khách (KMeans)",
 };
@@ -239,6 +241,23 @@ async function executeForecastDemand(
   return { rows: cached.value, cacheHit: cached.hit };
 }
 
+async function executeRfmSummary(context: AiToolContext) {
+  const cacheKey = aiToolCacheKey({
+    organizationId: context.organizationId,
+    branchId: context.branchId,
+    tool: "rfm_summary",
+    arguments: {},
+  });
+  return withAiToolCache(cacheKey, async () => {
+    const rows = await getRfmSummary(context.organizationId, context.branchId);
+    return rows.map((row) => ({
+      rfm_segment: row.segment,
+      customer_count: row.customerCount,
+      avg_monetary: row.avgMonetary,
+    }));
+  });
+}
+
 async function executeCustomerSegments(context: AiToolContext) {
   const cacheKey = aiToolCacheKey({
     organizationId: context.organizationId,
@@ -327,6 +346,10 @@ export async function executeAiTool(
     if (call.name === "forecast_demand") {
       const result = await executeForecastDemand(call, context);
       return { call, rows: result.rows, cacheHit: result.cacheHit, durationMs: Date.now() - startedAt };
+    }
+    if (call.name === "rfm_summary") {
+      const cached = await executeRfmSummary(context);
+      return { call, rows: cached.value, cacheHit: cached.hit, durationMs: Date.now() - startedAt };
     }
     if (call.name === "customer_segments") {
       const cached = await executeCustomerSegments(context);
