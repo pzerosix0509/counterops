@@ -154,6 +154,27 @@ export async function getRecentFeedback(
   }));
 }
 
+export async function listRecentPaidOrders(
+  organizationId: string,
+  branchId: string,
+): Promise<Array<{ id: string; orderNumber: string; openedAt: string }>> {
+  const supabase = createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("orders")
+    .select("id, order_number, opened_at")
+    .eq("organization_id", organizationId)
+    .eq("branch_id", branchId)
+    .eq("status", "paid")
+    .order("opened_at", { ascending: false })
+    .limit(30);
+  if (error || !data) return [];
+  return data.map((row) => ({
+    id: row.id,
+    orderNumber: row.order_number,
+    openedAt: row.opened_at,
+  }));
+}
+
 function asClusterProfiles(value: unknown): ClusterProfileRow[] {
   const rows = Array.isArray(value) ? value : [];
   return rows.flatMap((row) => {

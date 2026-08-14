@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input, Textarea } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { notifyError, notifySuccess } from "@/hooks/use-notify";
@@ -56,15 +57,19 @@ function mismatchWarning(row: FeedbackListRow) {
 export function SentimentPanel({
   rows,
   summary,
+  paidOrders,
 }: {
   rows: FeedbackListRow[];
   summary: SentimentSummary;
+  paidOrders: Array<{ id: string; orderNumber: string; openedAt: string }>;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [rating, setRating] = useState(5);
   const [feedbackText, setFeedbackText] = useState("");
-  const [orderId, setOrderId] = useState("");
+  const [orderId, setOrderId] = useState("none");
+  const [customerPhone, setCustomerPhone] = useState("");
+  const [customerName, setCustomerName] = useState("");
 
   function onSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -72,7 +77,9 @@ export function SentimentPanel({
       const res = await createCustomerFeedback({
         rating,
         feedbackText: feedbackText.trim() || null,
-        orderId: orderId.trim() || null,
+        orderId: orderId === "none" ? null : orderId,
+        customerPhone: customerPhone.trim() || null,
+        customerName: customerName.trim() || null,
       });
       if (!res.ok) {
         notifyError("Không lưu được phản hồi", res.error.message);
@@ -80,7 +87,9 @@ export function SentimentPanel({
       }
       notifySuccess("Đã lưu phản hồi", "Cảm xúc sẽ được chấm khi cập nhật dữ liệu.");
       setFeedbackText("");
-      setOrderId("");
+      setOrderId("none");
+      setCustomerPhone("");
+      setCustomerName("");
       router.refresh();
     });
   }
@@ -130,12 +139,38 @@ export function SentimentPanel({
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="feedback-order">Mã đơn (tuỳ chọn)</Label>
+              <Label htmlFor="feedback-order">Đơn đã thanh toán (tuỳ chọn)</Label>
+              <Select value={orderId} onValueChange={setOrderId}>
+                <SelectTrigger id="feedback-order">
+                  <SelectValue placeholder="Không gắn đơn" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Không gắn đơn</SelectItem>
+                  {paidOrders.map((order) => (
+                    <SelectItem key={order.id} value={order.id}>
+                      {order.orderNumber}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="feedback-phone">SĐT khách (RFM)</Label>
               <Input
-                id="feedback-order"
-                value={orderId}
-                onChange={(event) => setOrderId(event.target.value)}
-                placeholder="UUID đơn"
+                id="feedback-phone"
+                value={customerPhone}
+                onChange={(event) => setCustomerPhone(event.target.value)}
+                placeholder="0901234567"
+                inputMode="tel"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="feedback-name">Tên khách</Label>
+              <Input
+                id="feedback-name"
+                value={customerName}
+                onChange={(event) => setCustomerName(event.target.value)}
+                placeholder="Tuỳ chọn"
               />
             </div>
             <div className="space-y-1.5 sm:col-span-2">

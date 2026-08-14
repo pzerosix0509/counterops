@@ -1,4 +1,5 @@
 ﻿import { requireActiveContext, canManageMenu, getActiveMembership } from "@/lib/auth/permissions";
+import { listInventoryItems } from "@/server/queries/inventory";
 import { listCategories, listProducts } from "@/server/queries/menu";
 import { MenuManager } from "@/components/menu/menu-manager";
 
@@ -12,13 +13,14 @@ export default async function MenuPage({ searchParams }: PageProps) {
   const active = await getActiveMembership();
   if (!active) return null;
   const ctx = await requireActiveContext();
-  const [categories, products] = await Promise.all([
+  const [categories, products, inventoryItems] = await Promise.all([
     listCategories(ctx.organizationId),
     listProducts(ctx.organizationId, {
       search: searchParams.q || undefined,
       categoryId: searchParams.category || undefined,
       isActive: searchParams.status === "active" ? true : searchParams.status === "inactive" ? false : null,
     }),
+    listInventoryItems(ctx.organizationId),
   ]);
 
   return (
@@ -32,6 +34,7 @@ export default async function MenuPage({ searchParams }: PageProps) {
         canManage={canManageMenu.includes(active.role)}
         categories={categories}
         products={products}
+        inventoryItems={inventoryItems}
         initialQuery={searchParams.q ?? ""}
       />
     </div>
