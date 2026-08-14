@@ -60,6 +60,17 @@ describe("AI intent edge cases", () => {
       expect(plan.tools.map((call) => call.name)).toEqual(["customer_segments"]);
     }
   });
+
+  it("adds forecast_demand with revenue forecast when the question mentions nguyên liệu", () => {
+    const plan = buildAiPlan("Tuần tới cần đặt nguyên liệu gì?", "chat", new Date("2026-07-01T12:00:00+07:00"));
+    expect(plan.intent).toBe("forecast");
+    expect(plan.tools.map((call) => call.name)).toEqual([
+      "sales_summary",
+      "sales_timeseries",
+      "forecast_revenue",
+      "forecast_demand",
+    ]);
+  });
 });
 
 describe("AI chart keyword normalization", () => {

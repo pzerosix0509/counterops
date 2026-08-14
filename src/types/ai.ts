@@ -210,6 +210,7 @@ export type AiToolName =
   | "search_documents"
   | "search_web"
   | "forecast_revenue"
+  | "forecast_demand"
   | "sentiment_summary"
   | "customer_segments";
 
