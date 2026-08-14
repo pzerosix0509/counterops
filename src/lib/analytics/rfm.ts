@@ -111,6 +111,93 @@ export const DEFAULT_RFM_RULES: RfmRule[] = [
   },
 ];
 
+export interface RfmFeatureRow {
+  customer_id: string;
+  recency_days: number;
+  frequency: number;
+  monetary: number;
+}
+
+export interface RfmRuleRow {
+  organization_id: string | null;
+  branch_id: string | null;
+  segment: string;
+  r_min: number;
+  r_max: number;
+  f_min: number;
+  f_max: number;
+  m_min: number;
+  m_max: number;
+  priority: number;
+}
+
+function ruleSpecificity(
+  row: RfmRuleRow,
+  organizationId: string,
+  branchId?: string | null,
+): number {
+  if (row.organization_id === organizationId && branchId && row.branch_id === branchId) {
+    return 3;
+  }
+  if (row.organization_id === organizationId) return 2;
+  if (row.organization_id == null) return 1;
+  return 0;
+}
+
+export function pickRfmRules(
+  rows: RfmRuleRow[],
+  organizationId: string,
+  branchId?: string | null,
+): RfmRule[] {
+  const bySegment = new Map<string, RfmRuleRow>();
+  for (const row of rows) {
+    const rank = ruleSpecificity(row, organizationId, branchId);
+    if (rank === 0) continue;
+    const existing = bySegment.get(row.segment);
+    if (!existing || rank > ruleSpecificity(existing, organizationId, branchId)) {
+      bySegment.set(row.segment, row);
+    }
+  }
+  return [...bySegment.values()].map((row) => ({
+    segment: row.segment as RfmSegment,
+    rMin: row.r_min,
+    rMax: row.r_max,
+    fMin: row.f_min,
+    fMax: row.f_max,
+    mMin: row.m_min,
+    mMax: row.m_max,
+    priority: row.priority,
+  }));
+}
+
+export function applyRfmToFeatures<T extends RfmFeatureRow>(
+  features: T[],
+  rules: RfmRule[],
+  asOf: Date = new Date(),
+): Array<T & { r_score: number; f_score: number; m_score: number; rfm_segment: RfmSegment }> {
+  const scored = scoreRfm(
+    features.map((feature) => ({
+      customerId: feature.customer_id,
+      recencyDays: Number(feature.recency_days),
+      frequency: Number(feature.frequency),
+      monetary: Number(feature.monetary),
+    })),
+    asOf,
+    rules.length > 0 ? rules : DEFAULT_RFM_RULES,
+  );
+  const byCustomer = new Map(scored.map((row) => [row.customerId, row]));
+  return features.map((feature) => {
+    const row = byCustomer.get(feature.customer_id)!;
+    return {
+      ...feature,
+      r_score: row.rScore,
+      f_score: row.fScore,
+      m_score: row.mScore,
+      rfm_segment: row.segment,
+    };
+  });
+}
+
 export function scoreRfm(
   customers: CustomerRfmInput[],
   _asOf: Date,
