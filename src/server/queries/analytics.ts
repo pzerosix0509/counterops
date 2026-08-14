@@ -15,13 +15,6 @@ function asSegment(value: string | null): RfmSegment | null {
   return null;
 }
 
-function phoneLast4(phone: string | null | undefined): string | null {
-  if (!phone) return null;
-  const digits = phone.replace(/\D/g, "");
-  if (!digits) return null;
-  return digits.slice(-4);
-}
-
 export async function getRfmSummary(
   organizationId: string,
   branchId: string,
@@ -70,12 +63,6 @@ export async function getRfmCustomers(
   const { data, error } = await query;
   if (error || !data) return [];
 
-  const customerIds = data.map((row) => row.customer_id);
-  const { data: customers } = customerIds.length
-    ? await supabase.from("customers").select("id, phone").in("id", customerIds)
-    : { data: [] as { id: string; phone: string | null }[] };
-  const phoneById = new Map((customers ?? []).map((row) => [row.id, row.phone]));
-
   return data.map((row) => ({
     customerId: row.customer_id,
     recencyDays: Number(row.recency_days),
@@ -85,6 +72,5 @@ export async function getRfmCustomers(
     fScore: row.f_score,
     mScore: row.m_score,
     segment: asSegment(row.rfm_segment),
-    phoneLast4: phoneLast4(phoneById.get(row.customer_id)),
   }));
 }

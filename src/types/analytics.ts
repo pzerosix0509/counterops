@@ -45,5 +45,4 @@ export interface RfmCustomerRow {
   fScore: number | null;
   mScore: number | null;
   segment: RfmSegment | null;
-  phoneLast4: string | null;
 }
