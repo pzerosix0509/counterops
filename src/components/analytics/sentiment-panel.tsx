@@ -112,7 +112,7 @@ export function SentimentPanel({
         <CardHeader>
           <CardTitle>Ghi nhận phản hồi</CardTitle>
           <CardDescription>
-            Điểm sao tách khỏi cảm xúc văn bản. Chưa chấm LLM thì hiện "chưa chấm điểm".
+            Điểm sao tách khỏi cảm xúc văn bản. Chưa chấm LLM thì hiện “chưa chấm điểm”.
           </CardDescription>
         </CardHeader>
         <CardContent>
