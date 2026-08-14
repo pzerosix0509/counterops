@@ -1,10 +1,15 @@
 import Link from "next/link";
 import { canRefreshAnalytics, canViewReports, getActiveMembership, requireActiveContext } from "@/lib/auth/permissions";
-import { getRecentFeedback, getRfmCustomers, getRfmSummary } from "@/server/queries/analytics";
+import {
+  getRecentFeedback,
+  getRfmCustomers,
+  getRfmSummary,
+  getSentimentSummary,
+} from "@/server/queries/analytics";
 import { RefreshAnalyticsButton, RfmPanel } from "@/components/analytics/rfm-panel";
 import { SentimentPanel } from "@/components/analytics/sentiment-panel";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import type { RfmSegment } from "@/types/analytics";
+import type { FeedbackListRow, RfmSegment, SentimentSummary } from "@/types/analytics";
 
 export const metadata = { title: "Phân tích" };
 
@@ -57,9 +62,14 @@ export default async function AnalyticsPage({ searchParams }: PageProps) {
   const customers = tab === "rfm"
     ? await getRfmCustomers(ctx.organizationId, ctx.branchId, segment)
     : [];
-  const feedback = tab === "sentiment"
-    ? await getRecentFeedback(ctx.organizationId, ctx.branchId)
-    : [];
+  let feedback: FeedbackListRow[] = [];
+  let sentimentSummary: SentimentSummary = { positive: 0, neutral: 0, negative: 0 };
+  if (tab === "sentiment") {
+    [feedback, sentimentSummary] = await Promise.all([
+      getRecentFeedback(ctx.organizationId, ctx.branchId),
+      getSentimentSummary(ctx.organizationId, ctx.branchId),
+    ]);
+  }
 
   return (
     <div className="space-y-4">
@@ -84,7 +94,7 @@ export default async function AnalyticsPage({ searchParams }: PageProps) {
       {tab === "rfm" ? (
         <RfmPanel summary={summary} customers={customers} segment={segment} />
       ) : tab === "sentiment" ? (
-        <SentimentPanel rows={feedback} />
+        <SentimentPanel rows={feedback} summary={sentimentSummary} />
       ) : tab === "clusters" ? (
         <div className="rounded-md border border-dashed bg-card p-8 text-center text-sm text-muted-foreground">
           Phân cụm khách hàng sẽ có trong bản cập nhật tiếp theo.

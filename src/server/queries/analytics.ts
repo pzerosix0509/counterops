@@ -1,6 +1,12 @@
 import "server-only";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import type { FeedbackListRow, RfmCustomerRow, RfmSegment, RfmSummaryRow } from "@/types/analytics";
+import type {
+  FeedbackListRow,
+  RfmCustomerRow,
+  RfmSegment,
+  RfmSummaryRow,
+  SentimentSummary,
+} from "@/types/analytics";
 
 function asSegment(value: string | null): RfmSegment | null {
   if (
@@ -73,6 +79,36 @@ export async function getRfmCustomers(
     mScore: row.m_score,
     segment: asSegment(row.rfm_segment),
   }));
+}
+
+const SENTIMENT_SUMMARY_DAYS = 90;
+
+export async function getSentimentSummary(
+  organizationId: string,
+  branchId: string,
+): Promise<SentimentSummary> {
+  const supabase = createSupabaseServerClient();
+  const to = new Date();
+  const from = new Date(to);
+  from.setDate(from.getDate() - SENTIMENT_SUMMARY_DAYS);
+  from.setHours(0, 0, 0, 0);
+
+  const { data, error } = await supabase.rpc("ai_sentiment_summary", {
+    p_org_id: organizationId,
+    p_branch_id: branchId,
+    p_from: from.toISOString(),
+    p_to: to.toISOString(),
+  });
+  if (error || !data) return { positive: 0, neutral: 0, negative: 0 };
+
+  const counts: SentimentSummary = { positive: 0, neutral: 0, negative: 0 };
+  for (const row of data) {
+    const label = row.sentiment_label as string | null;
+    if (label === "positive") counts.positive = Number(row.feedback_count);
+    else if (label === "neutral") counts.neutral = Number(row.feedback_count);
+    else if (label === "negative") counts.negative = Number(row.feedback_count);
+  }
+  return counts;
 }
 
 export async function getRecentFeedback(
