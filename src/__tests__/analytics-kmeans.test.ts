@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildClusterProfiles,
   chooseKAndFit,
+  clusterLabel,
   silhouetteForClustering,
   standardize,
 } from "@/lib/analytics/kmeans";
@@ -87,5 +89,50 @@ describe("standardize", () => {
     expect(scaled[0][0]).toBeCloseTo(-1, 5);
     expect(scaled[2][0]).toBeCloseTo(1, 5);
     expect(scaled[1][1]).toBeCloseTo(0, 5);
+  });
+});
+
+describe("cluster profiles", () => {
+  it("labels young dinner guests in Vietnamese", () => {
+    expect(clusterLabel({
+      cluster_id: 0,
+      dinner_ratio: 0.8,
+      weekend_ratio: 0.2,
+      avg_age: 30,
+    })).toBe("Khách trẻ, ăn tối");
+  });
+
+  it("computes original-space means, not z-space centroids", () => {
+    const youngDinner = Array.from({ length: 8 }, () => ({
+      recency_days: 5,
+      frequency: 20,
+      monetary: 2_000_000,
+      avg_order_value: 100_000,
+      avg_order_interval: 7,
+      weekend_ratio: 0.2,
+      dinner_ratio: 0.8,
+      age: 30,
+      favorite_category: "Cà phê",
+    }));
+    const olderLunch = Array.from({ length: 8 }, () => ({
+      recency_days: 80,
+      frequency: 2,
+      monetary: 80_000,
+      avg_order_value: 40_000,
+      avg_order_interval: 40,
+      weekend_ratio: 0.6,
+      dinner_ratio: 0.1,
+      age: 45,
+      favorite_category: "Cơm",
+    }));
+    const rows = [...youngDinner, ...olderLunch];
+    const labels = [...Array(8).fill(0), ...Array(8).fill(1)];
+    const profiles = buildClusterProfiles(rows, labels);
+    const young = profiles.find((row) => row.cluster_id === 0);
+    expect(young?.avg_recency).toBe(5);
+    expect(young?.avg_monetary).toBe(2_000_000);
+    expect(young?.label).toBe("Khách trẻ, ăn tối");
+    expect(young?.top_category).toBe("Cà phê");
+    expect(Math.abs(young?.avg_recency ?? 0)).toBeGreaterThan(2);
   });
 });

@@ -5,6 +5,7 @@ import { aggregateToDailyPoints, computeForecast } from "@/lib/ai/forecast";
 import { searchWeb } from "@/lib/ai/web-search";
 import { searchAiDocumentChunks } from "@/server/queries/ai";
 import { aiToolCacheKey, withAiToolCache } from "@/server/ai/cache";
+import { getCustomerClusters } from "@/server/queries/analytics";
 import type { AiSource, AiToolCall, AiToolExecution, AiToolName } from "@/types/ai";
 
 const isoDateTime = z.string().refine((value) => !Number.isNaN(Date.parse(value)), {
@@ -46,6 +47,7 @@ const toolArgumentSchemas = {
     horizon_days: z.number().int().min(7).max(90).optional(),
   }).strict(),
   sentiment_summary: rangeArgumentsSchema,
+  customer_segments: z.object({}).strict(),
 } satisfies Record<AiToolName, z.ZodType>;
 
 const sourceLabels: Record<Exclude<AiToolName, "search_documents" | "search_web">, string> = {
@@ -58,6 +60,7 @@ const sourceLabels: Record<Exclude<AiToolName, "search_documents" | "search_web"
   inventory_risk: "Cảnh báo tồn kho",
   forecast_revenue: "Dự báo doanh thu",
   sentiment_summary: "Tổng hợp cảm xúc phản hồi",
+  customer_segments: "Nhóm hành vi khách (KMeans)",
 };
 
 const rpcNames: Partial<Record<AiToolName, string>> = {
@@ -189,6 +192,27 @@ async function executeForecast(
   return { rows: cached.value, cacheHit: cached.hit };
 }
 
+async function executeCustomerSegments(context: AiToolContext) {
+  const cacheKey = aiToolCacheKey({
+    organizationId: context.organizationId,
+    branchId: context.branchId,
+    tool: "customer_segments",
+    arguments: {},
+  });
+  return withAiToolCache(cacheKey, async () => {
+    const view = await getCustomerClusters(context.organizationId, context.branchId);
+    return [
+      {
+        reminder: view.reminder,
+        k: view.k,
+        silhouette: view.silhouette,
+        fitted_at: view.fittedAt,
+        profiles: view.profiles,
+      } as Record<string, unknown>,
+    ];
+  });
+}
+
 export async function executeAiTool(
   call: AiToolCall,
   context: AiToolContext,
@@ -252,6 +276,10 @@ export async function executeAiTool(
     if (call.name === "forecast_revenue") {
       const result = await executeForecast(call, context);
       return { call, rows: result.rows, cacheHit: result.cacheHit, durationMs: Date.now() - startedAt };
+    }
+    if (call.name === "customer_segments") {
+      const cached = await executeCustomerSegments(context);
+      return { call, rows: cached.value, cacheHit: cached.hit, durationMs: Date.now() - startedAt };
     }
     const result = await executeRpcTool(call, context);
     return { call, rows: result.rows, cacheHit: result.cacheHit, durationMs: Date.now() - startedAt };

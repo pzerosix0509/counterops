@@ -471,6 +471,22 @@ export function buildDeterministicAnswer(
       }
       break;
     }
+    case "segmentation": {
+      const segmentRows = executions.find((execution) => execution.call.name === "customer_segments")?.rows ?? [];
+      const row = segmentRows[0];
+      const profiles = Array.isArray(row?.profiles) ? row.profiles as Array<Record<string, unknown>> : [];
+      if (profiles.length === 0) {
+        bullets = ["Chưa có nhóm hành vi. Hãy phân cụm khách trên trang Phân tích."];
+      } else {
+        bullets = profiles.map((profile) => {
+          const label = String(profile.label ?? `Nhóm ${profile.cluster_id}`);
+          const size = Number(profile.size ?? 0).toLocaleString("vi-VN");
+          return `${label}: ${size} khách, recency TB ${Number(profile.avg_recency ?? 0).toFixed(0)} ngày, chi tiêu TB ${formatVND(Number(profile.avg_monetary ?? 0))}${citation("customer_segments")}.`;
+        });
+      }
+      bullets.push(String(row?.reminder ?? "RFM là value segment, cluster là hành vi"));
+      break;
+    }
     case "dashboard":
       bullets = summary
         ? [

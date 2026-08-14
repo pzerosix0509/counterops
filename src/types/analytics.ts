@@ -61,3 +61,33 @@ export interface SentimentSummary {
   neutral: number;
   negative: number;
 }
+
+export interface ClusterProfileRow {
+  cluster_id: number;
+  size: number;
+  avg_recency: number;
+  avg_frequency: number;
+  avg_monetary: number;
+  dinner_ratio: number;
+  weekend_ratio: number;
+  top_category: string | null;
+  label: string;
+}
+
+export interface ClusterCustomerRow {
+  customerId: string;
+  clusterId: number | null;
+  rfmSegment: RfmSegment | null;
+  recencyDays: number;
+  frequency: number;
+  monetary: number;
+}
+
+export interface CustomerClustersView {
+  k: number;
+  silhouette: number | null;
+  fittedAt: string | null;
+  profiles: ClusterProfileRow[];
+  customers: ClusterCustomerRow[];
+  reminder: string;
+}

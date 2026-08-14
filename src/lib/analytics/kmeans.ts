@@ -36,6 +36,92 @@ export interface ChooseKAndFitOptions {
   seed?: number;
 }
 
+export interface ClusterProfile {
+  cluster_id: number;
+  size: number;
+  avg_recency: number;
+  avg_frequency: number;
+  avg_monetary: number;
+  dinner_ratio: number;
+  weekend_ratio: number;
+  top_category: string | null;
+  label: string;
+}
+
+export function clusterLabel(stats: {
+  cluster_id: number;
+  dinner_ratio: number;
+  weekend_ratio: number;
+  avg_age: number | null;
+}): string {
+  const young = stats.avg_age != null && stats.avg_age < 35;
+  const dinner = stats.dinner_ratio > 0.5;
+  if (young && dinner) return "Khách trẻ, ăn tối";
+  if (young && stats.weekend_ratio > 0.5) return "Khách trẻ, cuối tuần";
+  if (dinner && stats.weekend_ratio > 0.5) return "Ăn tối cuối tuần";
+  if (dinner) return "Khách ăn tối";
+  if (stats.weekend_ratio > 0.5) return "Khách cuối tuần";
+  if (young) return "Khách trẻ";
+  if (stats.avg_age != null && stats.avg_age >= 50) return "Khách lớn tuổi";
+  return `Nhóm ${stats.cluster_id}`;
+}
+
+function mean(values: number[]): number {
+  if (values.length === 0) return 0;
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+export function buildClusterProfiles(
+  rows: KMeansFeatureRow[],
+  labels: number[],
+): ClusterProfile[] {
+  const groups = new Map<number, KMeansFeatureRow[]>();
+  for (let i = 0; i < rows.length; i++) {
+    const list = groups.get(labels[i]) ?? [];
+    list.push(rows[i]);
+    groups.set(labels[i], list);
+  }
+
+  return Array.from(groups.entries())
+    .sort((a, b) => a[0] - b[0])
+    .map(([clusterId, members]) => {
+      const dinner_ratio = mean(members.map((row) => Number(row.dinner_ratio)));
+      const weekend_ratio = mean(members.map((row) => Number(row.weekend_ratio)));
+      const ages = members
+        .map((row) => row.age)
+        .filter((age): age is number => age != null && !Number.isNaN(age));
+      const categories = new Map<string, number>();
+      for (const row of members) {
+        if (!row.favorite_category) continue;
+        categories.set(row.favorite_category, (categories.get(row.favorite_category) ?? 0) + 1);
+      }
+      let top_category: string | null = null;
+      let topCount = 0;
+      for (const [name, count] of Array.from(categories.entries())) {
+        if (count > topCount) {
+          top_category = name;
+          topCount = count;
+        }
+      }
+      return {
+        cluster_id: clusterId,
+        size: members.length,
+        avg_recency: mean(members.map((row) => Number(row.recency_days))),
+        avg_frequency: mean(members.map((row) => Number(row.frequency))),
+        avg_monetary: mean(members.map((row) => Number(row.monetary))),
+        dinner_ratio,
+        weekend_ratio,
+        top_category,
+        label: clusterLabel({
+          cluster_id: clusterId,
+          dinner_ratio,
+          weekend_ratio,
+          avg_age: ages.length === 0 ? null : mean(ages),
+        }),
+      };
+    });
+}
+
 type Rng = () => number;
 
 function createRng(seed = 42): Rng {
@@ -247,7 +333,7 @@ export function silhouetteForClustering(data: number[][], labels: number[]): num
     const a = intraCount > 0 ? intra / intraCount : 0;
 
     let b = Infinity;
-    for (const [cluster, size] of clusterSizes) {
+    for (const [cluster, size] of Array.from(clusterSizes.entries())) {
       if (cluster === own || size === 0) continue;
       let inter = 0;
       for (let j = 0; j < n; j++) {
