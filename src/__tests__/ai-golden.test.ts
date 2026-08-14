@@ -48,6 +48,18 @@ describe("AI intent edge cases", () => {
       expect(plan.tools.map((call) => call.name)).toEqual(["sentiment_summary"]);
     }
   });
+
+  it("routes cluster questions to customer_segments, not RFM", () => {
+    const now = new Date("2026-07-01T12:00:00+07:00");
+    for (const question of [
+      "Các nhóm hành vi khách khác nhau ra sao?",
+      "Phân cụm kmeans nhóm khách",
+    ]) {
+      const plan = buildAiPlan(question, "chat", now);
+      expect(plan.intent).toBe("segmentation");
+      expect(plan.tools.map((call) => call.name)).toEqual(["customer_segments"]);
+    }
+  });
 });
 
 describe("AI chart keyword normalization", () => {
@@ -98,7 +110,7 @@ describe("AI timezone handling", () => {
   it("writes the timezone into every analytics tool argument", () => {
     const plan = buildAiPlan("Doanh thu hôm nay?", "chat", new Date("2026-07-01T12:00:00+07:00"), [], "Asia/Ho_Chi_Minh");
     expect(plan.tools[0]?.arguments.timezone).toBe("Asia/Ho_Chi_Minh");
-    expect(plan.tools.every((tool) => "timezone" in tool.arguments || tool.name === "inventory_risk")).toBe(true);
+    expect(plan.tools.every((tool) => "timezone" in tool.arguments || tool.name === "inventory_risk" || tool.name === "customer_segments")).toBe(true);
   });
 });
 

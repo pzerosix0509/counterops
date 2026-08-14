@@ -23,6 +23,7 @@ export type AiIntent =
   | "diagnosis"
   | "forecast"
   | "sentiment"
+  | "segmentation"
   | "conversation_summary"
   | "out_of_scope";
 
@@ -209,7 +210,8 @@ export type AiToolName =
   | "search_documents"
   | "search_web"
   | "forecast_revenue"
-  | "sentiment_summary";
+  | "sentiment_summary"
+  | "customer_segments";
 
 export interface AiToolCall {
   id: string;

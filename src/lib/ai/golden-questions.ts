@@ -396,6 +396,15 @@ export const AI_GOLDEN_QUESTIONS: AiGoldenQuestion[] = [
     expectedDeterministic: false,
     expectedModelTier: "fast",
   },
+  {
+    question: "Các nhóm hành vi khách khác nhau ra sao?",
+    mode: "chat",
+    expectedIntent: "segmentation",
+    expectedTools: ["customer_segments"],
+    expectedRangeLabel: "7 ngày qua",
+    expectedDeterministic: true,
+    expectedModelTier: "none",
+  },
 ];
 
 export function evaluateGoldenQuestions(now = new Date()) {

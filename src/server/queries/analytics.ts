@@ -1,12 +1,18 @@
 import "server-only";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import type { ClusterProfile } from "@/lib/analytics/kmeans";
 import type {
+  ClusterCustomerRow,
+  ClusterProfileRow,
+  CustomerClustersView,
   FeedbackListRow,
   RfmCustomerRow,
   RfmSegment,
   RfmSummaryRow,
   SentimentSummary,
 } from "@/types/analytics";
+
+export const RFM_VS_CLUSTER_REMINDER = "RFM là value segment, cluster là hành vi";
 
 function asSegment(value: string | null): RfmSegment | null {
   if (
@@ -132,4 +138,67 @@ export async function getRecentFeedback(
     sentimentScore: row.sentiment_score == null ? null : Number(row.sentiment_score),
     createdAt: row.created_at,
   }));
+}
+
+function asClusterProfiles(value: unknown): ClusterProfileRow[] {
+  const rows = Array.isArray(value) ? value : [];
+  return rows.flatMap((row) => {
+    if (!row || typeof row !== "object") return [];
+    const item = row as Partial<ClusterProfile>;
+    if (typeof item.cluster_id !== "number") return [];
+    return [{
+      cluster_id: item.cluster_id,
+      size: Number(item.size ?? 0),
+      avg_recency: Number(item.avg_recency ?? 0),
+      avg_frequency: Number(item.avg_frequency ?? 0),
+      avg_monetary: Number(item.avg_monetary ?? 0),
+      dinner_ratio: Number(item.dinner_ratio ?? 0),
+      weekend_ratio: Number(item.weekend_ratio ?? 0),
+      top_category: item.top_category ?? null,
+      label: String(item.label ?? `Nhóm ${item.cluster_id}`),
+    }];
+  });
+}
+
+export async function getCustomerClusters(
+  organizationId: string,
+  branchId: string,
+): Promise<CustomerClustersView> {
+  const supabase = createSupabaseServerClient();
+  const [{ data: fit }, { data: customers }] = await Promise.all([
+    supabase
+      .from("customer_clusters")
+      .select("k, silhouette, profiles, fitted_at")
+      .eq("organization_id", organizationId)
+      .eq("branch_id", branchId)
+      .order("fitted_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase
+      .from("customer_features")
+      .select("customer_id, cluster_id, rfm_segment, recency_days, frequency, monetary")
+      .eq("organization_id", organizationId)
+      .eq("branch_id", branchId)
+      .not("cluster_id", "is", null)
+      .order("monetary", { ascending: false })
+      .limit(100),
+  ]);
+
+  const mappedCustomers: ClusterCustomerRow[] = (customers ?? []).map((row) => ({
+    customerId: row.customer_id,
+    clusterId: row.cluster_id,
+    rfmSegment: asSegment(row.rfm_segment),
+    recencyDays: Number(row.recency_days),
+    frequency: Number(row.frequency),
+    monetary: Number(row.monetary),
+  }));
+
+  return {
+    k: fit?.k ?? 0,
+    silhouette: fit?.silhouette == null ? null : Number(fit.silhouette),
+    fittedAt: fit?.fitted_at ?? null,
+    profiles: asClusterProfiles(fit?.profiles),
+    customers: mappedCustomers,
+    reminder: RFM_VS_CLUSTER_REMINDER,
+  };
 }

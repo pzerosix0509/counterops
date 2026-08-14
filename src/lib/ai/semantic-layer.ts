@@ -78,6 +78,13 @@ export const SEMANTIC_METRICS: SemanticMetricDefinition[] = [
     format: "number",
     source: "ai_sentiment_summary.sentiment_label / feedback_count",
   },
+  {
+    key: "customer_cluster",
+    label: "Nhóm hành vi",
+    description: "RFM là value segment, cluster là hành vi.",
+    format: "number",
+    source: "customer_clusters.profiles",
+  },
 ];
 
 export const ANALYTICS_TOOL_DEFINITIONS: AnalyticsToolDefinition[] = [
@@ -128,6 +135,12 @@ export const ANALYTICS_TOOL_DEFINITIONS: AnalyticsToolDefinition[] = [
     description: "Đếm phản hồi theo nhãn cảm xúc và điểm sao trung bình trong kỳ. Tách khỏi avg_rating.",
     metrics: ["feedback_sentiment", "avg_rating"],
     dimensions: ["sentiment_label"],
+  },
+  {
+    name: "customer_segments",
+    description: "Hồ sơ cụm KMeans. RFM là value segment, cluster là hành vi.",
+    metrics: ["customer_cluster"],
+    dimensions: ["cluster_id", "rfm_segment"],
   },
   {
     name: "search_documents",
@@ -336,6 +349,12 @@ function inferIntent(question: string, mode: "chat" | "dashboard"): {
   if (hasPhrase(q, ["cam xuc", "phan hoi", "feedback", "sentiment"]) || hasToken(q, ["review"])) {
     return { intent: "sentiment", confidence: 0.93, modelTier: "none", deterministic: true, rationale: "Yêu cầu tổng hợp cảm xúc phản hồi khách." };
   }
+  if (
+    hasPhrase(q, ["phan cum", "nhom khach", "kmeans", "cluster", "hanh vi khach", "nhom hanh vi"])
+    || hasToken(q, ["kmeans", "cluster"])
+  ) {
+    return { intent: "segmentation", confidence: 0.93, modelTier: "none", deterministic: true, rationale: "Yêu cầu nhóm hành vi KMeans, tách khỏi RFM." };
+  }
   if (hasPhrase(q, ["tai sao", "nguyen nhan", "de xuat", "khuyen nghi", "can lam gi", "nen lam gi", "bat thuong"])) {
     return { intent: "diagnosis", confidence: 0.9, modelTier: "quality", deterministic: false, rationale: "Yêu cầu suy luận nguyên nhân hoặc khuyến nghị." };
   }
@@ -387,6 +406,7 @@ function toolsForIntent(intent: AiIntent): AiToolName[] {
     web_search: ["search_web"],
     forecast: ["sales_summary", "sales_timeseries", "forecast_revenue"],
     sentiment: ["sentiment_summary"],
+    segmentation: ["customer_segments"],
     dashboard: ["sales_summary", "sales_timeseries", "period_comparison", "top_products", "category_summary", "channel_summary"],
     diagnosis: ["sales_summary", "sales_timeseries", "period_comparison", "top_products", "channel_summary"],
     conversation_summary: ["sales_summary", "top_products", "channel_summary"],
@@ -425,6 +445,7 @@ export function buildAiPlan(
       search_web: { query: question, limit: 5 },
       forecast_revenue: { ...common, horizon_days: 30 },
       sentiment_summary: common,
+      customer_segments: {},
     };
     return {
       id: `tool-${index + 1}`,
@@ -487,6 +508,7 @@ export async function buildAiPlanAsync(
       search_web: { query: question, limit: 5 },
       forecast_revenue: { ...common, horizon_days: 30 },
       sentiment_summary: common,
+      customer_segments: {},
     };
     return {
       id: `tool-${index + 1}`,

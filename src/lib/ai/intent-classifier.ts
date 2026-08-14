@@ -23,6 +23,7 @@ const VALID_INTENTS: AiIntent[] = [
   "diagnosis",
   "forecast",
   "sentiment",
+  "segmentation",
   "conversation_summary",
   "out_of_scope",
 ];
@@ -43,6 +44,7 @@ const INTENT_DESCRIPTIONS: Record<AiIntent, string> = {
   diagnosis: "Hỏi tại sao, nguyên nhân, đề xuất, khuyến nghị, bất thường",
   forecast: "Dự báo, dự đoán tương lai",
   sentiment: "Cảm xúc phản hồi khách, feedback, review (tách khỏi điểm sao)",
+  segmentation: "Nhóm hành vi khách, phân cụm KMeans (tách khỏi RFM value segment)",
   conversation_summary: "Tóm tắt cuộc trò chuyện",
   out_of_scope: "Không liên quan dữ liệu kinh doanh của quán",
 };

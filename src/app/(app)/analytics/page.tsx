@@ -1,15 +1,17 @@
 import Link from "next/link";
 import { canRefreshAnalytics, canViewReports, getActiveMembership, requireActiveContext } from "@/lib/auth/permissions";
 import {
+  getCustomerClusters,
   getRecentFeedback,
   getRfmCustomers,
   getRfmSummary,
   getSentimentSummary,
 } from "@/server/queries/analytics";
+import { ClusterPanel } from "@/components/analytics/cluster-panel";
 import { RefreshAnalyticsButton, RfmPanel } from "@/components/analytics/rfm-panel";
 import { SentimentPanel } from "@/components/analytics/sentiment-panel";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import type { FeedbackListRow, RfmSegment, SentimentSummary } from "@/types/analytics";
+import type { CustomerClustersView, FeedbackListRow, RfmSegment, SentimentSummary } from "@/types/analytics";
 
 export const metadata = { title: "Phân tích" };
 
@@ -64,11 +66,15 @@ export default async function AnalyticsPage({ searchParams }: PageProps) {
     : [];
   let feedback: FeedbackListRow[] = [];
   let sentimentSummary: SentimentSummary = { positive: 0, neutral: 0, negative: 0 };
+  let clusters: CustomerClustersView | null = null;
   if (tab === "sentiment") {
     [feedback, sentimentSummary] = await Promise.all([
       getRecentFeedback(ctx.organizationId, ctx.branchId),
       getSentimentSummary(ctx.organizationId, ctx.branchId),
     ]);
+  }
+  if (tab === "clusters") {
+    clusters = await getCustomerClusters(ctx.organizationId, ctx.branchId);
   }
 
   return (
@@ -95,10 +101,14 @@ export default async function AnalyticsPage({ searchParams }: PageProps) {
         <RfmPanel summary={summary} customers={customers} segment={segment} />
       ) : tab === "sentiment" ? (
         <SentimentPanel rows={feedback} summary={sentimentSummary} />
-      ) : tab === "clusters" ? (
-        <div className="rounded-md border border-dashed bg-card p-8 text-center text-sm text-muted-foreground">
-          Phân cụm khách hàng sẽ có trong bản cập nhật tiếp theo.
-        </div>
+      ) : tab === "clusters" && clusters ? (
+        <ClusterPanel
+          profiles={clusters.profiles}
+          customers={clusters.customers}
+          reminder={clusters.reminder}
+          canRefresh={canRefresh}
+          fittedAt={clusters.fittedAt}
+        />
       ) : (
         <div className="rounded-md border border-dashed bg-card p-8 text-center text-sm text-muted-foreground">
           Dự báo nhu cầu sẽ có trong bản cập nhật tiếp theo.
