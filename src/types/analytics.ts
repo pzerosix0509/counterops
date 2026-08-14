@@ -91,3 +91,28 @@ export interface CustomerClustersView {
   customers: ClusterCustomerRow[];
   reminder: string;
 }
+
+export interface DemandDishRow {
+  productId: string;
+  productName: string;
+  qty7: number;
+  qty14: number;
+}
+
+export interface DemandIngredientRow {
+  inventoryItemId: string;
+  name: string;
+  unit: string;
+  forecastQty: number;
+  onHand: number;
+  suggestedPurchase: number;
+}
+
+export interface DemandForecastView {
+  dishes: DemandDishRow[];
+  ingredients: DemandIngredientRow[];
+  computedAt: string | null;
+  method: string | null;
+  horizonDays: number;
+  insufficientData: boolean;
+}

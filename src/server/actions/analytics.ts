@@ -1,11 +1,13 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { DEMAND_DEFAULT_HORIZON } from "@/lib/analytics/demand";
 import { buildClusterProfiles, chooseKAndFit, type KMeansFeatureRow } from "@/lib/analytics/kmeans";
 import { canRefreshAnalytics, requireActiveContext, requireRole } from "@/lib/auth/permissions";
 import { actionFail, actionOk, type ActionResult } from "@/lib/utils/action-result";
 import { clearAiToolCache } from "@/server/ai/cache";
 import { scoreUnscoredFeedback } from "@/server/actions/feedback";
+import { computeAndPersistDemandForecasts } from "@/server/queries/analytics";
 import { refreshAndScoreCustomerFeatures } from "@/server/queries/analytics-features";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -96,5 +98,24 @@ export async function fitCustomerClusters(): Promise<ActionResult<{ k: number; u
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
     return actionFail("INTERNAL_ERROR", "Không phân cụm được khách: " + message);
+  }
+}
+
+export async function refreshDemandForecasts(
+  horizonDays = DEMAND_DEFAULT_HORIZON,
+): Promise<ActionResult<{ dishes: number; ingredients: number }>> {
+  const ctx = await requireActiveContext();
+  await requireRole(ctx.organizationId, canRefreshAnalytics);
+  try {
+    const result = await computeAndPersistDemandForecasts(ctx.organizationId, ctx.branchId, horizonDays);
+    clearAiToolCache();
+    revalidatePath("/analytics");
+    if (result.insufficientData) {
+      return actionFail("INSUFFICIENT_DATA", "Cần ít nhất 14 ngày đơn đã thanh toán");
+    }
+    return actionOk({ dishes: result.dishes, ingredients: result.ingredients });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    return actionFail("INTERNAL_ERROR", "Không dự báo được nhu cầu: " + message);
   }
 }

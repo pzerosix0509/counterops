@@ -5,7 +5,9 @@ import { aggregateToDailyPoints, computeForecast } from "@/lib/ai/forecast";
 import { searchWeb } from "@/lib/ai/web-search";
 import { searchAiDocumentChunks } from "@/server/queries/ai";
 import { aiToolCacheKey, withAiToolCache } from "@/server/ai/cache";
-import { getCustomerClusters } from "@/server/queries/analytics";
+import { getCustomerClusters, getDemandForecasts, computeAndPersistDemandForecasts } from "@/server/queries/analytics";
+import { canRefreshAnalytics, getActiveMembership } from "@/lib/auth/permissions";
+import { DEMAND_STALE_MS } from "@/lib/analytics/demand";
 import type { AiSource, AiToolCall, AiToolExecution, AiToolName } from "@/types/ai";
 
 const isoDateTime = z.string().refine((value) => !Number.isNaN(Date.parse(value)), {
@@ -46,6 +48,9 @@ const toolArgumentSchemas = {
   forecast_revenue: rangeArgumentsSchema.extend({
     horizon_days: z.number().int().min(7).max(90).optional(),
   }).strict(),
+  forecast_demand: rangeArgumentsSchema.extend({
+    horizon_days: z.number().int().min(7).max(30).optional(),
+  }).strict(),
   sentiment_summary: rangeArgumentsSchema,
   customer_segments: z.object({}).strict(),
 } satisfies Record<AiToolName, z.ZodType>;
@@ -59,6 +64,7 @@ const sourceLabels: Record<Exclude<AiToolName, "search_documents" | "search_web"
   period_comparison: "So sánh với kỳ trước",
   inventory_risk: "Cảnh báo tồn kho",
   forecast_revenue: "Dự báo doanh thu",
+  forecast_demand: "Dự báo nhu cầu món và nguyên liệu",
   sentiment_summary: "Tổng hợp cảm xúc phản hồi",
   customer_segments: "Nhóm hành vi khách (KMeans)",
 };
@@ -192,6 +198,47 @@ async function executeForecast(
   return { rows: cached.value, cacheHit: cached.hit };
 }
 
+async function executeForecastDemand(
+  call: AiToolCall,
+  context: AiToolContext,
+): Promise<{ rows: Array<Record<string, unknown>>; cacheHit: boolean }> {
+  const args = call.arguments as Record<string, any>;
+  const horizonDays = Number(args.horizon_days ?? 14);
+  const cacheKey = aiToolCacheKey({
+    organizationId: context.organizationId,
+    branchId: context.branchId,
+    tool: "forecast_demand",
+    arguments: { horizon_days: horizonDays },
+  });
+  const cached = await withAiToolCache(cacheKey, async () => {
+    const membership = await getActiveMembership();
+    const canRefresh = membership ? canRefreshAnalytics.includes(membership.role) : false;
+    let view = await getDemandForecasts(context.organizationId, context.branchId, horizonDays);
+    const computedAtMs = view.computedAt ? new Date(view.computedAt).getTime() : 0;
+    const stale = !view.computedAt || Date.now() - computedAtMs > DEMAND_STALE_MS;
+    let warning: string | null = null;
+
+    if (stale && canRefresh) {
+      await computeAndPersistDemandForecasts(context.organizationId, context.branchId, horizonDays);
+      view = await getDemandForecasts(context.organizationId, context.branchId, horizonDays);
+    } else if (stale) {
+      warning = "Dữ liệu dự báo cũ hơn 24 giờ.";
+    }
+
+    return [{
+      warning,
+      stale,
+      computed_at: view.computedAt,
+      method: view.method,
+      horizon_days: horizonDays,
+      insufficient_data: view.insufficientData,
+      dishes: view.dishes,
+      ingredients: view.ingredients,
+    } as Record<string, unknown>];
+  });
+  return { rows: cached.value, cacheHit: cached.hit };
+}
+
 async function executeCustomerSegments(context: AiToolContext) {
   const cacheKey = aiToolCacheKey({
     organizationId: context.organizationId,
@@ -275,6 +322,10 @@ export async function executeAiTool(
     }
     if (call.name === "forecast_revenue") {
       const result = await executeForecast(call, context);
+      return { call, rows: result.rows, cacheHit: result.cacheHit, durationMs: Date.now() - startedAt };
+    }
+    if (call.name === "forecast_demand") {
+      const result = await executeForecastDemand(call, context);
       return { call, rows: result.rows, cacheHit: result.cacheHit, durationMs: Date.now() - startedAt };
     }
     if (call.name === "customer_segments") {

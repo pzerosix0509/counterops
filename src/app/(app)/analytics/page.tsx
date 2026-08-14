@@ -2,16 +2,18 @@ import Link from "next/link";
 import { canRefreshAnalytics, canViewReports, getActiveMembership, requireActiveContext } from "@/lib/auth/permissions";
 import {
   getCustomerClusters,
+  getDemandForecasts,
   getRecentFeedback,
   getRfmCustomers,
   getRfmSummary,
   getSentimentSummary,
 } from "@/server/queries/analytics";
 import { ClusterPanel } from "@/components/analytics/cluster-panel";
+import { DemandPanel } from "@/components/analytics/demand-panel";
 import { RefreshAnalyticsButton, RfmPanel } from "@/components/analytics/rfm-panel";
 import { SentimentPanel } from "@/components/analytics/sentiment-panel";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import type { CustomerClustersView, FeedbackListRow, RfmSegment, SentimentSummary } from "@/types/analytics";
+import type { CustomerClustersView, DemandForecastView, FeedbackListRow, RfmSegment, SentimentSummary } from "@/types/analytics";
 
 export const metadata = { title: "Phân tích" };
 
@@ -67,6 +69,7 @@ export default async function AnalyticsPage({ searchParams }: PageProps) {
   let feedback: FeedbackListRow[] = [];
   let sentimentSummary: SentimentSummary = { positive: 0, neutral: 0, negative: 0 };
   let clusters: CustomerClustersView | null = null;
+  let demand: DemandForecastView | null = null;
   if (tab === "sentiment") {
     [feedback, sentimentSummary] = await Promise.all([
       getRecentFeedback(ctx.organizationId, ctx.branchId),
@@ -75,6 +78,9 @@ export default async function AnalyticsPage({ searchParams }: PageProps) {
   }
   if (tab === "clusters") {
     clusters = await getCustomerClusters(ctx.organizationId, ctx.branchId);
+  }
+  if (tab === "demand") {
+    demand = await getDemandForecasts(ctx.organizationId, ctx.branchId);
   }
 
   return (
@@ -109,11 +115,9 @@ export default async function AnalyticsPage({ searchParams }: PageProps) {
           canRefresh={canRefresh}
           fittedAt={clusters.fittedAt}
         />
-      ) : (
-        <div className="rounded-md border border-dashed bg-card p-8 text-center text-sm text-muted-foreground">
-          Dự báo nhu cầu sẽ có trong bản cập nhật tiếp theo.
-        </div>
-      )}
+      ) : demand ? (
+        <DemandPanel view={demand} canRefresh={canRefresh} />
+      ) : null}
     </div>
   );
 }
