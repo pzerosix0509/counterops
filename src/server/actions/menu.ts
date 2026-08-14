@@ -47,6 +47,7 @@ export async function createProduct(
     .eq("organization_id", m.organization.id)
     .eq("code", parsed.data.code)
     .maybeSingle();
+  if (codeTaken) return actionFail("CONFLICT", "Mã món đã tồn tại trong cửa hàng", { code: ["Mã món đã tồn tại"] });
   if (parsed.data.productType === "prepared" && (!parsed.data.recipe || parsed.data.recipe.length === 0)) {
     return actionFail("VALIDATION_ERROR", "Món chế biến cần ít nhất 1 dòng công thức.", { recipe: ["Thiếu nguyên liệu"] });
   }
