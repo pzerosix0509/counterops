@@ -36,6 +36,12 @@ describe("AI intent edge cases", () => {
     expect(plan.intent).toBe("inventory_risk");
   });
 
+  it("routes RFM questions to rfm_summary, not KMeans", () => {
+    const plan = buildAiPlan("Nhóm khách RFM Champions đang thế nào?", "chat", new Date("2026-07-01T12:00:00+07:00"));
+    expect(plan.intent).toBe("rfm");
+    expect(plan.tools.map((call) => call.name)).toEqual(["rfm_summary"]);
+  });
+
   it("routes feedback and sentiment questions to sentiment_summary", () => {
     const now = new Date("2026-07-01T12:00:00+07:00");
     for (const question of [
@@ -121,7 +127,7 @@ describe("AI timezone handling", () => {
   it("writes the timezone into every analytics tool argument", () => {
     const plan = buildAiPlan("Doanh thu hôm nay?", "chat", new Date("2026-07-01T12:00:00+07:00"), [], "Asia/Ho_Chi_Minh");
     expect(plan.tools[0]?.arguments.timezone).toBe("Asia/Ho_Chi_Minh");
-    expect(plan.tools.every((tool) => "timezone" in tool.arguments || tool.name === "inventory_risk" || tool.name === "customer_segments")).toBe(true);
+    expect(plan.tools.every((tool) => "timezone" in tool.arguments || tool.name === "inventory_risk" || tool.name === "customer_segments" || tool.name === "rfm_summary")).toBe(true);
   });
 });
 
