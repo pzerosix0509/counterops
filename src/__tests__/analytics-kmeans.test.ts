@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { chooseKAndFit, standardize } from "@/lib/analytics/kmeans";
+import {
+  chooseKAndFit,
+  silhouetteForClustering,
+  standardize,
+} from "@/lib/analytics/kmeans";
 
 describe("chooseKAndFit", () => {
   it("separates two obvious blobs", () => {
@@ -45,6 +49,30 @@ describe("chooseKAndFit", () => {
     const result = chooseKAndFit(rows);
     expect(result.insufficient_data).toBe(true);
     expect(result.labels).toEqual([]);
+  });
+});
+
+describe("silhouetteForClustering", () => {
+  it("counts singletons as zero and allows negative scores", () => {
+    const data = [
+      [0, 0],
+      [1, 0],
+      [2, 0],
+    ];
+    const labels = [0, 1, 0];
+    // singleton at index 1 => 0; indices 0 and 2 => (1-2)/2 = -0.5 each
+    expect(silhouetteForClustering(data, labels)).toBeCloseTo(-1 / 3, 5);
+  });
+
+  it("averages singleton zeros into the mean", () => {
+    const data = [
+      [0, 0],
+      [0, 0],
+      [10, 0],
+    ];
+    const labels = [0, 0, 1];
+    // two identical cluster-0 points (s=1 each) plus one singleton (0)
+    expect(silhouetteForClustering(data, labels)).toBeCloseTo(2 / 3, 5);
   });
 });
 

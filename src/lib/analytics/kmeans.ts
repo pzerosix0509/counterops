@@ -217,7 +217,7 @@ function fitKMeans(
   return { labels, centroids };
 }
 
-function silhouetteForClustering(data: number[][], labels: number[]): number {
+export function silhouetteForClustering(data: number[][], labels: number[]): number {
   const n = data.length;
   if (n < 2) return 0;
 
@@ -228,11 +228,14 @@ function silhouetteForClustering(data: number[][], labels: number[]): number {
   if (clusterSizes.size < 2) return 0;
 
   let total = 0;
-  let counted = 0;
 
   for (let i = 0; i < n; i++) {
     const own = labels[i];
-    if ((clusterSizes.get(own) ?? 0) <= 1) continue;
+    const ownSize = clusterSizes.get(own) ?? 0;
+    if (ownSize <= 1) {
+      total += 0;
+      continue;
+    }
 
     let intra = 0;
     let intraCount = 0;
@@ -254,13 +257,17 @@ function silhouetteForClustering(data: number[][], labels: number[]): number {
       b = Math.min(b, inter / size);
     }
 
-    if (!Number.isFinite(b)) continue;
-    const s = b > a ? (b - a) / Math.max(a, b) : 0;
+    if (!Number.isFinite(b)) {
+      total += 0;
+      continue;
+    }
+
+    const denom = Math.max(a, b);
+    const s = denom === 0 ? 0 : (b - a) / denom;
     total += s;
-    counted++;
   }
 
-  return counted > 0 ? total / counted : 0;
+  return total / n;
 }
 
 export function chooseKAndFit(
