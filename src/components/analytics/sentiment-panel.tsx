@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { Loader2 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -59,6 +60,7 @@ export function SentimentPanel({
   rows: FeedbackListRow[];
   summary: SentimentSummary;
 }) {
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [rating, setRating] = useState(5);
   const [feedbackText, setFeedbackText] = useState("");
@@ -79,6 +81,7 @@ export function SentimentPanel({
       notifySuccess("Đã lưu phản hồi", "Cảm xúc sẽ được chấm khi cập nhật dữ liệu.");
       setFeedbackText("");
       setOrderId("");
+      router.refresh();
     });
   }
 

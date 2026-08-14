@@ -21,6 +21,19 @@ export interface IngredientDemand {
   unit: string;
 }
 
+export function pickLatestRecipeVersion<T extends { product_id: string; version: number }>(
+  recipes: T[],
+): T[] {
+  const latest = new Map<string, T>();
+  for (const recipe of recipes) {
+    const current = latest.get(recipe.product_id);
+    if (!current || recipe.version > current.version) {
+      latest.set(recipe.product_id, recipe);
+    }
+  }
+  return Array.from(latest.values());
+}
+
 export function explodeBom(
   dishForecasts: DishForecastInput[],
   recipes: RecipeBomLine[],

@@ -134,4 +134,52 @@ describe("pickRfmRules", () => {
       },
     ]);
   });
+
+  it("does not let sibling branch rules win over org-wide rules", () => {
+    const orgId = "org-1";
+    const picked = pickRfmRules(
+      [
+        rule({
+          id: "org",
+          organization_id: orgId,
+          branch_id: null,
+          segment: "Champions",
+          r_min: 5,
+          r_max: 5,
+          f_min: 5,
+          f_max: 5,
+          m_min: 5,
+          m_max: 5,
+          priority: 10,
+        }),
+        rule({
+          id: "sibling",
+          organization_id: orgId,
+          branch_id: "branch-sibling",
+          segment: "Champions",
+          r_min: 1,
+          r_max: 1,
+          f_min: 1,
+          f_max: 1,
+          m_min: 1,
+          m_max: 1,
+          priority: 99,
+        }),
+      ],
+      orgId,
+      "branch-current",
+    );
+    expect(picked).toEqual([
+      {
+        segment: "Champions",
+        rMin: 5,
+        rMax: 5,
+        fMin: 5,
+        fMax: 5,
+        mMin: 5,
+        mMax: 5,
+        priority: 10,
+      },
+    ]);
+  });
 });

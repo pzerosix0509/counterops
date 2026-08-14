@@ -206,38 +206,49 @@ async function executeForecastDemand(
 ): Promise<{ rows: Array<Record<string, unknown>>; cacheHit: boolean }> {
   const args = call.arguments as Record<string, any>;
   const horizonDays = Number(args.horizon_days ?? 14);
-  const cacheKey = aiToolCacheKey({
+  const membership = await getActiveMembership();
+  const canRefresh = membership ? canRefreshAnalytics.includes(membership.role) : false;
+  let view = await getDemandForecasts(context.organizationId, context.branchId, horizonDays);
+  const computedAtMs = view.computedAt ? new Date(view.computedAt).getTime() : 0;
+  const stale = !view.computedAt || Date.now() - computedAtMs > DEMAND_STALE_MS;
+  let warning: string | null = null;
+
+  if (stale && canRefresh) {
+    await computeAndPersistDemandForecasts(context.organizationId, context.branchId, horizonDays);
+    view = await getDemandForecasts(context.organizationId, context.branchId, horizonDays);
+  } else if (stale) {
+    warning = "Dữ liệu dự báo cũ hơn 24 giờ.";
+    return {
+      rows: [{
+        warning,
+        stale: true,
+        computed_at: view.computedAt,
+        method: view.method,
+        horizon_days: horizonDays,
+        insufficient_data: view.insufficientData,
+        dishes: view.dishes,
+        ingredients: view.ingredients,
+      } as Record<string, unknown>],
+      cacheHit: false,
+    };
+  }
+
+  const snapshotKey = aiToolCacheKey({
     organizationId: context.organizationId,
     branchId: context.branchId,
     tool: "forecast_demand",
-    arguments: { horizon_days: horizonDays },
+    arguments: { horizon_days: horizonDays, computed_at: view.computedAt },
   });
-  const cached = await withAiToolCache(cacheKey, async () => {
-    const membership = await getActiveMembership();
-    const canRefresh = membership ? canRefreshAnalytics.includes(membership.role) : false;
-    let view = await getDemandForecasts(context.organizationId, context.branchId, horizonDays);
-    const computedAtMs = view.computedAt ? new Date(view.computedAt).getTime() : 0;
-    const stale = !view.computedAt || Date.now() - computedAtMs > DEMAND_STALE_MS;
-    let warning: string | null = null;
-
-    if (stale && canRefresh) {
-      await computeAndPersistDemandForecasts(context.organizationId, context.branchId, horizonDays);
-      view = await getDemandForecasts(context.organizationId, context.branchId, horizonDays);
-    } else if (stale) {
-      warning = "Dữ liệu dự báo cũ hơn 24 giờ.";
-    }
-
-    return [{
-      warning,
-      stale,
-      computed_at: view.computedAt,
-      method: view.method,
-      horizon_days: horizonDays,
-      insufficient_data: view.insufficientData,
-      dishes: view.dishes,
-      ingredients: view.ingredients,
-    } as Record<string, unknown>];
-  });
+  const cached = await withAiToolCache(snapshotKey, async () => [{
+    warning,
+    stale: false,
+    computed_at: view.computedAt,
+    method: view.method,
+    horizon_days: horizonDays,
+    insufficient_data: view.insufficientData,
+    dishes: view.dishes,
+    ingredients: view.ingredients,
+  } as Record<string, unknown>]);
   return { rows: cached.value, cacheHit: cached.hit };
 }
 
