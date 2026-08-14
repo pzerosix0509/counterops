@@ -22,6 +22,7 @@ export type AiIntent =
   | "dashboard"
   | "diagnosis"
   | "forecast"
+  | "sentiment"
   | "conversation_summary"
   | "out_of_scope";
 
@@ -207,7 +208,8 @@ export type AiToolName =
   | "inventory_risk"
   | "search_documents"
   | "search_web"
-  | "forecast_revenue";
+  | "forecast_revenue"
+  | "sentiment_summary";
 
 export interface AiToolCall {
   id: string;

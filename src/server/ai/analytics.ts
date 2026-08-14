@@ -450,6 +450,27 @@ export function buildDeterministicAnswer(
       if (bullets.length === 0) bullets = ["Không có mặt hàng âm kho, hết hàng hoặc sắp hết."];
       break;
     }
+    case "sentiment": {
+      const sentimentRows = executions.find((execution) => execution.call.name === "sentiment_summary")?.rows ?? [];
+      if (sentimentRows.length === 0) {
+        bullets = [`Chưa có phản hồi khách trong ${analytics.range.label.toLocaleLowerCase("vi")}.`];
+      } else {
+        const labels: Record<string, string> = {
+          positive: "tích cực",
+          neutral: "trung lập",
+          negative: "tiêu cực",
+        };
+        bullets = sentimentRows.map((row) => {
+          const key = String(row.sentiment_label ?? "chưa chấm");
+          const count = Number(row.feedback_count ?? 0).toLocaleString("vi-VN");
+          const avgRating = row.avg_rating == null ? "—" : Number(row.avg_rating).toFixed(1);
+          const avgScore = row.avg_sentiment_score == null ? "—" : Number(row.avg_sentiment_score).toFixed(2);
+          return `${labels[key] ?? key}: ${count} phản hồi, điểm sao TB ${avgRating}, điểm cảm xúc TB ${avgScore}${citation("sentiment_summary")}.`;
+        });
+        bullets.push("Điểm sao và cảm xúc văn bản là hai chỉ số riêng, không dùng rating làm nhãn.");
+      }
+      break;
+    }
     case "dashboard":
       bullets = summary
         ? [
