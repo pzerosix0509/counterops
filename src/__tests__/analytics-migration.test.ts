@@ -16,6 +16,7 @@ describe("analytics migration", () => {
       "demand_forecasts",
       "refresh_customer_features",
       "ai_rfm_summary",
+      "ai_rfm_customers",
       "ai_sentiment_summary",
       "ai_dish_demand_series",
     ]) {

@@ -443,6 +443,7 @@ as $$
   group by cf.sentiment_label;
 $$;
 
+-- dish demand includes paid walk-ins (customer_id may be null)
 create or replace function public.ai_dish_demand_series(
   p_org_id uuid,
   p_branch_id uuid,
