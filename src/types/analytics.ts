@@ -29,3 +29,21 @@ export interface RfmScoredCustomer extends CustomerRfmInput {
   mScore: number;
   segment: RfmSegment;
 }
+
+export interface RfmSummaryRow {
+  segment: RfmSegment | null;
+  customerCount: number;
+  avgMonetary: number;
+}
+
+export interface RfmCustomerRow {
+  customerId: string;
+  recencyDays: number;
+  frequency: number;
+  monetary: number;
+  rScore: number | null;
+  fScore: number | null;
+  mScore: number | null;
+  segment: RfmSegment | null;
+  phoneLast4: string | null;
+}
