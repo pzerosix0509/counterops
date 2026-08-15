@@ -450,6 +450,57 @@ export function buildDeterministicAnswer(
       if (bullets.length === 0) bullets = ["Không có mặt hàng âm kho, hết hàng hoặc sắp hết."];
       break;
     }
+    case "sentiment": {
+      const sentimentRows = executions.find((execution) => execution.call.name === "sentiment_summary")?.rows ?? [];
+      if (sentimentRows.length === 0) {
+        bullets = [`Chưa có phản hồi khách trong ${analytics.range.label.toLocaleLowerCase("vi")}.`];
+      } else {
+        const labels: Record<string, string> = {
+          positive: "tích cực",
+          neutral: "trung lập",
+          negative: "tiêu cực",
+        };
+        bullets = sentimentRows.map((row) => {
+          const key = String(row.sentiment_label ?? "chưa chấm");
+          const count = Number(row.feedback_count ?? 0).toLocaleString("vi-VN");
+          const avgRating = row.avg_rating == null ? "—" : Number(row.avg_rating).toFixed(1);
+          const avgScore = row.avg_sentiment_score == null ? "—" : Number(row.avg_sentiment_score).toFixed(2);
+          return `${labels[key] ?? key}: ${count} phản hồi, điểm sao TB ${avgRating}, điểm cảm xúc TB ${avgScore}${citation("sentiment_summary")}.`;
+        });
+        bullets.push("Điểm sao và cảm xúc văn bản là hai chỉ số riêng, không dùng rating làm nhãn.");
+      }
+      break;
+    }
+    case "rfm": {
+      const rfmRows = executions.find((execution) => execution.call.name === "rfm_summary")?.rows ?? [];
+      if (rfmRows.length === 0) {
+        bullets = ["Chưa có phân khúc RFM. Hãy cập nhật dữ liệu trên trang Phân tích."];
+      } else {
+        bullets = rfmRows.map((row) => {
+          const segment = String(row.rfm_segment ?? "chưa gán");
+          const count = Number(row.customer_count ?? 0).toLocaleString("vi-VN");
+          return `${segment}: ${count} khách, chi tiêu TB ${formatVND(Number(row.avg_monetary ?? 0))}${citation("rfm_summary")}.`;
+        });
+        bullets.push("RFM là phân khúc giá trị, khác với nhóm hành vi KMeans.");
+      }
+      break;
+    }
+    case "segmentation": {
+      const segmentRows = executions.find((execution) => execution.call.name === "customer_segments")?.rows ?? [];
+      const row = segmentRows[0];
+      const profiles = Array.isArray(row?.profiles) ? row.profiles as Array<Record<string, unknown>> : [];
+      if (profiles.length === 0) {
+        bullets = ["Chưa có nhóm hành vi. Hãy phân cụm khách trên trang Phân tích."];
+      } else {
+        bullets = profiles.map((profile) => {
+          const label = String(profile.label ?? `Nhóm ${profile.cluster_id}`);
+          const size = Number(profile.size ?? 0).toLocaleString("vi-VN");
+          return `${label}: ${size} khách, recency TB ${Number(profile.avg_recency ?? 0).toFixed(0)} ngày, chi tiêu TB ${formatVND(Number(profile.avg_monetary ?? 0))}${citation("customer_segments")}.`;
+        });
+      }
+      bullets.push(String(row?.reminder ?? "RFM là value segment, cluster là hành vi"));
+      break;
+    }
     case "dashboard":
       bullets = summary
         ? [

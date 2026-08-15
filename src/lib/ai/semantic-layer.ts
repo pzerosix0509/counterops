@@ -64,6 +64,34 @@ export const SEMANTIC_METRICS: SemanticMetricDefinition[] = [
     format: "number",
     source: "count(orders.id where status = paid)",
   },
+  {
+    key: "avg_rating",
+    label: "Điểm sao trung bình",
+    description: "Trung bình rating 1-5 trên phản hồi khách. Không dùng làm nhãn cảm xúc.",
+    format: "number",
+    source: "avg(customer_feedback.rating)",
+  },
+  {
+    key: "feedback_sentiment",
+    label: "Cảm xúc phản hồi",
+    description: "Phân bố positive/neutral/negative từ văn bản, tách khỏi điểm sao.",
+    format: "number",
+    source: "ai_sentiment_summary.sentiment_label / feedback_count",
+  },
+  {
+    key: "customer_cluster",
+    label: "Nhóm hành vi",
+    description: "RFM là value segment, cluster là hành vi.",
+    format: "number",
+    source: "customer_clusters.profiles",
+  },
+  {
+    key: "rfm_segment",
+    label: "Phân khúc RFM",
+    description: "Nhóm giá trị khách Champions/Loyal/At Risk/Lost. Tách khỏi cluster hành vi.",
+    format: "number",
+    source: "ai_rfm_summary.rfm_segment / customer_count",
+  },
 ];
 
 export const ANALYTICS_TOOL_DEFINITIONS: AnalyticsToolDefinition[] = [
@@ -108,6 +136,24 @@ export const ANALYTICS_TOOL_DEFINITIONS: AnalyticsToolDefinition[] = [
     description: "Các mặt hàng âm kho, hết hàng hoặc dưới định mức thấp.",
     metrics: ["quantity_on_hand", "low_stock_threshold"],
     dimensions: ["inventory_item", "inventory_status"],
+  },
+  {
+    name: "sentiment_summary",
+    description: "Đếm phản hồi theo nhãn cảm xúc và điểm sao trung bình trong kỳ. Tách khỏi avg_rating.",
+    metrics: ["feedback_sentiment", "avg_rating"],
+    dimensions: ["sentiment_label"],
+  },
+  {
+    name: "rfm_summary",
+    description: "Đếm khách và chi tiêu TB theo phân khúc RFM. Tách khỏi KMeans.",
+    metrics: ["rfm_segment"],
+    dimensions: ["rfm_segment"],
+  },
+  {
+    name: "customer_segments",
+    description: "Hồ sơ cụm KMeans. RFM là value segment, cluster là hành vi.",
+    metrics: ["customer_cluster"],
+    dimensions: ["cluster_id", "rfm_segment"],
   },
   {
     name: "search_documents",
@@ -313,6 +359,18 @@ function inferIntent(question: string, mode: "chat" | "dashboard"): {
   if (hasPhrase(q, ["du bao", "du doan", "tháng tới", "thang toi", "tuan toi", "ky toi", "forecast", "predict", "tuong lai"])) {
     return { intent: "forecast", confidence: 0.92, modelTier: "fast", deterministic: false, rationale: "Yêu cầu dự báo hoặc dự đoán tương lai." };
   }
+  if (hasPhrase(q, ["cam xuc", "phan hoi", "feedback", "sentiment"]) || hasToken(q, ["review"])) {
+    return { intent: "sentiment", confidence: 0.93, modelTier: "none", deterministic: true, rationale: "Yêu cầu tổng hợp cảm xúc phản hồi khách." };
+  }
+  if (hasToken(q, ["rfm", "champions"]) || hasPhrase(q, ["phan khuc rfm", "khach rfm"])) {
+    return { intent: "rfm", confidence: 0.93, modelTier: "none", deterministic: true, rationale: "Yêu cầu phân khúc giá trị RFM, tách khỏi KMeans." };
+  }
+  if (
+    hasPhrase(q, ["phan cum", "nhom khach", "kmeans", "cluster", "hanh vi khach", "nhom hanh vi"])
+    || hasToken(q, ["kmeans", "cluster"])
+  ) {
+    return { intent: "segmentation", confidence: 0.93, modelTier: "none", deterministic: true, rationale: "Yêu cầu nhóm hành vi KMeans, tách khỏi RFM." };
+  }
   if (hasPhrase(q, ["tai sao", "nguyen nhan", "de xuat", "khuyen nghi", "can lam gi", "nen lam gi", "bat thuong"])) {
     return { intent: "diagnosis", confidence: 0.9, modelTier: "quality", deterministic: false, rationale: "Yêu cầu suy luận nguyên nhân hoặc khuyến nghị." };
   }
@@ -363,12 +421,63 @@ function toolsForIntent(intent: AiIntent): AiToolName[] {
     document_search: ["search_documents"],
     web_search: ["search_web"],
     forecast: ["sales_summary", "sales_timeseries", "forecast_revenue"],
+    rfm: ["rfm_summary"],
+    sentiment: ["sentiment_summary"],
+    segmentation: ["customer_segments"],
     dashboard: ["sales_summary", "sales_timeseries", "period_comparison", "top_products", "category_summary", "channel_summary"],
     diagnosis: ["sales_summary", "sales_timeseries", "period_comparison", "top_products", "channel_summary"],
     conversation_summary: ["sales_summary", "top_products", "channel_summary"],
     out_of_scope: [],
   };
   return tools[intent];
+}
+
+function wantsDemandForecast(question: string) {
+  const q = normalizeIntentText(question);
+  return hasPhrase(q, ["nguyen lieu", "nhu cau", "dat hang", "demand"]);
+}
+
+function toolArguments(
+  name: AiToolName,
+  question: string,
+  range: AiDateRange,
+  timezone: string,
+): Record<string, string | number | boolean | null> {
+  const common = { from: range.from, to: range.to, rangeLabel: range.label, timezone };
+  const argumentsByTool: Record<AiToolName, Record<string, string | number | boolean | null>> = {
+    sales_summary: common,
+    sales_timeseries: { ...common, granularity: chooseGranularity(range, question) },
+    top_products: { ...common, limit: 10 },
+    category_summary: { ...common, limit: 20 },
+    channel_summary: common,
+    period_comparison: common,
+    inventory_risk: { status: "attention" },
+    search_documents: { query: question, limit: 6 },
+    search_web: { query: question, limit: 5 },
+    forecast_revenue: { ...common, horizon_days: 30 },
+    forecast_demand: { ...common, horizon_days: 14 },
+    rfm_summary: {},
+    sentiment_summary: common,
+    customer_segments: {},
+  };
+  return argumentsByTool[name];
+}
+
+function buildToolCalls(
+  intent: AiIntent,
+  question: string,
+  range: AiDateRange,
+  timezone: string,
+): AiToolCall[] {
+  const names = [...toolsForIntent(intent)];
+  if (intent === "forecast" && wantsDemandForecast(question)) {
+    names.push("forecast_demand");
+  }
+  return names.map((name, index) => ({
+    id: `tool-${index + 1}`,
+    name,
+    arguments: toolArguments(name, question, range, timezone),
+  }));
 }
 
 export function buildAiPlan(
@@ -387,26 +496,6 @@ export function buildAiPlan(
     ) ?? "";
   const range = inferAiDateRange(`${question} ${inheritedDateQuestion}`, now, timezone);
   const classification = inferIntent(question, mode);
-  const tools = toolsForIntent(classification.intent).map((name, index) => {
-    const common = { from: range.from, to: range.to, rangeLabel: range.label, timezone };
-    const argumentsByTool: Record<AiToolName, Record<string, string | number | boolean | null>> = {
-      sales_summary: common,
-      sales_timeseries: { ...common, granularity: chooseGranularity(range, question) },
-      top_products: { ...common, limit: 10 },
-      category_summary: { ...common, limit: 20 },
-      channel_summary: common,
-      period_comparison: common,
-      inventory_risk: { status: "attention" },
-      search_documents: { query: question, limit: 6 },
-      search_web: { query: question, limit: 5 },
-      forecast_revenue: { ...common, horizon_days: 30 },
-    };
-    return {
-      id: `tool-${index + 1}`,
-      name,
-      arguments: argumentsByTool[name],
-    };
-  });
   return {
     intent: classification.intent,
     intentConfidence: classification.confidence,
@@ -414,7 +503,7 @@ export function buildAiPlan(
     deterministic: classification.deterministic,
     rationale: classification.rationale,
     range,
-    tools,
+    tools: buildToolCalls(classification.intent, question, range, timezone),
   };
 }
 
@@ -447,27 +536,6 @@ export async function buildAiPlanAsync(
       to: llmPlan.to,
       label: llmPlan.rangeLabel,
     };
-  const rangeArgs = { from: range.from, to: range.to, rangeLabel: range.label, timezone };
-  const tools = toolsForIntent(llmPlan.intent).map((name, index) => {
-    const common = rangeArgs;
-    const argumentsByTool: Record<AiToolName, Record<string, string | number | boolean | null>> = {
-      sales_summary: common,
-      sales_timeseries: { ...common, granularity: chooseGranularity(range, question) },
-      top_products: { ...common, limit: 10 },
-      category_summary: { ...common, limit: 20 },
-      channel_summary: common,
-      period_comparison: common,
-      inventory_risk: { status: "attention" },
-      search_documents: { query: question, limit: 6 },
-      search_web: { query: question, limit: 5 },
-      forecast_revenue: { ...common, horizon_days: 30 },
-    };
-    return {
-      id: `tool-${index + 1}`,
-      name,
-      arguments: argumentsByTool[name],
-    };
-  });
 
   return {
     intent: llmPlan.intent,
@@ -476,7 +544,7 @@ export async function buildAiPlanAsync(
     deterministic,
     rationale: llmPlan.rationale || `LLM lập kế hoạch: ${llmPlan.intent}`,
     range,
-    tools,
+    tools: buildToolCalls(llmPlan.intent, question, { from: range.from, to: range.to, label: range.label }, timezone),
   };
 }
 
