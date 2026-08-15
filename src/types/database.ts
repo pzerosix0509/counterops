@@ -52,6 +52,13 @@ export interface OrganizationSettings {
   receipt_footer: string;
   bank_code: string | null;
   bank_account_number: string | null;
+  tax_code: string | null;
+  business_line: string | null;
+  business_start_date: string | null;
+  account_holder_name: string | null;
+  province: string | null;
+  district: string | null;
+  commune: string | null;
   created_at: string;
   updated_at: string;
 }

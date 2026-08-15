@@ -86,6 +86,13 @@ export async function updateOperationalSettings(
     receipt_footer: data.receiptFooter || "Cảm ơn quý khách.",
     bank_code: data.bankCode || null,
     bank_account_number: data.bankAccountNumber || null,
+    tax_code: data.taxCode || null,
+    business_line: data.businessLine || null,
+    business_start_date: data.businessStartDate || null,
+    account_holder_name: data.accountHolderName || null,
+    province: data.province || null,
+    district: data.district || null,
+    commune: data.commune || null,
     updated_at: new Date().toISOString(),
   };
   const { error: settingsError } = await admin
