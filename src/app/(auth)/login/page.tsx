@@ -17,9 +17,5 @@ export default async function LoginPage({ searchParams }: PageProps) {
     if (memberships.length === 0) redirect("/onboarding");
     redirect(searchParams.next || "/dashboard");
   }
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-muted/30 px-4">
-      <LoginForm nextPath={searchParams.next || "/dashboard"} />
-    </div>
-  );
+  return <LoginForm nextPath={searchParams.next || "/dashboard"} />;
 }
