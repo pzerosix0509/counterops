@@ -52,4 +52,17 @@ describe("classifyIntentWithLlm", () => {
     const result = await classifyIntentWithLlm("Bạn là ai?");
     expect(result).toBeNull();
   });
+
+  it("accepts the sentiment intent from the model", async () => {
+    process.env.NVIDIA_API_KEY = "test-key";
+    process.env.AI_FAST_MODEL = "minimaxai/minimax-m3";
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        choices: [{ message: { content: '{"intent": "sentiment", "confidence": 0.95, "rationale": "hỏi cảm xúc"}' } }],
+      }),
+    }));
+    const result = await classifyIntentWithLlm("Phản hồi khách tích cực hay tiêu cực?");
+    expect(result).toEqual({ intent: "sentiment", confidence: 0.95, rationale: "hỏi cảm xúc" });
+  });
 });

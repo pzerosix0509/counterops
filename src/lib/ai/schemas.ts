@@ -50,6 +50,13 @@ export const aiModelAnswerSchema = z.object({
   dashboard: aiDashboardSpecSchema.nullable(),
 }).strict();
 
+export const sentimentLlmSchema = z.object({
+  label: z.enum(["positive", "neutral", "negative"]),
+  score: z.number().min(0).max(1),
+}).strict();
+
+export type SentimentLlmPayload = z.infer<typeof sentimentLlmSchema>;
+
 export const aiChatRequestSchema = z.object({
   question: z.string().trim().max(1000).optional(),
   mode: z.enum(["chat", "dashboard"]).optional(),

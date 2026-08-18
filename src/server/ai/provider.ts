@@ -277,6 +277,14 @@ function providerOrder(tier: Exclude<AiModelTier, "none">) {
     .filter((config): config is ProviderConfig => Boolean(config));
 }
 
+export function listAiProviderConfigs(tier: Exclude<AiModelTier, "none">) {
+  return providerOrder(tier);
+}
+
+export function extractAiOutputText(payload: unknown) {
+  return extractOutputText(payload);
+}
+
 async function postChatCompletions(
   config: ProviderConfig,
   payload: ProviderPayload,

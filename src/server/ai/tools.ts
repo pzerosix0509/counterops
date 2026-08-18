@@ -5,6 +5,9 @@ import { aggregateToDailyPoints, computeForecast } from "@/lib/ai/forecast";
 import { searchWeb } from "@/lib/ai/web-search";
 import { searchAiDocumentChunks } from "@/server/queries/ai";
 import { aiToolCacheKey, withAiToolCache } from "@/server/ai/cache";
+import { getCustomerClusters, getDemandForecasts, computeAndPersistDemandForecasts, getRfmSummary } from "@/server/queries/analytics";
+import { canRefreshAnalytics, getActiveMembership } from "@/lib/auth/permissions";
+import { DEMAND_STALE_MS } from "@/lib/analytics/demand";
 import type { AiSource, AiToolCall, AiToolExecution, AiToolName } from "@/types/ai";
 
 const isoDateTime = z.string().refine((value) => !Number.isNaN(Date.parse(value)), {
@@ -45,6 +48,12 @@ const toolArgumentSchemas = {
   forecast_revenue: rangeArgumentsSchema.extend({
     horizon_days: z.number().int().min(7).max(90).optional(),
   }).strict(),
+  forecast_demand: rangeArgumentsSchema.extend({
+    horizon_days: z.number().int().min(7).max(30).optional(),
+  }).strict(),
+  rfm_summary: z.object({}).strict(),
+  sentiment_summary: rangeArgumentsSchema,
+  customer_segments: z.object({}).strict(),
 } satisfies Record<AiToolName, z.ZodType>;
 
 const sourceLabels: Record<Exclude<AiToolName, "search_documents" | "search_web">, string> = {
@@ -56,6 +65,10 @@ const sourceLabels: Record<Exclude<AiToolName, "search_documents" | "search_web"
   period_comparison: "So sánh với kỳ trước",
   inventory_risk: "Cảnh báo tồn kho",
   forecast_revenue: "Dự báo doanh thu",
+  forecast_demand: "Dự báo nhu cầu món và nguyên liệu",
+  rfm_summary: "Phân khúc giá trị RFM",
+  sentiment_summary: "Tổng hợp cảm xúc phản hồi",
+  customer_segments: "Nhóm hành vi khách (KMeans)",
 };
 
 const rpcNames: Partial<Record<AiToolName, string>> = {
@@ -65,6 +78,7 @@ const rpcNames: Partial<Record<AiToolName, string>> = {
   category_summary: "ai_category_summary",
   channel_summary: "ai_channel_summary",
   period_comparison: "ai_period_comparison",
+  sentiment_summary: "ai_sentiment_summary",
 };
 
 export interface AiToolContext {
@@ -97,6 +111,7 @@ async function executeRpcTool(
     category_summary: { ...common, p_limit: args.limit },
     channel_summary: common,
     period_comparison: common,
+    sentiment_summary: common,
   };
   const rpc = rpcNames[call.name];
   if (!rpc) throw new Error(`Tool ${call.name} không có RPC.`);
@@ -185,6 +200,96 @@ async function executeForecast(
   return { rows: cached.value, cacheHit: cached.hit };
 }
 
+async function executeForecastDemand(
+  call: AiToolCall,
+  context: AiToolContext,
+): Promise<{ rows: Array<Record<string, unknown>>; cacheHit: boolean }> {
+  const args = call.arguments as Record<string, any>;
+  const horizonDays = Number(args.horizon_days ?? 14);
+  const membership = await getActiveMembership();
+  const canRefresh = membership ? canRefreshAnalytics.includes(membership.role) : false;
+  let view = await getDemandForecasts(context.organizationId, context.branchId, horizonDays);
+  const computedAtMs = view.computedAt ? new Date(view.computedAt).getTime() : 0;
+  const stale = !view.computedAt || Date.now() - computedAtMs > DEMAND_STALE_MS;
+  let warning: string | null = null;
+
+  if (stale && canRefresh) {
+    await computeAndPersistDemandForecasts(context.organizationId, context.branchId, horizonDays);
+    view = await getDemandForecasts(context.organizationId, context.branchId, horizonDays);
+  } else if (stale) {
+    warning = "Dữ liệu dự báo cũ hơn 24 giờ.";
+    return {
+      rows: [{
+        warning,
+        stale: true,
+        computed_at: view.computedAt,
+        method: view.method,
+        horizon_days: horizonDays,
+        insufficient_data: view.insufficientData,
+        dishes: view.dishes,
+        ingredients: view.ingredients,
+      } as Record<string, unknown>],
+      cacheHit: false,
+    };
+  }
+
+  const snapshotKey = aiToolCacheKey({
+    organizationId: context.organizationId,
+    branchId: context.branchId,
+    tool: "forecast_demand",
+    arguments: { horizon_days: horizonDays, computed_at: view.computedAt },
+  });
+  const cached = await withAiToolCache(snapshotKey, async () => [{
+    warning,
+    stale: false,
+    computed_at: view.computedAt,
+    method: view.method,
+    horizon_days: horizonDays,
+    insufficient_data: view.insufficientData,
+    dishes: view.dishes,
+    ingredients: view.ingredients,
+  } as Record<string, unknown>]);
+  return { rows: cached.value, cacheHit: cached.hit };
+}
+
+async function executeRfmSummary(context: AiToolContext) {
+  const cacheKey = aiToolCacheKey({
+    organizationId: context.organizationId,
+    branchId: context.branchId,
+    tool: "rfm_summary",
+    arguments: {},
+  });
+  return withAiToolCache(cacheKey, async () => {
+    const rows = await getRfmSummary(context.organizationId, context.branchId);
+    return rows.map((row) => ({
+      rfm_segment: row.segment,
+      customer_count: row.customerCount,
+      avg_monetary: row.avgMonetary,
+    }));
+  });
+}
+
+async function executeCustomerSegments(context: AiToolContext) {
+  const cacheKey = aiToolCacheKey({
+    organizationId: context.organizationId,
+    branchId: context.branchId,
+    tool: "customer_segments",
+    arguments: {},
+  });
+  return withAiToolCache(cacheKey, async () => {
+    const view = await getCustomerClusters(context.organizationId, context.branchId);
+    return [
+      {
+        reminder: view.reminder,
+        k: view.k,
+        silhouette: view.silhouette,
+        fitted_at: view.fittedAt,
+        profiles: view.profiles,
+      } as Record<string, unknown>,
+    ];
+  });
+}
+
 export async function executeAiTool(
   call: AiToolCall,
   context: AiToolContext,
@@ -248,6 +353,18 @@ export async function executeAiTool(
     if (call.name === "forecast_revenue") {
       const result = await executeForecast(call, context);
       return { call, rows: result.rows, cacheHit: result.cacheHit, durationMs: Date.now() - startedAt };
+    }
+    if (call.name === "forecast_demand") {
+      const result = await executeForecastDemand(call, context);
+      return { call, rows: result.rows, cacheHit: result.cacheHit, durationMs: Date.now() - startedAt };
+    }
+    if (call.name === "rfm_summary") {
+      const cached = await executeRfmSummary(context);
+      return { call, rows: cached.value, cacheHit: cached.hit, durationMs: Date.now() - startedAt };
+    }
+    if (call.name === "customer_segments") {
+      const cached = await executeCustomerSegments(context);
+      return { call, rows: cached.value, cacheHit: cached.hit, durationMs: Date.now() - startedAt };
     }
     const result = await executeRpcTool(call, context);
     return { call, rows: result.rows, cacheHit: result.cacheHit, durationMs: Date.now() - startedAt };
