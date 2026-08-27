@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { canViewReports, requireActiveContext, requireRole } from "@/lib/auth/permissions";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { chunkText, normalizeDocumentText } from "@/lib/ai/chunk";
