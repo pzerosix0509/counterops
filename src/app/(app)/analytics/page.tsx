@@ -9,11 +9,9 @@ import {
   getSentimentSummary,
   listRecentPaidOrders,
 } from "@/server/queries/analytics";
-import { ClusterPanel } from "@/components/analytics/cluster-panel";
-import { DemandPanel } from "@/components/analytics/demand-panel";
-import { RefreshAnalyticsButton, RfmPanel } from "@/components/analytics/rfm-panel";
-import { SentimentPanel } from "@/components/analytics/sentiment-panel";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { RefreshAnalyticsButton } from "@/components/analytics/refresh-analytics-button";
+import { ClusterPanel, DemandPanel, RfmPanel, SentimentPanel } from "@/components/analytics/analytics-panels-lazy";
 import type { CustomerClustersView, DemandForecastView, FeedbackListRow, RfmSegment, SentimentSummary } from "@/types/analytics";
 
 export const metadata = { title: "Phân tích" };

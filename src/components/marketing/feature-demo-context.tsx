@@ -1,6 +1,5 @@
 "use client";
 import * as React from "react";
-import { useReducedMotion } from "framer-motion";
 import { FEATURES, MOTION } from "./feature-data";
 
 interface FeatureDemoContextValue {
@@ -14,10 +13,22 @@ interface FeatureDemoContextValue {
 
 const FeatureDemoContext = React.createContext<FeatureDemoContextValue | null>(null);
 
+function usePrefersReducedMotion() {
+  const [reduced, setReduced] = React.useState(false);
+  React.useEffect(() => {
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    setReduced(mq.matches);
+    const onChange = () => setReduced(mq.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+  return reduced;
+}
+
 export function FeatureDemoProvider({ children }: { children: React.ReactNode }) {
   const [activeIndex, setActiveIndex] = React.useState(0);
   const [isPaused, setIsPaused] = React.useState(false);
-  const reducedMotion = useReducedMotion() === true;
+  const reducedMotion = usePrefersReducedMotion();
 
   React.useEffect(() => {
     if (reducedMotion || isPaused) return;

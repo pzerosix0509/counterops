@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { DashboardCharts } from "@/components/dashboard/dashboard-charts";
+import { DashboardCharts } from "@/components/dashboard/dashboard-charts-lazy";
 
 interface PageProps {
   searchParams: { range?: string; from?: string; to?: string };

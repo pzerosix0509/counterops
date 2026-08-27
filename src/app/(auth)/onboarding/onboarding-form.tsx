@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { AnimatedAuthIcon } from "@/components/common/animated-auth-icon";
+import { AnimatedAuthIcon } from "@/components/common/animated-auth-icon-lazy";
 import { createOrganizationWithFirstBranch } from "@/server/actions/onboarding";
 
 export function OnboardingForm({ email, userId }: { email: string; userId: string }) {

@@ -1,7 +1,7 @@
-import { AiAssistant } from "@/components/ai/ai-assistant";
 import { canViewReports, getActiveMembership, requireActiveContext } from "@/lib/auth/permissions";
 import { getAiUsageSummary, listAiChatMessages, listAiChatSessions } from "@/server/ai/conversations";
 import { listAiDashboardTemplates, listAiDocuments } from "@/server/queries/ai";
+import { AiAssistant } from "@/components/ai/ai-assistant-lazy";
 
 export const metadata = { title: "AI trợ lý" };
 
