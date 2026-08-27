@@ -6,7 +6,6 @@ import { searchWeb } from "@/lib/ai/web-search";
 import { searchAiDocumentChunks } from "@/server/queries/ai";
 import { aiToolCacheKey, withAiToolCache } from "@/server/ai/cache";
 import { getCustomerClusters, getDemandForecasts, computeAndPersistDemandForecasts, getRfmSummary } from "@/server/queries/analytics";
-import { canRefreshAnalytics, getActiveMembership } from "@/lib/auth/permissions";
 import { DEMAND_STALE_MS } from "@/lib/analytics/demand";
 import type { AiSource, AiToolCall, AiToolExecution, AiToolName } from "@/types/ai";
 
@@ -216,6 +215,7 @@ async function executeForecastDemand(
 ): Promise<{ rows: Array<Record<string, unknown>>; cacheHit: boolean }> {
   const args = call.arguments as Record<string, any>;
   const horizonDays = Number(args.horizon_days ?? 14);
+  const { canRefreshAnalytics, getActiveMembership } = await import("@/lib/auth/permissions");
   const membership = await getActiveMembership();
   const canRefresh = membership ? canRefreshAnalytics.includes(membership.role) : false;
   let view = await getDemandForecasts(context.organizationId, context.branchId, horizonDays);
