@@ -41,7 +41,7 @@ export async function createOrganizationWithFirstBranch(
     return actionFail("CONFLICT", "Mã định danh đã tồn tại, vui lòng chọn mã khác.", { organizationSlug: ["Mã định danh đã tồn tại"] });
   }
 
-  const { data: org, error: orgErr } = await supabase
+  const { data: org, error: orgErr } = await admin
     .from("organizations")
     .insert({
       name: data.organizationName,
