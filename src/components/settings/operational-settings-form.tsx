@@ -379,29 +379,45 @@ export function OperationalSettingsForm({
 
         <section className="space-y-3 rounded-md border bg-card p-4 xl:col-span-2">
           <div>
-            <h2 className="text-sm font-semibold">Chuyển khoản ngân hàng</h2>
-            <p className="text-sm text-muted-foreground">Thông tin tài khoản để tự sinh QR VietQR khi thanh toán chuyển khoản trên POS.</p>
+            <h2 className="text-sm font-semibold">Thuế</h2>
+            <p className="text-sm text-muted-foreground">Thông tin hộ kinh doanh, cá nhân kinh doanh dùng để tự điền vào các mẫu biểu thuế.</p>
           </div>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <div className="space-y-1.5">
-              <Label>Mã ngân hàng (BIN)</Label>
-              <Input
-                placeholder="VD: 970415 (Vietinbank), 970436 (Vietcombank)"
-                value={draft.bankCode ?? ""}
-                onChange={(event) => updateDraft("bankCode", event.target.value || null)}
-              />
-              <FieldHint>Tra cứu BIN tại vietqr.io/danh-sach-ngan-hang</FieldHint>
+              <Label>Mã số thuế</Label>
+              <Input placeholder="VD: 0123456789" value={draft.taxCode ?? ""} onChange={(event) => updateDraft("taxCode", event.target.value || null)} />
             </div>
             <div className="space-y-1.5">
-              <Label>Số tài khoản</Label>
-              <Input
-                placeholder="VD: 123456789"
-                value={draft.bankAccountNumber ?? ""}
-                onChange={(event) => updateDraft("bankAccountNumber", event.target.value || null)}
-              />
+              <Label>Ngày bắt đầu hoạt động</Label>
+              <Input type="date" value={draft.businessStartDate ?? ""} onChange={(event) => updateDraft("businessStartDate", event.target.value || null)} />
+            </div>
+            <div className="space-y-1.5 md:col-span-2">
+              <Label>Ngành nghề kinh doanh chính</Label>
+              <Input placeholder="VD: Quán cà phê, giải khát" value={draft.businessLine ?? ""} onChange={(event) => updateDraft("businessLine", event.target.value || null)} />
+            </div>
+            <div className="space-y-1.5 md:col-span-2">
+              <Label>Tên chủ tài khoản</Label>
+              <Input placeholder="Tên in trên số tài khoản ngân hàng" value={draft.accountHolderName ?? ""} onChange={(event) => updateDraft("accountHolderName", event.target.value || null)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Số nhà, đường phố (xóm/ấp/thôn)</Label>
+              <Input value={draft.receiptAddress ?? ""} onChange={(event) => updateDraft("receiptAddress", event.target.value || null)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Xã/Phường/Đặc khu</Label>
+              <Input value={draft.commune ?? ""} onChange={(event) => updateDraft("commune", event.target.value || null)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Quận/Huyện</Label>
+              <Input value={draft.district ?? ""} onChange={(event) => updateDraft("district", event.target.value || null)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Tỉnh/Thành phố</Label>
+              <Input value={draft.province ?? ""} onChange={(event) => updateDraft("province", event.target.value || null)} />
             </div>
           </div>
         </section>
+
       </div>
 
       <div className="sticky bottom-0 flex justify-end border-t bg-background/95 py-3 backdrop-blur">

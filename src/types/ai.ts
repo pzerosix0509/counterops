@@ -32,6 +32,7 @@ export interface AiSourceProvenance {
 
 export type AiIntent =
   | "greeting"
+  | "capability"
   | "metric_lookup"
   | "trend"
   | "comparison"
