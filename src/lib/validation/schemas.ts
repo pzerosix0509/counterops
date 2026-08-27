@@ -39,6 +39,13 @@ export const productSchema = z.object({
 });
 export type ProductInput = z.infer<typeof productSchema>;
 
+export const recipeItemInputSchema = z.object({
+  inventoryItemId: z.string().uuid(),
+  quantity: z.number().positive("Số lượng phải lớn hơn 0"),
+  unit: z.string().min(1, "Đơn vị không được trống"),
+});
+export type RecipeItemInput = z.infer<typeof recipeItemInputSchema>;
+
 export const categorySchema = z.object({
   name: z.string().min(1),
   sortOrder: z.number().int().default(0),
@@ -162,6 +169,13 @@ export const operationalSettingsSchema = z.object({
   receiptFooter: z.string().trim().max(240),
   bankCode: z.string().trim().max(20).nullable().optional(),
   bankAccountNumber: z.string().trim().max(30).nullable().optional(),
+  taxCode: z.string().trim().max(30).nullable().optional(),
+  businessLine: z.string().trim().max(160).nullable().optional(),
+  businessStartDate: z.string().date().nullable().optional().or(z.literal("")),
+  accountHolderName: z.string().trim().max(120).nullable().optional(),
+  province: z.string().trim().max(80).nullable().optional(),
+  district: z.string().trim().max(80).nullable().optional(),
+  commune: z.string().trim().max(80).nullable().optional(),
   salesChannels: z.array(z.object({
     id: z.string().uuid().optional(),
     name: z.string().trim().min(1),

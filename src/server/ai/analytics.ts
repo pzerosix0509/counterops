@@ -1,5 +1,6 @@
 import "server-only";
 import { formatVND } from "@/lib/date/ranges";
+import { decomposeRevenueDelta } from "@/lib/ai/decomposition";
 import type {
   AiAnalyticsContext,
   AiChartSpec,
@@ -85,7 +86,30 @@ export function buildAnalyticsContext(executions: AiToolExecution[]): AiAnalytic
       previous_profit: numberValue(comparison.previous_profit),
       profit_delta_percent: comparison.profit_delta_percent == null ? null : numberValue(comparison.profit_delta_percent),
     } : null,
+    decomposition: buildDecomposition(salesSummary, comparison),
     forecastRevenue,
+  };
+}
+
+/** Driver decomposition: Δ doanh thu = Δorders×AOV_prev + ΔAOV×orders_current */
+function buildDecomposition(
+  summary: any,
+  comparison: any,
+): AiAnalyticsContext["decomposition"] {
+  if (!summary || !comparison) return null;
+  const current = { revenue: numberValue(summary.net_revenue), orders: numberValue(summary.total_orders) };
+  const previous = {
+    revenue: numberValue(comparison.previous_revenue),
+    orders: numberValue(comparison.previous_orders),
+  };
+  if (previous.revenue === 0 && previous.orders === 0) return null;
+  const result = decomposeRevenueDelta(current, previous);
+  return {
+    delta: result.delta,
+    ordersEffect: result.ordersEffect,
+    aovEffect: result.aovEffect,
+    ordersSharePct: result.ordersSharePct,
+    aovSharePct: result.aovSharePct,
   };
 }
 
@@ -368,12 +392,15 @@ export function buildDeterministicAnswer(
         const avgRevenue = Math.round(
           forecast.points.reduce((sum, p) => sum + p.forecasted_revenue, 0) / forecast.points.length,
         );
+        const backtestWmape = forecast.backtest?.wmape;
         bullets = [
           `Dự báo ${forecast.horizon_days} ngày tới dựa trên ${forecast.training_days} ngày lịch sử (phương pháp trung bình có trọng số).`,
           first ? `Ngày đầu tiên (${first.period_start}): doanh thu dự kiến ${formatVND(first.forecasted_revenue)}, biên dao động ${formatVND(first.lower_bound)} – ${formatVND(first.upper_bound)}.` : "",
           last && forecast.horizon_days > 1 ? `Ngày cuối (${last.period_start}): doanh thu dự kiến ${formatVND(last.forecasted_revenue)}.` : "",
           `Doanh thu trung bình mỗi ngày dự báo: ${formatVND(avgRevenue)}.`,
-          "Dự báo này là ước tính thống kê đơn giản, không tính đến mùa vụ, khuyến mãi hoặc sự kiện bất thường.",
+          backtestWmape != null && backtestWmape > 0.3
+            ? `Đây là baseline forecast — sai số backtest WMAPE ~${Math.round(backtestWmape * 100)}%, chưa đủ chắc chắn cho quyết định lớn.`
+            : "Dự báo này là ước tính thống kê đơn giản, không tính đến mùa vụ, khuyến mãi hoặc sự kiện bất thường.",
         ].filter(Boolean) as string[];
       }
       break;

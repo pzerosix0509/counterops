@@ -33,6 +33,13 @@ function mapSettings(row: OrganizationSettings | null | undefined): OperationalS
     receiptFooter: row.receipt_footer,
     bankCode: row.bank_code ?? null,
     bankAccountNumber: row.bank_account_number ?? null,
+    taxCode: row.tax_code ?? null,
+    businessLine: row.business_line ?? null,
+    businessStartDate: row.business_start_date ?? null,
+    accountHolderName: row.account_holder_name ?? null,
+    province: row.province ?? null,
+    district: row.district ?? null,
+    commune: row.commune ?? null,
   };
 }
 

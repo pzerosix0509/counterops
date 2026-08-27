@@ -5,6 +5,7 @@ import { z } from "zod";
 import { actionFail, actionOk, type ActionResult } from "@/lib/utils/action-result";
 import { canManageTables, requireRole } from "@/lib/auth/permissions";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { canFreeTable } from "@/lib/calculations/tables";
 
 const areaSchema = z.object({ name: z.string().min(1), sortOrder: z.number().int().default(0) });
 const tableSchema = z.object({
@@ -85,7 +86,8 @@ export async function updateTableStatus(organizationId: string, input: z.infer<t
       .neq("status", "refunded")
       .limit(1)
       .maybeSingle();
-    if (openOrder && !["owner", "admin", "manager"].includes(m.role)) {
+    const allowed = canFreeTable(m.role, table.status, Boolean(openOrder));
+    if (!allowed) {
       return actionFail("CONFLICT", "Bàn còn đơn đang mở, cần quản lý để chuyển trạng thái.");
     }
   }

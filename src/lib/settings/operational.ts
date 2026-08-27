@@ -27,6 +27,13 @@ export interface OperationalSettings {
   receiptFooter: string;
   bankCode: string | null;
   bankAccountNumber: string | null;
+  taxCode: string | null;
+  businessLine: string | null;
+  businessStartDate: string | null;
+  accountHolderName: string | null;
+  province: string | null;
+  district: string | null;
+  commune: string | null;
 }
 
 export const DEFAULT_OPERATIONAL_SETTINGS: OperationalSettings = {
@@ -53,4 +60,11 @@ export const DEFAULT_OPERATIONAL_SETTINGS: OperationalSettings = {
   receiptFooter: "Cảm ơn quý khách.",
   bankCode: null,
   bankAccountNumber: null,
+  taxCode: null,
+  businessLine: null,
+  businessStartDate: null,
+  accountHolderName: null,
+  province: null,
+  district: null,
+  commune: null,
 };
