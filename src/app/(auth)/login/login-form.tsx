@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { AnimatedAuthIcon } from "@/components/common/animated-auth-icon";
+import { AnimatedAuthIcon } from "@/components/common/animated-auth-icon-lazy";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 export function LoginForm({ nextPath }: { nextPath: string }) {

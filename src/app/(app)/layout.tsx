@@ -2,6 +2,7 @@
 import { Toaster } from "sonner";
 import { Sidebar } from "@/components/app-shell/sidebar";
 import { Topbar } from "@/components/app-shell/topbar";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
   getActiveMemberships,
@@ -40,20 +41,22 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const branches = branchesResp.data ?? [];
 
   return (
-    <div className="min-h-screen bg-muted/20">
-      <Sidebar role={active.role as MembershipRole} organizationName={org.name} />
-      <div className="flex min-h-screen flex-col md:pl-[240px]">
-        <Topbar
-          userEmail={user.email ?? ""}
-          userName={profile?.full_name ?? null}
-          organizationName={org.name}
-          branches={branches.map((b) => ({ id: b.id, name: b.name }))}
-          currentBranchId={branchId}
-          role={active.role as MembershipRole}
-        />
-        <main className="flex-1 px-4 py-4 md:px-6 md:py-6">{children}</main>
-        <Toaster richColors closeButton position="top-right" />
+    <TooltipProvider delayDuration={200}>
+      <div className="min-h-screen bg-muted/20">
+        <Sidebar role={active.role as MembershipRole} organizationName={org.name} />
+        <div className="flex min-h-screen flex-col md:pl-[240px]">
+          <Topbar
+            userEmail={user.email ?? ""}
+            userName={profile?.full_name ?? null}
+            organizationName={org.name}
+            branches={branches.map((b) => ({ id: b.id, name: b.name }))}
+            currentBranchId={branchId}
+            role={active.role as MembershipRole}
+          />
+          <main className="flex-1 px-4 py-4 md:px-6 md:py-6">{children}</main>
+          <Toaster richColors closeButton position="top-right" />
+        </div>
       </div>
-    </div>
+    </TooltipProvider>
   );
 }

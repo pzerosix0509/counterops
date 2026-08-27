@@ -1,16 +1,11 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useTransition } from "react";
-import { Loader2, RefreshCw } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatVND } from "@/lib/date/ranges";
-import { notifyError, notifySuccess } from "@/hooks/use-notify";
-import { refreshCustomerAnalytics } from "@/server/actions/analytics";
 import type { RfmCustomerRow, RfmSegment, RfmSummaryRow } from "@/types/analytics";
 
 const RFM_SEGMENTS: RfmSegment[] = [
@@ -43,32 +38,6 @@ function shortCustomerId(customerId: string) {
 
 function formatScore(value: number | null) {
   return value == null ? "—" : String(value);
-}
-
-export function RefreshAnalyticsButton({ canRefresh }: { canRefresh: boolean }) {
-  const router = useRouter();
-  const [isPending, startTransition] = useTransition();
-
-  if (!canRefresh) return null;
-
-  function onRefresh() {
-    startTransition(async () => {
-      const res = await refreshCustomerAnalytics();
-      if (!res.ok) {
-        notifyError("Không cập nhật được dữ liệu", res.error.message);
-        return;
-      }
-      notifySuccess("Đã cập nhật dữ liệu phân tích", `${res.data.updated.toLocaleString("vi-VN")} khách`);
-      router.refresh();
-    });
-  }
-
-  return (
-    <Button variant="outline" size="sm" onClick={onRefresh} disabled={isPending}>
-      {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-      {isPending ? "Đang cập nhật..." : "Cập nhật dữ liệu"}
-    </Button>
-  );
 }
 
 export function RfmPanel({

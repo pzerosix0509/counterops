@@ -1,6 +1,5 @@
 ﻿import type { Metadata } from "next";
 import "./globals.css";
-import { TooltipProvider } from "@/components/ui/tooltip";
 
 export const metadata: Metadata = {
   title: "Quản lý cửa hàng",
@@ -10,9 +9,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="vi" suppressHydrationWarning>
-      <body>
-        <TooltipProvider delayDuration={200}>{children}</TooltipProvider>
-      </body>
+      <body>{children}</body>
     </html>
   );
 }

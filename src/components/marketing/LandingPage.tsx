@@ -3,7 +3,7 @@ import { ArrowRight, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { FeatureDemoProvider } from "./feature-demo-context";
-import { FeatureDemoPanel } from "./feature-demo-panel";
+import { FeatureDemoPanelLazy } from "./feature-demo-panel-lazy";
 import { FeaturesGrid } from "./features-grid";
 
 interface ProofStat {
@@ -123,7 +123,7 @@ function FeaturesSection() {
       <div className="mt-12 grid items-start gap-10 lg:grid-cols-[minmax(0,1fr)_400px]">
         <FeaturesGrid />
         <div className="hidden lg:sticky lg:top-24 lg:block">
-          <FeatureDemoPanel />
+          <FeatureDemoPanelLazy />
         </div>
       </div>
     </section>
