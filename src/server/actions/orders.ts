@@ -7,6 +7,7 @@ import { canCreateOrder, canPayOrder, canUpdateKitchen, requireRole } from "@/li
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { calculateTotals, newOrderNumber, classifyPaymentStatus } from "@/lib/calculations/orders";
 import { clearAiToolCache } from "@/server/ai/cache";
+import { upsertCustomerByPhone } from "@/server/customers";
 
 const OPEN_ORDER_STATUSES = ["draft", "open", "sent_to_kitchen", "partially_paid"] as const;
 
@@ -94,6 +95,18 @@ export async function createOrUpdateOrder(
   }
   const productCostMap = await loadProductCostSnapshots(supabase, m.organization.id, productMap);
 
+  let customerId: string | null = null;
+  try {
+    customerId = await upsertCustomerByPhone(
+      supabase,
+      m.organization.id,
+      parsed.data.customerPhone,
+      parsed.data.customerName,
+    );
+  } catch (error) {
+    return actionFail("INTERNAL_ERROR", error instanceof Error ? error.message : "Không lưu được khách");
+  }
+
   const itemsForCalc = parsed.data.items.map((item) => {
     const p = productMap.get(item.productId)!;
     return {
@@ -158,6 +171,7 @@ export async function createOrUpdateOrder(
         tax_amount: totals.taxAmount,
         service_fee_amount: totals.serviceFeeAmount,
         total_amount: totals.totalAmount,
+        customer_id: customerId ?? existing.customer_id,
         status: "open",
       })
       .eq("id", orderId);
@@ -217,6 +231,7 @@ export async function createOrUpdateOrder(
       paid_amount: 0,
       debt_amount: totals.totalAmount,
       opened_by: m.membership.user_id,
+      customer_id: customerId,
     })
     .select("id")
     .single();

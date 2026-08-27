@@ -1,5 +1,11 @@
 ﻿import { z } from "zod";
 
+export const loginSchema = z.object({
+  email: z.string().min(1, "Email không được trống").email("Email không hợp lệ"),
+  password: z.string().min(6, "Mật khẩu tối thiểu 6 ký tự"),
+});
+export type LoginInput = z.infer<typeof loginSchema>;
+
 export const onboardingSchema = z.object({
   organizationName: z.string().min(2, "Tên cửa hàng tối thiểu 2 ký tự"),
   organizationSlug: z

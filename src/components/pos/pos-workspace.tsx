@@ -36,7 +36,7 @@ interface Props {
   categories: MenuCategory[];
   areas: Area[];
   tables: DiningTable[];
-  openByTable: Record<string, Order & { items: OrderItem[] }>;
+  openByTable: Record<string, Order & { items: OrderItem[]; customer?: { name: string | null; phone: string | null } | null }>;
   channels: SalesChannel[];
   settings: OperationalSettings;
 }
@@ -46,6 +46,8 @@ interface OrderPayload {
   tableId: string | null;
   salesChannelId: string | null;
   orderType: "dine_in" | "takeaway";
+  customerName: string | null;
+  customerPhone: string | null;
   items: { productId: string; quantity: number; note: string | null }[];
   discountAmount: number;
   taxAmount: number;
@@ -89,6 +91,8 @@ export function PosWorkspace(props: Props) {
   const [payOpen, setPayOpen] = useState(false);
   const [noteItemIdx, setNoteItemIdx] = useState<number | null>(null);
   const [noteText, setNoteText] = useState("");
+  const [customerName, setCustomerName] = useState("");
+  const [customerPhone, setCustomerPhone] = useState("");
 
   const [paymentLines, setPaymentLines] = useState<{ method: "cash" | "bank_transfer" | "card" | "ewallet" | "debt" | "other"; amount: number }[]>([
     { method: settings.defaultPaymentMethod, amount: 0 },
@@ -142,6 +146,8 @@ export function PosWorkspace(props: Props) {
       setDiscount(existing.discount_amount ?? 0);
       setTax(existing.tax_amount ?? 0);
       setServiceFee(existing.service_fee_amount ?? 0);
+      setCustomerName(existing.customer?.name ?? "");
+      setCustomerPhone(existing.customer?.phone ?? "");
       setCart(
         (existing.items ?? [])
           .filter((item) => item.product_id)
@@ -226,6 +232,8 @@ export function PosWorkspace(props: Props) {
     setServiceFee(0);
     setActiveOrderId(null);
     setTableId(null);
+    setCustomerName("");
+    setCustomerPhone("");
     setError(null);
   }
 
@@ -246,6 +254,8 @@ export function PosWorkspace(props: Props) {
       tableId: orderType === "dine_in" ? tableId : null,
       salesChannelId: channelId,
       orderType,
+      customerName: customerName.trim() || null,
+      customerPhone: customerPhone.trim() || null,
       items: cart.map((item) => ({ productId: item.productId, quantity: item.quantity, note: item.note || null })),
       discountAmount: discount,
       taxAmount: tax,
@@ -449,6 +459,25 @@ export function PosWorkspace(props: Props) {
           <CardTitle className="text-sm">Đơn hiện tại {isSelectedPaidOrder ? "- đã thanh toán" : activeOrderId ? "- đã lưu" : "- chưa lưu"}{" "}{realtime.isSubscribed ? <span className="ml-2 text-xs font-normal text-muted-foreground">{realtime.hasPendingChange ? "Đang đồng bộ..." : "Đã đồng bộ"}</span> : null}</CardTitle>
         </CardHeader>
         <CardContent className="flex-1 space-y-3 overflow-auto">
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-xs text-muted-foreground">SĐT khách (RFM)</label>
+              <Input
+                value={customerPhone}
+                onChange={(event) => setCustomerPhone(event.target.value)}
+                placeholder="0901234567"
+                inputMode="tel"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Tên khách</label>
+              <Input
+                value={customerName}
+                onChange={(event) => setCustomerName(event.target.value)}
+                placeholder="Tuỳ chọn"
+              />
+            </div>
+          </div>
           {cart.length === 0 ? (
             <EmptyState title="Chưa có món nào" description="Bấm vào thực đơn để thêm món." />
           ) : (

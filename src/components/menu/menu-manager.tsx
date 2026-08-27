@@ -1,7 +1,7 @@
 ﻿"use client";
 import { useState, useTransition, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Search, FileUp, ChefHat } from "lucide-react";
+import { Plus, Search, FileUp, Trash2, ChefHat } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NumberInput } from "@/components/ui/number-input";
@@ -22,7 +22,7 @@ import {
 import { ExcelImportDialog, ExcelDownloadButton } from "@/components/common/excel-import";
 import { RecipeDialog } from "@/components/menu/recipe-dialog";
 import { formatVND } from "@/lib/date/ranges";
-import type { MenuCategory, Product, InventoryItem } from "@/types/database";
+import type { InventoryItem, MenuCategory, Product } from "@/types/database";
 import { EmptyState } from "@/components/common/states";
 import { notifyError, notifySuccess } from "@/hooks/use-notify";
 import {
@@ -63,6 +63,8 @@ export function MenuManager({
   const [recipeProduct, setRecipeProduct] = useState<Product | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [productType, setProductType] = useState<"regular" | "prepared">("regular");
+  const [recipeLines, setRecipeLines] = useState<Array<{ inventoryItemId: string; quantity: string }>>([]);
 
   function applyFilter(e: React.FormEvent) {
     e.preventDefault();
@@ -81,12 +83,30 @@ export function MenuManager({
       categoryId: (f.get("categoryId") as string) || null,
       description: (f.get("description") as string) || null,
       menuType: (f.get("menuType") as string) || "food",
-      productType: (f.get("productType") as string) || "regular",
+      productType,
       costPrice: Number(f.get("costPrice") || 0),
       salePrice: Number(f.get("salePrice") || 0),
       unit: String(f.get("unit") || "phần"),
       isActive: true,
+      recipe: productType === "prepared"
+        ? recipeLines
+            .filter((line) => line.inventoryItemId)
+            .map((line) => {
+              const item = inventoryItems.find((inv) => inv.id === line.inventoryItemId);
+              return {
+                inventoryItemId: line.inventoryItemId,
+                quantity: Number(line.quantity || 0),
+                unit: item?.unit ?? "g",
+                estimatedCost: 0,
+              };
+            })
+        : undefined,
     };
+    if (productType === "prepared" && (!payload.recipe || payload.recipe.length === 0)) {
+      setError("Món chế biến cần ít nhất 1 dòng công thức.");
+      notifyError("Thêm món thất bại", "Món chế biến cần ít nhất 1 dòng công thức.");
+      return;
+    }
     startTransition(async () => {
       const res = await createProduct(organizationId, payload);
       if (!res.ok) {
@@ -95,6 +115,8 @@ export function MenuManager({
         return;
       }
       setOpen(false);
+      setProductType("regular");
+      setRecipeLines([]);
       router.refresh();
       notifySuccess("Đã thêm món");
     });
@@ -154,16 +176,23 @@ export function MenuManager({
             label="Xuất Excel"
           />
           {canManage ? (
-            <Dialog open={open} onOpenChange={setOpen}>
+            <Dialog open={open} onOpenChange={(next) => {
+              setOpen(next);
+              if (!next) {
+                setProductType("regular");
+                setRecipeLines([]);
+                setError(null);
+              }
+            }}>
               <DialogTrigger asChild>
                 <Button>
                   <Plus className="h-4 w-4" /> Thêm món
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-lg">
+              <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>Thêm món mới</DialogTitle>
-                  <DialogDescription>Điền thông tin cơ bản, có thể bổ sung công thức sau.</DialogDescription>
+                  <DialogDescription>Món chế biến cần chọn nguyên liệu để dự báo nhu cầu hoạt động.</DialogDescription>
                 </DialogHeader>
                 <form className="space-y-3" onSubmit={onCreateProduct}>
                   <div className="grid grid-cols-2 gap-3">
@@ -206,7 +235,13 @@ export function MenuManager({
                     </div>
                     <div className="space-y-1.5">
                       <Label htmlFor="productType">Loại sản phẩm</Label>
-                      <Select name="productType" defaultValue="regular">
+                      <Select value={productType} onValueChange={(value) => {
+                        const next = value as "regular" | "prepared";
+                        setProductType(next);
+                        if (next === "prepared" && recipeLines.length === 0) {
+                          setRecipeLines([{ inventoryItemId: inventoryItems[0]?.id ?? "", quantity: "1" }]);
+                        }
+                      }}>
                         <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="regular">Món thường</SelectItem>
@@ -215,6 +250,54 @@ export function MenuManager({
                       </Select>
                     </div>
                   </div>
+                  {productType === "prepared" ? (
+                    <div className="space-y-2 rounded-md border p-3">
+                      <div className="flex items-center justify-between">
+                        <Label>Công thức</Label>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setRecipeLines((rows) => [...rows, { inventoryItemId: inventoryItems[0]?.id ?? "", quantity: "1" }])}
+                        >
+                          <Plus className="h-4 w-4" /> Thêm dòng
+                        </Button>
+                      </div>
+                      {inventoryItems.length === 0 ? (
+                        <p className="text-sm text-destructive">Chưa có nguyên liệu kho. Tạo nguyên liệu trước khi thêm món chế biến.</p>
+                      ) : recipeLines.map((line, index) => (
+                        <div key={`${line.inventoryItemId}-${index}`} className="grid grid-cols-[1fr_88px_auto] gap-2">
+                          <Select
+                            value={line.inventoryItemId}
+                            onValueChange={(value) => setRecipeLines((rows) => rows.map((row, i) => i === index ? { ...row, inventoryItemId: value } : row))}
+                          >
+                            <SelectTrigger><SelectValue placeholder="Nguyên liệu" /></SelectTrigger>
+                            <SelectContent>
+                              {inventoryItems.map((item) => (
+                                <SelectItem key={item.id} value={item.id}>{item.name} ({item.unit})</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <Input
+                            type="number"
+                            min={0.01}
+                            step="0.01"
+                            value={line.quantity}
+                            onChange={(event) => setRecipeLines((rows) => rows.map((row, i) => i === index ? { ...row, quantity: event.target.value } : row))}
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setRecipeLines((rows) => rows.filter((_, i) => i !== index))}
+                            aria-label="Xoá dòng"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1.5">
                       <Label htmlFor="costPrice">Giá vốn (đ)</Label>

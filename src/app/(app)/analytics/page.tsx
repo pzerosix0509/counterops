@@ -7,6 +7,7 @@ import {
   getRfmCustomers,
   getRfmSummary,
   getSentimentSummary,
+  listRecentPaidOrders,
 } from "@/server/queries/analytics";
 import { ClusterPanel } from "@/components/analytics/cluster-panel";
 import { DemandPanel } from "@/components/analytics/demand-panel";
@@ -68,12 +69,14 @@ export default async function AnalyticsPage({ searchParams }: PageProps) {
     : [];
   let feedback: FeedbackListRow[] = [];
   let sentimentSummary: SentimentSummary = { positive: 0, neutral: 0, negative: 0 };
+  let paidOrders: Array<{ id: string; orderNumber: string; openedAt: string }> = [];
   let clusters: CustomerClustersView | null = null;
   let demand: DemandForecastView | null = null;
   if (tab === "sentiment") {
-    [feedback, sentimentSummary] = await Promise.all([
+    [feedback, sentimentSummary, paidOrders] = await Promise.all([
       getRecentFeedback(ctx.organizationId, ctx.branchId),
       getSentimentSummary(ctx.organizationId, ctx.branchId),
+      listRecentPaidOrders(ctx.organizationId, ctx.branchId),
     ]);
   }
   if (tab === "clusters") {
@@ -106,7 +109,7 @@ export default async function AnalyticsPage({ searchParams }: PageProps) {
       {tab === "rfm" ? (
         <RfmPanel summary={summary} customers={customers} segment={segment} />
       ) : tab === "sentiment" ? (
-        <SentimentPanel rows={feedback} summary={sentimentSummary} />
+        <SentimentPanel rows={feedback} summary={sentimentSummary} paidOrders={paidOrders} />
       ) : tab === "clusters" && clusters ? (
         <ClusterPanel
           profiles={clusters.profiles}

@@ -1,6 +1,6 @@
 ﻿import { requireActiveContext, canManageMenu, getActiveMembership } from "@/lib/auth/permissions";
-import { listCategories, listProducts } from "@/server/queries/menu";
 import { listInventoryItems } from "@/server/queries/inventory";
+import { listCategories, listProducts } from "@/server/queries/menu";
 import { MenuManager } from "@/components/menu/menu-manager";
 
 export const metadata = { title: "Thực đơn" };
