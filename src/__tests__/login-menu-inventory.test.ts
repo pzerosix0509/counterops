@@ -81,6 +81,21 @@ describe("inventory — inventoryItemSchema", () => {
     expect(result.success).toBe(true);
   });
 
+  it("accepts menuType for sellable items without a group", () => {
+    const result = inventoryItemSchema.safeParse({
+      name: "Nước suối",
+      canBeIngredient: false,
+      canBeSold: true,
+      salePrice: 10000,
+      menuType: "drink",
+      categoryId: null,
+      unit: "chai",
+      costPrice: 5000,
+    });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.menuType).toBe("drink");
+  });
+
   it("rejects missing name and neither flag", () => {
     const missingName = inventoryItemSchema.safeParse({
       name: "",

@@ -29,20 +29,15 @@ import {
   previewProductImport,
 } from "@/server/actions/excel";
 import { ExcelImportDialog, ExcelDownloadButton } from "@/components/common/excel-import";
+import { CategoryFields, ensureCategoryId, MENU_TYPE_LABEL } from "@/components/menu/category-fields";
 import { RecipeDialog } from "@/components/menu/recipe-dialog";
+import { readCategoryForm } from "@/lib/ui/category-form";
 import { formatVND } from "@/lib/date/ranges";
 import { computeBomCost } from "@/lib/calculations/inventory";
 import type { InventoryItem, MenuCategory, MenuType, Product } from "@/types/database";
 import { EmptyState } from "@/components/common/states";
 import { notifyError, notifySuccess } from "@/hooks/use-notify";
 import { PRODUCT_IMPORT_COLUMNS } from "@/lib/validation/excel-schemas";
-
-const MENU_TYPE_LABEL: Record<MenuType, string> = {
-  food: "Đồ ăn",
-  drink: "Đồ uống",
-  service: "Dịch vụ",
-  other: "Khác",
-};
 
 const PRODUCT_TYPE_LABEL: Record<string, string> = {
   regular: "Bán liền",
@@ -142,39 +137,46 @@ export function MenuManager({
     e.preventDefault();
     setError(null);
     const f = new FormData(e.currentTarget);
-    const rawCategory = String(f.get("categoryId") || "none");
-    const categoryId = rawCategory === "none" || !rawCategory ? null : rawCategory;
-    const payload = {
+    const picked = readCategoryForm(f);
+    const recipe =
+      productType === "prepared"
+        ? recipeLines
+            .filter((line) => line.inventoryItemId)
+            .map((line) => {
+              const item = inventoryItems.find((inv) => inv.id === line.inventoryItemId);
+              return {
+                inventoryItemId: line.inventoryItemId,
+                quantity: Number(line.quantity || 0),
+                unit: item?.unit ?? "g",
+                estimatedCost: 0,
+              };
+            })
+        : undefined;
+    if (productType === "prepared" && (!recipe || recipe.length === 0)) {
+      setError("Món chế biến cần ít nhất 1 dòng công thức.");
+      notifyError("Lưu món thất bại", "Món chế biến cần ít nhất 1 dòng công thức.");
+      return;
+    }
+    startTransition(async () => {
+      const resolved = await ensureCategoryId(organizationId, picked, categories.length);
+      if (resolved.error) {
+        setError(resolved.error);
+        notifyError("Lưu món thất bại", resolved.error);
+        return;
+      }
+      const payload = {
       id: editing?.id,
       name: String(f.get("name") || ""),
-      categoryId,
+      categoryId: resolved.categoryId,
+      menuType: picked.menuType,
       description: String(f.get("description") || "") || null,
       productType,
       costPrice: productType === "prepared" ? bomCost : Number(f.get("costPrice") || 0),
       salePrice: Number(f.get("salePrice") || 0),
       unit: String(f.get("unit") || "phần"),
       isActive: true,
-      recipe:
-        productType === "prepared"
-          ? recipeLines
-              .filter((line) => line.inventoryItemId)
-              .map((line) => {
-                const item = inventoryItems.find((inv) => inv.id === line.inventoryItemId);
-                return {
-                  inventoryItemId: line.inventoryItemId,
-                  quantity: Number(line.quantity || 0),
-                  unit: item?.unit ?? "g",
-                  estimatedCost: 0,
-                };
-              })
-          : undefined,
+      recipe,
     };
-    if (productType === "prepared" && (!payload.recipe || payload.recipe.length === 0)) {
-      setError("Món chế biến cần ít nhất 1 dòng công thức.");
-      notifyError("Lưu món thất bại", "Món chế biến cần ít nhất 1 dòng công thức.");
-      return;
-    }
-    startTransition(async () => {
       const res = editing
         ? await updateProduct(organizationId, payload)
         : await createProduct(organizationId, payload);
@@ -244,14 +246,9 @@ export function MenuManager({
         </form>
         <div className="flex flex-wrap items-center gap-2">
           {canManage ? (
-            <>
-              <Button variant="outline" onClick={() => { setActiveGroupId(categories[0]?.id ?? ""); setGroupsOpen(true); }}>
-                <Filter className="h-4 w-4" /> Nhóm món
-              </Button>
-              <Button variant="outline" onClick={() => setImportOpen(true)}>
-                <FileUp className="h-4 w-4" /> Import Excel
-              </Button>
-            </>
+            <Button variant="outline" onClick={() => setImportOpen(true)}>
+              <FileUp className="h-4 w-4" /> Import Excel
+            </Button>
           ) : null}
           <ExcelDownloadButton action={() => exportMenu(organizationId, query || undefined)} label="Xuất Excel" />
           {canManage ? (
@@ -279,6 +276,18 @@ export function MenuManager({
             {category.name}
           </Button>
         ))}
+        {canManage ? (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              setActiveGroupId(categories[0]?.id ?? "");
+              setGroupsOpen(true);
+            }}
+          >
+            <Filter className="h-4 w-4" /> Sửa nhóm
+          </Button>
+        ) : null}
       </div>
 
       <Dialog open={open} onOpenChange={(next) => { setOpen(next); if (!next) setEditing(null); }}>
@@ -300,22 +309,7 @@ export function MenuManager({
                 <Input id="unit" name="unit" defaultValue={editing?.unit ?? "phần"} required />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Nhóm món</Label>
-                <Select name="categoryId" defaultValue={editing?.category_id ?? "none"}>
-                  <SelectTrigger><SelectValue placeholder="Chưa gán" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Chưa gán</SelectItem>
-                    {categories.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.name} ({MENU_TYPE_LABEL[c.menu_type]})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
+            <div className="space-y-1.5">
                 <Label>Cách bán</Label>
                 <Select
                   value={productType}
@@ -334,7 +328,6 @@ export function MenuManager({
                   </SelectContent>
                 </Select>
               </div>
-            </div>
             {productType === "prepared" ? (
               <div className="space-y-2 rounded-md border p-3">
                 <div className="flex items-center justify-between">
@@ -384,17 +377,32 @@ export function MenuManager({
                     </div>
                   ))
                 )}
-                <p className="text-sm">Giá vốn: <span className="font-medium">{formatVND(bomCost)}</span></p>
               </div>
-            ) : (
+            ) : null}
+            <CategoryFields
+              key={editing?.id ?? "new"}
+              organizationId={organizationId}
+              categories={categories}
+              defaultCategoryId={editing?.category_id}
+              defaultMenuType={editing?.menu_type}
+              onGroupCreated={() => router.refresh()}
+            />
+            <div className="grid grid-cols-2 gap-3">
+              {productType === "prepared" ? (
+                <div className="space-y-1.5">
+                  <Label>Giá vốn (đ)</Label>
+                  <p className="flex h-9 items-center text-sm font-medium">{formatVND(bomCost)}</p>
+                </div>
+              ) : (
+                <div className="space-y-1.5">
+                  <Label htmlFor="costPrice">Giá vốn (đ)</Label>
+                  <NumberInput id="costPrice" name="costPrice" defaultValue={editing?.cost_price ?? 0} required />
+                </div>
+              )}
               <div className="space-y-1.5">
-                <Label htmlFor="costPrice">Giá vốn (đ)</Label>
-                <NumberInput id="costPrice" name="costPrice" defaultValue={editing?.cost_price ?? 0} required />
+                <Label htmlFor="salePrice">Giá bán (đ)</Label>
+                <NumberInput id="salePrice" name="salePrice" defaultValue={editing?.sale_price ?? 0} required />
               </div>
-            )}
-            <div className="space-y-1.5">
-              <Label htmlFor="salePrice">Giá bán (đ)</Label>
-              <NumberInput id="salePrice" name="salePrice" defaultValue={editing?.sale_price ?? 0} required />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="description">Mô tả</Label>

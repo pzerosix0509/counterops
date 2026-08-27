@@ -1,10 +1,26 @@
-﻿"use client";
+"use client";
 import * as React from "react";
 import * as SelectPrimitive from "@radix-ui/react-select";
 import { Check, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils/format";
+import { noteSelectOpenChange } from "@/lib/ui/dialog-outside";
 
-export const Select = SelectPrimitive.Root;
+const SelectRoot = SelectPrimitive.Root as React.ComponentType<
+  React.ComponentPropsWithoutRef<typeof SelectPrimitive.Root> & { modal?: boolean }
+>;
+
+export function Select({ onOpenChange, ...props }: React.ComponentPropsWithoutRef<typeof SelectPrimitive.Root>) {
+  return (
+    <SelectRoot
+      modal={false}
+      {...props}
+      onOpenChange={(open) => {
+        noteSelectOpenChange(open);
+        onOpenChange?.(open);
+      }}
+    />
+  );
+}
 export const SelectGroup = SelectPrimitive.Group;
 export const SelectValue = SelectPrimitive.Value;
 
@@ -36,7 +52,7 @@ export const SelectContent = React.forwardRef<
     <SelectPrimitive.Content
       ref={ref}
       className={cn(
-        "relative z-50 max-h-96 min-w-[8rem] overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md",
+        "relative z-[70] max-h-96 min-w-[8rem] overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md",
         position === "popper" && "data-[side=bottom]:translate-y-1",
         className
       )}
