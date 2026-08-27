@@ -2,10 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { categorySchema, productSchema } from "@/lib/validation/schemas";
+import { categorySchema, productSchema, recipeItemInputSchema } from "@/lib/validation/schemas";
 import { actionFail, actionOk, type ActionResult } from "@/lib/utils/action-result";
 import { canManageMenu, requireRole } from "@/lib/auth/permissions";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { computeRecipeCost } from "@/lib/calculations/inventory";
 
 export async function createCategory(
   organizationId: string,
@@ -110,4 +111,100 @@ export async function toggleProductActive(organizationId: string, productId: str
   if (error) return actionFail("INTERNAL_ERROR", "Không cập nhật được món");
   revalidatePath("/menu");
   return actionOk({ id: productId });
+}
+
+/**
+ * Lưu công thức (recipe) cho một món: tạo version mới, vô hiệu bản cũ,
+ * tính giá vốn từng nguyên liệu theo cost_price (giá nhập) hiện tại và
+ * cập nhật cost_price của món bằng tổng chi phí công thức.
+ */
+export async function upsertProductRecipe(
+  organizationId: string,
+  productId: string,
+  items: unknown
+): Promise<ActionResult<{ id: string; costPrice: number }>> {
+  const m = await requireRole(organizationId, canManageMenu);
+  const parsed = z.array(recipeItemInputSchema).safeParse(items);
+  if (!parsed.success) return actionFail("VALIDATION_ERROR", "Công thức không hợp lệ: kiểm tra nguyên liệu và số lượng");
+  const supabase = createSupabaseServerClient();
+
+  // Món phải thuộc org này.
+  const { data: product } = await supabase
+    .from("products")
+    .select("id, cost_price")
+    .eq("id", productId)
+    .eq("organization_id", m.organization.id)
+    .maybeSingle();
+  if (!product) return actionFail("NOT_FOUND", "Không tìm thấy món");
+
+  // Lấy giá nhập (cost_price) của từng nguyên liệu (tenant-scoped) để tính estimated_cost.
+  const ids = parsed.data.map((r) => r.inventoryItemId);
+  const { data: invItems } = await supabase
+    .from("inventory_items")
+    .select("id, cost_price")
+    .in("id", ids)
+    .eq("organization_id", m.organization.id);
+  const costById = new Map((invItems ?? []).map((it) => [it.id, it.cost_price]));
+  const missing = ids.filter((id) => !costById.has(id));
+  if (missing.length > 0) return actionFail("VALIDATION_ERROR", "Có nguyên liệu không thuộc cửa hàng này");
+
+  const recipeItems = parsed.data.map((r) => {
+    const unitCost = costById.get(r.inventoryItemId) ?? 0;
+    return {
+      inventory_item_id: r.inventoryItemId,
+      quantity: r.quantity,
+      unit: r.unit,
+      // estimated_cost lưu DB là tổng chi phí của dòng (giá 1 đơn vị x số lượng).
+      estimated_cost: Math.round(unitCost * r.quantity),
+    };
+  });
+  const totalCost = computeRecipeCost(
+    parsed.data.map((r) => ({ quantity: r.quantity, estimatedCost: costById.get(r.inventoryItemId) ?? 0 }))
+  );
+
+  const { data: activeRecipe } = await supabase
+    .from("recipes")
+    .select("version")
+    .eq("product_id", productId)
+    .eq("is_active", true)
+    .maybeSingle();
+  const nextVersion = (activeRecipe?.version ?? 0) + 1;
+
+  const { data: recipe, error: recipeErr } = await supabase
+    .from("recipes")
+    .insert({
+      organization_id: m.organization.id,
+      product_id: productId,
+      version: nextVersion,
+      is_active: true,
+    })
+    .select("id")
+    .single();
+  if (recipeErr || !recipe) return actionFail("INTERNAL_ERROR", "Không lưu được công thức");
+
+  const { error: itemsErr } = await supabase.from("recipe_items").insert(
+    recipeItems.map((it) => ({ recipe_id: recipe.id, ...it }))
+  );
+  if (itemsErr) return actionFail("INTERNAL_ERROR", "Không lưu được nguyên liệu công thức");
+
+  // Vô hiệu bản cũ và cập nhật giá vốn món theo tổng chi phí.
+  await supabase.from("recipes").update({ is_active: false }).eq("product_id", productId).neq("id", recipe.id);
+  const { error: costErr } = await supabase
+    .from("products")
+    .update({ cost_price: totalCost })
+    .eq("id", productId)
+    .eq("organization_id", m.organization.id);
+  if (costErr) return actionFail("INTERNAL_ERROR", "Công thức đã lưu nhưng không cập nhật được giá vốn");
+
+  await supabase.from("audit_logs").insert({
+    organization_id: m.organization.id,
+    actor_user_id: m.membership.user_id,
+    action: "product.recipe.upsert",
+    entity_type: "products",
+    entity_id: productId,
+    after: { version: nextVersion, cost_price: totalCost, items: recipeItems.length },
+  });
+
+  revalidatePath("/menu");
+  return actionOk({ id: recipe.id, costPrice: totalCost });
 }
