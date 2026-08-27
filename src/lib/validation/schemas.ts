@@ -1,4 +1,4 @@
-﻿import { z } from "zod";
+import { z } from "zod";
 
 export const loginSchema = z.object({
   email: z.string().min(1, "Email không được trống").email("Email không hợp lệ"),
@@ -66,6 +66,7 @@ export const inventoryItemSchema = z.object({
   canBeSold: z.boolean().default(false),
   salePrice: z.number().int().min(0).optional(),
   categoryId: z.string().uuid().nullable().optional(),
+  menuType: z.enum(["food", "drink", "service", "other"]).optional(),
   unit: z.string().min(1),
   costPrice: z.number().int().min(0),
   description: z.string().nullable().optional(),

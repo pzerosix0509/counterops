@@ -18,6 +18,8 @@ import { ExcelDownloadButton, ExcelImportDialog } from "@/components/common/exce
 import { formatVND } from "@/lib/date/ranges";
 import { formatDateTime } from "@/lib/utils/format";
 import { createInventoryItem, createInventoryMovement } from "@/server/actions/inventory";
+import { CategoryFields, ensureCategoryId } from "@/components/menu/category-fields";
+import { readCategoryForm } from "@/lib/ui/category-form";
 import {
   commitInventoryItemImport,
   downloadInventoryItemTemplate,
@@ -95,12 +97,12 @@ export function InventoryManager({
     e.preventDefault();
     setError(null);
     const f = new FormData(e.currentTarget);
+    const picked = readCategoryForm(f);
     const payload = {
       name: String(f.get("name") || ""),
       canBeIngredient,
       canBeSold,
       salePrice: canBeSold ? Number(f.get("salePrice") || 0) : undefined,
-      categoryId: canBeSold ? (String(f.get("categoryId") || "none") === "none" ? null : String(f.get("categoryId"))) : null,
       unit: String(f.get("unit") || ""),
       costPrice: Number(f.get("costPrice") || 0),
       description: String(f.get("description") || "") || null,
@@ -108,7 +110,22 @@ export function InventoryManager({
       lowStockThreshold: Number(f.get("lowStockThreshold") || 0),
     };
     startTransition(async () => {
-      const res = await createInventoryItem(organizationId, branchId, payload);
+      let categoryId: string | null = null;
+      const menuType = picked.menuType;
+      if (canBeSold) {
+        const resolved = await ensureCategoryId(organizationId, picked, categories.length);
+        if (resolved.error) {
+          setError(resolved.error);
+          notifyError("Thêm hàng hóa thất bại", resolved.error);
+          return;
+        }
+        categoryId = resolved.categoryId;
+      }
+      const res = await createInventoryItem(organizationId, branchId, {
+        ...payload,
+        categoryId: canBeSold ? categoryId : null,
+        menuType: canBeSold ? menuType : undefined,
+      });
       if (!res.ok) {
         setError(res.error.message);
         notifyError("Thêm hàng hóa thất bại", res.error.message);
@@ -228,29 +245,12 @@ export function InventoryManager({
                       Bán trên thực đơn
                     </label>
                     {canBeSold ? (
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-1.5">
-                          <Label htmlFor="salePrice">Giá bán (đ)</Label>
-                          <NumberInput id="salePrice" name="salePrice" defaultValue={0} required />
-                        </div>
-                        <div className="space-y-1.5">
-                          <Label>Nhóm món</Label>
-                          <Select name="categoryId" defaultValue="none">
-                            <SelectTrigger><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="none">Chưa gán</SelectItem>
-                              {categories.map((c) => (
-                                <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
+                      <CategoryFields
+                        organizationId={organizationId}
+                        categories={categories}
+                        onGroupCreated={() => router.refresh()}
+                      />
                     ) : null}
-                    <div className="space-y-1.5">
-                      <Label htmlFor="costPrice">Giá vốn</Label>
-                      <NumberInput id="costPrice" name="costPrice" defaultValue={0} required />
-                    </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1.5">
                         <Label htmlFor="initialQuantity">Tồn kho ban đầu</Label>
@@ -279,6 +279,23 @@ export function InventoryManager({
                         </p>
                       </div>
                     </div>
+                    {canBeSold ? (
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
+                          <Label htmlFor="costPrice">Giá vốn</Label>
+                          <NumberInput id="costPrice" name="costPrice" defaultValue={0} required />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label htmlFor="salePrice">Giá bán (đ)</Label>
+                          <NumberInput id="salePrice" name="salePrice" defaultValue={0} required />
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-1.5">
+                        <Label htmlFor="costPrice">Giá vốn</Label>
+                        <NumberInput id="costPrice" name="costPrice" defaultValue={0} required />
+                      </div>
+                    )}
                     <div className="space-y-1.5">
                       <Label htmlFor="description">Mô tả</Label>
                       <Textarea id="description" name="description" rows={2} />

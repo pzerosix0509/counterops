@@ -10,7 +10,6 @@ import { computeRecipeCost } from "@/lib/calculations/inventory";
 import { generateSkuCode, normalizeItemName } from "@/lib/inventory/sku";
 import {
   deactivateSellableProduct,
-  ensureSellableProduct,
   insertInventorySku,
   inventoryNameTaken,
   resolveCategoryMenuType,

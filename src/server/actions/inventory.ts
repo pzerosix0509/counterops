@@ -72,7 +72,12 @@ export async function createInventoryItem(
   }
 
   if (parsed.data.canBeSold) {
-    const menuType = await resolveCategoryMenuType(supabase, m.organization.id, parsed.data.categoryId ?? null);
+    const menuType = await resolveCategoryMenuType(
+      supabase,
+      m.organization.id,
+      parsed.data.categoryId ?? null,
+      parsed.data.menuType ?? "food"
+    );
     const linked = await ensureSellableProduct(supabase, {
       organizationId: m.organization.id,
       inventoryItemId: sku.id,

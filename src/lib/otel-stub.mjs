@@ -1,3 +1,4 @@
 export const context = undefined;
 export const propagation = undefined;
-export default {};
+const stub = {};
+export default stub;
