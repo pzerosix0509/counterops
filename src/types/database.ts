@@ -423,6 +423,83 @@ export interface AiMessageFeedback {
   created_at: string;
   updated_at: string;
 }
+export interface CustomerFeature {
+  id: string;
+  organization_id: string;
+  branch_id: string;
+  customer_id: string;
+  age: number | null;
+  recency_days: number;
+  frequency: number;
+  monetary: number;
+  avg_order_value: number;
+  avg_order_interval: number;
+  weekend_ratio: number;
+  dinner_ratio: number;
+  favorite_category: string | null;
+  favorite_dish_id: string | null;
+  web_visit_count: number;
+  dish_view_count: number;
+  avg_rating: number | null;
+  sentiment_score: number | null;
+  r_score: number | null;
+  f_score: number | null;
+  m_score: number | null;
+  rfm_segment: string | null;
+  cluster_id: number | null;
+  computed_at: string;
+}
+export interface RfmSegmentRule {
+  id: string;
+  organization_id: string | null;
+  branch_id: string | null;
+  segment: string;
+  r_min: number;
+  r_max: number;
+  f_min: number;
+  f_max: number;
+  m_min: number;
+  m_max: number;
+  priority: number;
+}
+export interface CustomerFeedback {
+  id: string;
+  organization_id: string;
+  branch_id: string;
+  customer_id: string | null;
+  order_id: string | null;
+  rating: number;
+  feedback_text: string | null;
+  sentiment_label: string | null;
+  sentiment_score: number | null;
+  model_name: string | null;
+  scored_at: string | null;
+  created_at: string;
+}
+export interface CustomerCluster {
+  id: string;
+  organization_id: string;
+  branch_id: string;
+  k: number;
+  silhouette: number | null;
+  feature_names: string[];
+  profiles: Json;
+  fitted_at: string;
+}
+export interface DemandForecast {
+  id: string;
+  organization_id: string;
+  branch_id: string;
+  horizon_days: number;
+  method: string;
+  product_id: string | null;
+  inventory_item_id: string | null;
+  target_date: string;
+  forecast_qty: number;
+  lower_qty: number | null;
+  upper_qty: number | null;
+  computed_at: string;
+}
 
 // Helper to make a Supabase-style table descriptor.
 type TableDescriptor<Row> = {
@@ -467,6 +544,11 @@ export interface Database {
       ai_chat_messages: TableDescriptor<AiChatMessage>;
       ai_runs: TableDescriptor<AiRun>;
       ai_message_feedback: TableDescriptor<AiMessageFeedback>;
+      customer_features: TableDescriptor<CustomerFeature>;
+      rfm_segment_rules: TableDescriptor<RfmSegmentRule>;
+      customer_feedback: TableDescriptor<CustomerFeedback>;
+      customer_clusters: TableDescriptor<CustomerCluster>;
+      demand_forecasts: TableDescriptor<DemandForecast>;
     };
     Views: Record<string, never>;
     Functions: {
@@ -603,6 +685,48 @@ export interface Database {
             estimated_cost_usd: number;
             fallback_runs: number;
             average_latency_ms: number;
+          }[];
+        };
+        refresh_customer_features: {
+          Args: { p_org: string; p_branch: string; p_as_of: string };
+          Returns: number;
+        };
+        ai_rfm_summary: {
+          Args: { p_org_id: string; p_branch_id: string };
+          Returns: {
+            rfm_segment: string | null;
+            customer_count: number;
+            avg_monetary: number;
+          }[];
+        };
+        ai_rfm_customers: {
+          Args: { p_org_id: string; p_branch_id: string; p_segment: string };
+          Returns: {
+            customer_id: string;
+            recency_days: number;
+            frequency: number;
+            monetary: number;
+            r_score: number | null;
+            f_score: number | null;
+            m_score: number | null;
+            rfm_segment: string | null;
+          }[];
+        };
+        ai_sentiment_summary: {
+          Args: { p_org_id: string; p_branch_id: string; p_from: string; p_to: string };
+          Returns: {
+            sentiment_label: string | null;
+            feedback_count: number;
+            avg_rating: number;
+            avg_sentiment_score: number;
+          }[];
+        };
+        ai_dish_demand_series: {
+          Args: { p_org_id: string; p_branch_id: string; p_from: string; p_to: string };
+          Returns: {
+            product_id: string;
+            day: string;
+            qty: number;
           }[];
         };
       };

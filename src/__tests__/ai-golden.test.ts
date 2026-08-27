@@ -35,6 +35,48 @@ describe("AI intent edge cases", () => {
     const plan = buildAiPlan("Nguyên liệu nào đang tồn kho thấp?", "chat", new Date("2026-07-01T12:00:00+07:00"));
     expect(plan.intent).toBe("inventory_risk");
   });
+
+  it("routes RFM questions to rfm_summary, not KMeans", () => {
+    const plan = buildAiPlan("Nhóm khách RFM Champions đang thế nào?", "chat", new Date("2026-07-01T12:00:00+07:00"));
+    expect(plan.intent).toBe("rfm");
+    expect(plan.tools.map((call) => call.name)).toEqual(["rfm_summary"]);
+  });
+
+  it("routes feedback and sentiment questions to sentiment_summary", () => {
+    const now = new Date("2026-07-01T12:00:00+07:00");
+    for (const question of [
+      "Phản hồi khách gần đây tích cực hay tiêu cực?",
+      "Cảm xúc review tuần này?",
+      "Tóm tắt feedback sentiment",
+    ]) {
+      const plan = buildAiPlan(question, "chat", now);
+      expect(plan.intent).toBe("sentiment");
+      expect(plan.tools.map((call) => call.name)).toEqual(["sentiment_summary"]);
+    }
+  });
+
+  it("routes cluster questions to customer_segments, not RFM", () => {
+    const now = new Date("2026-07-01T12:00:00+07:00");
+    for (const question of [
+      "Các nhóm hành vi khách khác nhau ra sao?",
+      "Phân cụm kmeans nhóm khách",
+    ]) {
+      const plan = buildAiPlan(question, "chat", now);
+      expect(plan.intent).toBe("segmentation");
+      expect(plan.tools.map((call) => call.name)).toEqual(["customer_segments"]);
+    }
+  });
+
+  it("adds forecast_demand with revenue forecast when the question mentions nguyên liệu", () => {
+    const plan = buildAiPlan("Tuần tới cần đặt nguyên liệu gì?", "chat", new Date("2026-07-01T12:00:00+07:00"));
+    expect(plan.intent).toBe("forecast");
+    expect(plan.tools.map((call) => call.name)).toEqual([
+      "sales_summary",
+      "sales_timeseries",
+      "forecast_revenue",
+      "forecast_demand",
+    ]);
+  });
 });
 
 describe("AI chart keyword normalization", () => {
@@ -85,7 +127,7 @@ describe("AI timezone handling", () => {
   it("writes the timezone into every analytics tool argument", () => {
     const plan = buildAiPlan("Doanh thu hôm nay?", "chat", new Date("2026-07-01T12:00:00+07:00"), [], "Asia/Ho_Chi_Minh");
     expect(plan.tools[0]?.arguments.timezone).toBe("Asia/Ho_Chi_Minh");
-    expect(plan.tools.every((tool) => "timezone" in tool.arguments || tool.name === "inventory_risk")).toBe(true);
+    expect(plan.tools.every((tool) => "timezone" in tool.arguments || tool.name === "inventory_risk" || tool.name === "customer_segments" || tool.name === "rfm_summary")).toBe(true);
   });
 });
 
