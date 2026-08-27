@@ -111,7 +111,7 @@ export function InventoryManager({
     };
     startTransition(async () => {
       let categoryId: string | null = null;
-      let menuType = picked.menuType;
+      const menuType = picked.menuType;
       if (canBeSold) {
         const resolved = await ensureCategoryId(organizationId, picked, categories.length);
         if (resolved.error) {
