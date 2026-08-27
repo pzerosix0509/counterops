@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Bot, Database, FileText, History, Loader2, Pencil, Pin, PinOff, Plus, Save, Send, ThumbsDown, ThumbsUp, Trash2, Upload } from "lucide-react";
-import { uploadAiDocument } from "@/server/actions/ai-documents";
+import { deleteAiDocument, uploadAiDocument } from "@/server/actions/ai-documents";
 import { saveAiDashboardTemplate } from "@/server/actions/ai-dashboards";
 import { submitAiMessageFeedback } from "@/server/actions/ai-feedback";
 import { deleteAiChatSession, renameAiChatSession, togglePinAiChatSession } from "@/server/actions/ai-sessions";
@@ -310,6 +310,7 @@ export function AiAssistant({
   const [renameTarget, setRenameTarget] = useState<AiChatSessionSummary | null>(null);
   const [renameTitle, setRenameTitle] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<AiChatSessionSummary | null>(null);
+  const [deleteDocTarget, setDeleteDocTarget] = useState<AiDocument | null>(null);
   const [imageLoading, setImageLoading] = useState(false);
   const draftKey = `counterops:ai-draft:${branchId}`;
 
@@ -580,6 +581,21 @@ export function AiAssistant({
     });
   }
 
+  function confirmDeleteDocument() {
+    if (!deleteDocTarget) return;
+    const target = deleteDocTarget;
+    startSave(async () => {
+      const result = await deleteAiDocument(organizationId, { documentId: target.id });
+      if (!result.ok) {
+        notifyError("Xóa tài liệu thất bại", result.error.message);
+        return;
+      }
+      setDeleteDocTarget(null);
+      notifySuccess("Đã xóa tài liệu");
+      router.refresh();
+    });
+  }
+
   return (
     <div className="flex min-h-[600px] flex-col-reverse gap-6 xl:h-[calc(100vh-10rem)] xl:flex-row">
       {/* Sidebar: History, Stats, v.v */}
@@ -695,6 +711,9 @@ export function AiAssistant({
                         <p className="truncate text-xs font-medium group-hover:text-primary transition-colors">{document.title}</p>
                         <p className="truncate text-[10px] text-muted-foreground mt-0.5">{document.file_name}</p>
                       </div>
+                      <Button type="button" variant="ghost" size="icon" className="h-6 w-6 rounded-full text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-destructive hover:bg-destructive/10 transition-opacity" title="Xóa tài liệu" onClick={() => setDeleteDocTarget(document)}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
                     </div>
                   ))}
                 </div>
@@ -1018,6 +1037,21 @@ export function AiAssistant({
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setDeleteTarget(null)}>Hủy</Button>
             <Button type="button" variant="destructive" onClick={confirmDelete} disabled={isSaving}>Xóa</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deleteDocTarget !== null} onOpenChange={(open) => { if (!open) setDeleteDocTarget(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Xóa tài liệu</DialogTitle>
+            <DialogDescription>
+              Bạn có chắc muốn xóa &quot;{deleteDocTarget?.title}&quot;? Tài liệu này sẽ không còn được dùng làm nguồn dữ liệu cho AI.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setDeleteDocTarget(null)}>Hủy</Button>
+            <Button type="button" variant="destructive" onClick={confirmDeleteDocument} disabled={isSaving}>Xóa</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

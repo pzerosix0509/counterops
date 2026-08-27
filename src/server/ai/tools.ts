@@ -1,12 +1,11 @@
 import "server-only";
 import { z } from "zod";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { aggregateToDailyPoints, computeForecast } from "@/lib/ai/forecast";
+import { aggregateToDailyPoints, backtestForecast, computeForecast } from "@/lib/ai/forecast";
 import { searchWeb } from "@/lib/ai/web-search";
 import { searchAiDocumentChunks } from "@/server/queries/ai";
 import { aiToolCacheKey, withAiToolCache } from "@/server/ai/cache";
 import { getCustomerClusters, getDemandForecasts, computeAndPersistDemandForecasts, getRfmSummary } from "@/server/queries/analytics";
-import { canRefreshAnalytics, getActiveMembership } from "@/lib/auth/permissions";
 import { DEMAND_STALE_MS } from "@/lib/analytics/demand";
 import type { AiSource, AiToolCall, AiToolExecution, AiToolName } from "@/types/ai";
 
@@ -85,6 +84,12 @@ export interface AiToolContext {
   organizationId: string;
   branchId: string;
   timezone: string;
+  /** Thời điểm dữ liệu được chụp — chung cho cả phiên chạy tool */
+  dataAsOf: string;
+  /** Id snapshot cho cả phiên — mọi tool cùng một snapshot */
+  snapshotId: string;
+  /** Catalog version — đi vào cache key để đổi catalog tự invalidate */
+  catalogVersion: string;
 }
 
 async function executeRpcTool(
@@ -121,6 +126,7 @@ async function executeRpcTool(
     branchId: context.branchId,
     tool: call.name,
     arguments: rpcArguments[call.name] ?? {},
+    catalogVersion: context.catalogVersion,
   });
   const cached = await withAiToolCache(cacheKey, async () => {
     const { data, error } = await supabase.rpc(rpc as any, rpcArguments[call.name] as any);
@@ -136,6 +142,7 @@ async function executeInventoryRisk(context: AiToolContext) {
     branchId: context.branchId,
     tool: "inventory_risk",
     arguments: { status: "attention" },
+    catalogVersion: context.catalogVersion,
   });
   return withAiToolCache(cacheKey, async () => {
     const supabase = createSupabaseServerClient();
@@ -195,7 +202,9 @@ async function executeForecast(
       (data ?? []) as Array<{ period_start: string; net_revenue: number; total_orders: number }>,
     );
     const forecast = computeForecast(daily, horizonDays);
-    return [forecast as unknown as Record<string, unknown>];
+    // Backtest WMAPE/MASE trên dữ liệu lịch sử (rẻ, chạy ngay) — trả thành thật về độ tin cậy
+    const backtest = backtestForecast(daily);
+    return [{ ...forecast, backtest } as unknown as Record<string, unknown>];
   });
   return { rows: cached.value, cacheHit: cached.hit };
 }
@@ -206,6 +215,7 @@ async function executeForecastDemand(
 ): Promise<{ rows: Array<Record<string, unknown>>; cacheHit: boolean }> {
   const args = call.arguments as Record<string, any>;
   const horizonDays = Number(args.horizon_days ?? 14);
+  const { canRefreshAnalytics, getActiveMembership } = await import("@/lib/auth/permissions");
   const membership = await getActiveMembership();
   const canRefresh = membership ? canRefreshAnalytics.includes(membership.role) : false;
   let view = await getDemandForecasts(context.organizationId, context.branchId, horizonDays);
@@ -401,14 +411,31 @@ export async function executeAiToolPlan(calls: AiToolCall[], context: AiToolCont
   return [...wave1Results, ...wave2Results];
 }
 
-export function buildSourcesFromToolExecutions(executions: AiToolExecution[]): AiSource[] {
+export function buildSourcesFromToolExecutions(
+  executions: AiToolExecution[],
+  provenance: {
+    asOf: string;
+    snapshotId: string;
+    catalogVersion: string;
+    metricKey?: string;
+    metricVersion?: string;
+  },
+): AiSource[] {
   const pending: Omit<AiSource, "id">[] = [];
 
   for (const execution of executions) {
     if (execution.call.name === "search_documents" || execution.call.name === "search_web") {
       for (const source of execution.sources ?? []) {
         const { id: _id, ...withoutId } = source;
-        pending.push(withoutId);
+        pending.push({
+          ...withoutId,
+          meta: {
+            ...(withoutId.meta ?? {}),
+            ...provenance,
+            cacheHit: execution.cacheHit ?? false,
+            sourceAsOf: provenance.asOf,
+          },
+        });
       }
       continue;
     }
@@ -427,9 +454,25 @@ export function buildSourcesFromToolExecutions(executions: AiToolExecution[]): A
         rows: execution.rows.length,
         durationMs: execution.durationMs,
         cacheHit: execution.cacheHit ?? false,
+        queryHash: stableQueryHash(execution.call),
+        ...provenance,
       },
     });
   }
 
   return pending.map((source, index) => ({ ...source, id: `S${index + 1}` }));
+}
+
+/** Hash ổn định của {tool, arguments} — dùng để đối chiếu query khi eval */
+function stableQueryHash(call: AiToolCall): string {
+  const sorted = JSON.stringify(
+    Object.fromEntries(
+      Object.entries(call.arguments).sort(([a], [b]) => a.localeCompare(b)),
+    ),
+  );
+  let hash = 0;
+  for (let i = 0; i < sorted.length; i += 1) {
+    hash = ((hash << 5) - hash + sorted.charCodeAt(i)) | 0;
+  }
+  return `q${Math.abs(hash).toString(36)}`;
 }

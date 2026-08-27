@@ -4,6 +4,7 @@ import type {
   AiChatResponse,
   AiChatSessionSummary,
   AiIntent,
+  AiMemoryState,
   AiModelUsage,
   AiResponseMode,
   AiStoredChatMessage,
@@ -167,6 +168,41 @@ export async function getConversationMemory(sessionId: string): Promise<Conversa
       .reverse()
       .map((row) => ({ role: row.role as "user" | "assistant", content: row.content })),
   };
+}
+
+/** Structured state của session (jsonb memory_state) — fail-safe null khi chưa có */
+export async function getConversationState(sessionId: string): Promise<AiMemoryState | null> {
+  const supabase = createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("ai_chat_sessions")
+    .select("memory_state")
+    .eq("id", sessionId)
+    .maybeSingle();
+  if (error || !data?.memory_state) return null;
+  try {
+    const parsed = data.memory_state as unknown as AiMemoryState;
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Merge patch vào state hiện tại, set updatedAt, ghi lại. Fail-safe (không throw khi lỗi). */
+export async function updateConversationState(
+  sessionId: string,
+  patch: Partial<Omit<AiMemoryState, "updatedAt">>,
+): Promise<void> {
+  const supabase = createSupabaseServerClient();
+  const current = await getConversationState(sessionId);
+  const next: AiMemoryState = {
+    ...(current ?? {}),
+    ...patch,
+    updatedAt: new Date().toISOString(),
+  };
+  await supabase
+    .from("ai_chat_sessions")
+    .update({ memory_state: next as unknown as Json })
+    .eq("id", sessionId);
 }
 
 export async function findAiResponseByRequest(

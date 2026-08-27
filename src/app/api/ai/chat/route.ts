@@ -46,6 +46,7 @@ export async function POST(request: NextRequest) {
     organizationId: context.organizationId,
     branchId: context.branchId,
     userId: context.userId,
+    role: context.role,
     timezone: active.branch?.timezone ?? active.organization.timezone,
     question,
     mode: parsed.data.mode ?? "chat",

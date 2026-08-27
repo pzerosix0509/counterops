@@ -4,8 +4,7 @@ import path from "node:path";
 export default defineConfig({
   test: {
     environment: "node",
-    include: ["src/__tests__/**/*.test.{ts,tsx}"],
-    testTimeout: 30_000,
+    include: ["src/__tests__/**/*.test.{ts,tsx}", "scripts/**/*.test.{ts,tsx}"],
   },
   resolve: {
     alias: {

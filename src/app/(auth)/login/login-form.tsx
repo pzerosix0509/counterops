@@ -81,7 +81,11 @@ export function LoginForm({ nextPath }: { nextPath: string }) {
         <Separator className="my-6" />
         <p className="text-center text-sm text-muted-foreground">
           Chưa có tài khoản?{" "}
-          <Link href="/onboarding" className="font-medium text-primary underline-offset-4 hover:underline">
+          <Link href="/register" className="text-primary underline-offset-4 hover:underline">
+            Đăng ký ngay
+          </Link>{" "}
+          ·{" "}
+          <Link href="/onboarding" className="text-primary underline-offset-4 hover:underline">
             Tạo cửa hàng mới
           </Link>
         </p>

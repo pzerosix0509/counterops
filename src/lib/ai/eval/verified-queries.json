@@ -1,0 +1,195 @@
+{
+  "catalogVersion": "2.0.0",
+  "verifiedAt": "2026-08-10",
+  "queries": [
+    {
+      "id": "VQ-001",
+      "question": "Doanh thu hôm nay là bao nhiêu?",
+      "semanticQuery": { "metric": "net_revenue", "dimensions": [], "grain": "day" },
+      "expectedValue": { "net_revenue": 618000 },
+      "requiredSources": ["sales_summary"],
+      "expectedClarification": false,
+      "purpose": "eval",
+      "layer": "numbers"
+    },
+    {
+      "id": "VQ-002",
+      "question": "Lợi nhuận 7 ngày qua",
+      "semanticQuery": { "metric": "net_profit", "dimensions": [], "grain": "day" },
+      "expectedValue": { "net_profit": 4073300 },
+      "requiredSources": ["sales_summary"],
+      "expectedClarification": false,
+      "purpose": "eval",
+      "layer": "numbers"
+    },
+    {
+      "id": "VQ-003",
+      "question": "Top món bán chạy nhất 7 ngày qua",
+      "semanticQuery": { "metric": "net_revenue", "dimensions": ["product"], "grain": "day" },
+      "expectedValue": { "topProduct": "Espresso" },
+      "requiredSources": ["top_products"],
+      "expectedClarification": false,
+      "purpose": "eval",
+      "layer": "numbers"
+    },
+    {
+      "id": "VQ-004",
+      "question": "Kênh bán nào hiệu quả nhất 7 ngày qua?",
+      "semanticQuery": { "metric": "net_revenue", "dimensions": ["channel"], "grain": "day" },
+      "expectedValue": { "topChannel": "Shopee" },
+      "requiredSources": ["channel_summary"],
+      "expectedClarification": false,
+      "purpose": "eval",
+      "layer": "numbers"
+    },
+    {
+      "id": "VQ-005",
+      "question": "So sánh doanh thu tuần này với kỳ trước",
+      "semanticQuery": { "metric": "net_revenue", "dimensions": [], "grain": "day", "comparison": "previous_period" },
+      "expectedValue": {},
+      "requiredSources": ["sales_summary", "period_comparison"],
+      "expectedClarification": false,
+      "purpose": "eval",
+      "layer": "numbers"
+    },
+    {
+      "id": "VQ-006",
+      "question": "doanh thu hom nay la bao nhiu?",
+      "semanticQuery": { "metric": "net_revenue", "dimensions": [], "grain": "day" },
+      "expectedIntent": "metric_lookup",
+      "expectedTools": ["sales_summary"],
+      "expectedRangeLabel": "Hôm nay",
+      "expectedClarification": false,
+      "purpose": "eval",
+      "layer": "planning"
+    },
+    {
+      "id": "VQ-007",
+      "question": "top mon ban chay 7 ngay qua",
+      "semanticQuery": { "metric": "net_revenue", "dimensions": ["product"], "grain": "day" },
+      "expectedIntent": "product_ranking",
+      "expectedTools": ["sales_summary", "top_products"],
+      "expectedRangeLabel": "7 ngày qua",
+      "expectedClarification": false,
+      "purpose": "eval",
+      "layer": "planning"
+    },
+    {
+      "id": "VQ-008",
+      "question": "Giá hôm nay thế nào?",
+      "expectedClarification": true,
+      "purpose": "eval",
+      "layer": "quality"
+    },
+    {
+      "id": "VQ-009",
+      "question": "Doanh thu Grab tháng này",
+      "expectedIntent": "channel_analysis",
+      "expectedRangeLabel": "Tháng này",
+      "expectedClarification": false,
+      "purpose": "eval",
+      "layer": "planning"
+    },
+    {
+      "id": "VQ-010",
+      "question": "Doanh thu hôm nay đến giờ là bao nhiêu?",
+      "semanticQuery": { "metric": "net_revenue", "dimensions": [], "grain": "day" },
+      "expectedIntent": "metric_lookup",
+      "expectedRangeLabel": "Hôm nay",
+      "expectedClarification": false,
+      "purpose": "eval",
+      "layer": "quality"
+    },
+    {
+      "id": "VQ-014",
+      "question": "Xu hướng doanh thu 30 ngày qua thế nào?",
+      "expectedIntent": "trend",
+      "expectedRangeLabel": "30 ngày qua",
+      "scenario": "outlier-day",
+      "expectedAnomalyDate": "2026-07-16",
+      "purpose": "eval",
+      "layer": "quality"
+    },
+    {
+      "id": "VQ-015",
+      "question": "Doanh thu hôm nay là bao nhiêu?",
+      "expectedIntent": "metric_lookup",
+      "expectedRangeLabel": "Hôm nay",
+      "scenario": "refund-day",
+      "purpose": "eval",
+      "layer": "quality"
+    },
+    {
+      "id": "VQ-016",
+      "question": "Doanh thu hôm nay là bao nhiêu?",
+      "expectedIntent": "metric_lookup",
+      "expectedRangeLabel": "Hôm nay",
+      "scenario": "tool-timeout",
+      "expectedQualityIssues": ["tool_error_sales_summary"],
+      "purpose": "eval",
+      "layer": "quality"
+    },
+    {
+      "id": "VQ-017",
+      "question": "Doanh thu hôm nay là bao nhiêu?",
+      "expectedIntent": "metric_lookup",
+      "expectedRangeLabel": "Hôm nay",
+      "scenario": "empty-period",
+      "purpose": "eval",
+      "layer": "quality"
+    },
+    {
+      "id": "VQ-018",
+      "question": "Lợi nhuận 7 ngày qua",
+      "expectedIntent": "metric_lookup",
+      "expectedRangeLabel": "7 ngày qua",
+      "scenario": "small-sample",
+      "expectedQualityIssues": ["small_sample"],
+      "purpose": "eval",
+      "layer": "quality"
+    },
+    {
+      "id": "VQ-019",
+      "question": "Doanh thu hôm nay là bao nhiêu?",
+      "expectedIntent": "metric_lookup",
+      "expectedRangeLabel": "Hôm nay",
+      "scenario": "missing-day",
+      "purpose": "eval",
+      "layer": "quality"
+    },
+    {
+      "id": "VQ-020",
+      "question": "Xu hướng doanh thu 30 ngày qua thế nào?",
+      "expectedIntent": "trend",
+      "expectedRangeLabel": "30 ngày qua",
+      "scenario": "duplicate-day",
+      "expectedQualityIssues": ["duplicate_rows"],
+      "purpose": "eval",
+      "layer": "quality"
+    },
+    {
+      "id": "VQ-011",
+      "question": "Doanh thu hôm nay là bao nhiêu?",
+      "semanticQuery": { "metric": "net_revenue", "dimensions": [], "grain": "day" },
+      "expectedClarification": false,
+      "purpose": "guidance",
+      "layer": "planning"
+    },
+    {
+      "id": "VQ-012",
+      "question": "So sánh doanh thu tuần này với kỳ trước",
+      "semanticQuery": { "metric": "net_revenue", "dimensions": [], "grain": "day", "comparison": "previous_period" },
+      "expectedClarification": false,
+      "purpose": "guidance",
+      "layer": "planning"
+    },
+    {
+      "id": "VQ-013",
+      "question": "Top món bán chạy nhất 7 ngày qua",
+      "semanticQuery": { "metric": "net_revenue", "dimensions": ["product"], "grain": "day" },
+      "expectedClarification": false,
+      "purpose": "guidance",
+      "layer": "planning"
+    }
+  ]
+}

@@ -45,6 +45,13 @@ export const productSchema = z.object({
 });
 export type ProductInput = z.infer<typeof productSchema>;
 
+export const recipeItemInputSchema = z.object({
+  inventoryItemId: z.string().uuid(),
+  quantity: z.number().positive("Số lượng phải lớn hơn 0"),
+  unit: z.string().min(1, "Đơn vị không được trống"),
+});
+export type RecipeItemInput = z.infer<typeof recipeItemInputSchema>;
+
 export const categorySchema = z.object({
   name: z.string().min(1),
   sortOrder: z.number().int().default(0),
