@@ -2,6 +2,7 @@
 import {
   findShortages,
   computeRecipeCost,
+  computeBomCost,
   expectedNetProfit,
 } from "@/lib/calculations/inventory";
 
@@ -25,6 +26,10 @@ describe("inventory calculations", () => {
         { quantity: 30, estimatedCost: 2 },
       ])
     ).toBe(20 * 5 + 30 * 2);
+  });
+
+  it("computes BOM cost from unit prices", () => {
+    expect(computeBomCost([{ quantity: 20, unitCost: 5 }, { quantity: 30, unitCost: 2 }])).toBe(160);
   });
 
   it("computes expected net profit", () => {

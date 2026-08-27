@@ -13,8 +13,8 @@
 do $$
 declare
   v_owner_user_id   uuid := '1fef06b8-3998-46ae-9ad6-62faa4275ab1';
-  v_organization_id uuid := select gen_random_uuid();
-  v_branch_id       uuid := select gen_random_uuid();
+  v_organization_id uuid := gen_random_uuid();
+  v_branch_id       uuid := gen_random_uuid();
 begin
   insert into public.organizations (id, name, slug, business_type)
   values (v_organization_id, 'Quán Cafe Demo', 'cafe-demo', 'restaurant')
@@ -49,30 +49,30 @@ begin
   );
 
   -- 6. Menu categories
-  insert into public.menu_categories (organization_id, name, sort_order)
-  select v_organization_id, c.name, c.sort_order
+  insert into public.menu_categories (organization_id, name, sort_order, menu_type)
+  select v_organization_id, c.name, c.sort_order, c.menu_type::public.menu_type
   from (values
-    ('Cà phê'::text, 1),
-    ('Trà'::text,    2),
-    ('Đồ ăn'::text,  3),
-    ('Khác'::text,   4)
-  ) as c(name, sort_order)
+    ('Cà phê'::text, 1, 'drink'::text),
+    ('Trà'::text,    2, 'drink'::text),
+    ('Đồ ăn'::text,  3, 'food'::text),
+    ('Khác'::text,   4, 'other'::text)
+  ) as c(name, sort_order, menu_type)
   where not exists (
     select 1 from public.menu_categories m
     where m.organization_id = v_organization_id and m.name = c.name
   );
 
   -- 7. Inventory items (cast item_type -> enum)
-  insert into public.inventory_items (organization_id, name, code, item_type, unit, cost_price)
-  select v_organization_id, i.name, i.code, i.item_type::public.inventory_item_type, i.unit, i.cost_price
+  insert into public.inventory_items (organization_id, name, code, item_type, unit, cost_price, can_be_ingredient, can_be_sold)
+  select v_organization_id, i.name, i.code, i.item_type::public.inventory_item_type, i.unit, i.cost_price, i.can_be_ingredient, i.can_be_sold
   from (values
-    ('Cà phê bột'::text,     'INV-CF-BOT'::text,    'ingredient'::text,      'g'::text,   5),
-    ('Sữa đặc'::text,        'INV-SUA-DAC'::text,   'ingredient'::text,      'ml'::text,  2),
-    ('Trà đào'::text,        'INV-TRA-DAO'::text,   'ingredient'::text,      'g'::text,   3),
-    ('Đào hộp'::text,        'INV-DAO-HOP'::text,   'ingredient'::text,      'g'::text,   6),
-    ('Nước suối chai'::text, 'INV-NUOC-SUOI'::text, 'sellable_product'::text,'chai'::text,4000),
-    ('Gạo'::text,            'INV-GAO'::text,       'ingredient'::text,      'kg'::text,  22000)
-  ) as i(name, code, item_type, unit, cost_price)
+    ('Cà phê bột'::text,     'INV-CF-BOT'::text,    'ingredient'::text,      'g'::text,   5, true, false),
+    ('Sữa đặc'::text,        'INV-SUA-DAC'::text,   'ingredient'::text,      'ml'::text,  2, true, true),
+    ('Trà đào'::text,        'INV-TRA-DAO'::text,   'ingredient'::text,      'g'::text,   3, true, false),
+    ('Đào hộp'::text,        'INV-DAO-HOP'::text,   'ingredient'::text,      'g'::text,   6, true, false),
+    ('Nước suối chai'::text, 'INV-NUOC-SUOI'::text, 'sellable_product'::text,'chai'::text,4000, false, true),
+    ('Gạo'::text,            'INV-GAO'::text,       'ingredient'::text,      'kg'::text,  22000, true, false)
+  ) as i(name, code, item_type, unit, cost_price, can_be_ingredient, can_be_sold)
   where not exists (
     select 1 from public.inventory_items ii
     where ii.organization_id = v_organization_id and ii.code = i.code
@@ -115,6 +115,14 @@ begin
     select 1 from public.products pp
     where pp.organization_id = v_organization_id and pp.code = p.code
   );
+
+  update public.products p
+  set inventory_item_id = i.id
+  from public.inventory_items i
+  where p.organization_id = v_organization_id
+    and i.organization_id = v_organization_id
+    and p.code = 'P-NUOC-SUOI'
+    and i.code = 'INV-NUOC-SUOI';
 
   -- 10. Recipes
   insert into public.recipes (organization_id, product_id, version, is_active)

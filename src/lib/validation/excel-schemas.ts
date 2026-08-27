@@ -104,12 +104,15 @@ export const MENU_TYPE_VALUES = ["food", "drink", "service", "other"] as const;
 export const PRODUCT_TYPE_VALUES = ["regular", "prepared"] as const;
 
 export const productImportRowSchema = z.object({
-  code: cellString.refine((v) => v.length > 0, "Mã món không được trống"),
+  code: cellString,
   name: cellString.refine((v) => v.length > 0, "Tên món không được trống"),
   category: cellOptionalString,
   menuType: z.preprocess(
-    (v) => (v == null ? "" : String(v).trim().toLowerCase()),
-    z.enum(MENU_TYPE_VALUES, { message: "Loại thực đơn không hợp lệ" })
+    (v) => {
+      if (v == null || String(v).trim() === "") return undefined;
+      return String(v).trim().toLowerCase();
+    },
+    z.enum(MENU_TYPE_VALUES, { message: "Loại thực đơn không hợp lệ" }).optional()
   ),
   productType: z.preprocess(
     (v) => (v == null ? "" : String(v).trim().toLowerCase()),
@@ -127,7 +130,7 @@ export const productImportRowSchema = z.object({
 export type ProductImportRow = z.infer<typeof productImportRowSchema>;
 
 export const PRODUCT_IMPORT_COLUMNS = [
-  { key: "code", header: "Mã món" },
+  { key: "code", header: "Mã món (tuỳ chọn)" },
   { key: "name", header: "Tên món" },
   { key: "category", header: "Nhóm món" },
   { key: "menuType", header: "Loại thực đơn (food|drink|service|other)" },
@@ -149,7 +152,7 @@ export const PRODUCT_COLUMN_BY_FIELD: Record<string, string> = Object.fromEntrie
 export const INVENTORY_TYPE_VALUES = ["ingredient", "sellable_product", "packaging", "other"] as const;
 
 export const inventoryItemImportRowSchema = z.object({
-  code: cellString.refine((v) => v.length > 0, "Mã hàng không được trống"),
+  code: cellString,
   name: cellString.refine((v) => v.length > 0, "Tên hàng không được trống"),
   itemType: z.preprocess(
     (v) => (v == null ? "" : String(v).trim().toLowerCase()),
@@ -167,7 +170,7 @@ export const inventoryItemImportRowSchema = z.object({
 export type InventoryItemImportRow = z.infer<typeof inventoryItemImportRowSchema>;
 
 export const INVENTORY_ITEM_IMPORT_COLUMNS = [
-  { key: "code", header: "Mã hàng" },
+  { key: "code", header: "Mã hàng (tuỳ chọn)" },
   { key: "name", header: "Tên hàng" },
   { key: "itemType", header: "Loại (ingredient|sellable_product|packaging|other)" },
   { key: "unit", header: "Đơn vị" },

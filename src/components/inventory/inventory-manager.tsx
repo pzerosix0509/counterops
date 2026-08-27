@@ -25,14 +25,7 @@ import {
   previewInventoryItemImport,
 } from "@/server/actions/excel";
 import { INVENTORY_ITEM_IMPORT_COLUMNS } from "@/lib/validation/excel-schemas";
-import type { InventoryItem, InventoryBalance, InventoryMovement } from "@/types/database";
-
-const ITEM_TYPE_LABEL: Record<string, string> = {
-  ingredient: "Nguyên liệu",
-  sellable_product: "Hàng bán",
-  packaging: "Bao bì",
-  other: "Khác",
-};
+import type { InventoryItem, InventoryBalance, InventoryMovement, MenuCategory } from "@/types/database";
 
 type MovementIntent = {
   itemId: string;
@@ -64,6 +57,7 @@ export function InventoryManager({
   canManage,
   items,
   balances,
+  categories,
   initialQuery,
   defaultLowStockThreshold,
   lowStockAlertEnabled,
@@ -73,6 +67,7 @@ export function InventoryManager({
   canManage: boolean;
   items: InventoryItem[];
   balances: InventoryBalance[];
+  categories: MenuCategory[];
   initialQuery: string;
   defaultLowStockThreshold: number;
   lowStockAlertEnabled: boolean;
@@ -86,6 +81,8 @@ export function InventoryManager({
   const [isPending, startTransition] = useTransition();
   const [movements, setMovements] = useState<Record<string, InventoryMovement[]>>({});
   const [loadingMv, setLoadingMv] = useState<string | null>(null);
+  const [canBeIngredient, setCanBeIngredient] = useState(true);
+  const [canBeSold, setCanBeSold] = useState(false);
 
   function onFilter(e: React.FormEvent) {
     e.preventDefault();
@@ -100,8 +97,10 @@ export function InventoryManager({
     const f = new FormData(e.currentTarget);
     const payload = {
       name: String(f.get("name") || ""),
-      code: String(f.get("code") || ""),
-      itemType: (f.get("itemType") as string) || "ingredient",
+      canBeIngredient,
+      canBeSold,
+      salePrice: canBeSold ? Number(f.get("salePrice") || 0) : undefined,
+      categoryId: canBeSold ? (String(f.get("categoryId") || "none") === "none" ? null : String(f.get("categoryId"))) : null,
       unit: String(f.get("unit") || ""),
       costPrice: Number(f.get("costPrice") || 0),
       description: String(f.get("description") || "") || null,
@@ -206,7 +205,7 @@ export function InventoryManager({
                   <DialogHeader>
                     <DialogTitle>Thêm hàng hoá</DialogTitle>
                     <DialogDescription>
-                      Tạo hàng mới trong kho. Nếu đang có sẵn hàng, nhập số tồn hiện có để khởi tạo kho.
+                      Tên hàng unique trong cửa hàng. Không nhập mã. Tick bán để hiện trên thực đơn.
                     </DialogDescription>
                   </DialogHeader>
                   <form className="space-y-3" onSubmit={onCreateItem}>
@@ -216,31 +215,41 @@ export function InventoryManager({
                         <Input id="name" name="name" required />
                       </div>
                       <div className="space-y-1.5">
-                        <Label htmlFor="code">Mã hàng</Label>
-                        <Input id="code" name="code" required />
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-3 gap-3">
-                      <div className="space-y-1.5">
-                        <Label htmlFor="itemType">Loại</Label>
-                        <Select name="itemType" defaultValue="ingredient">
-                          <SelectTrigger><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="ingredient">Nguyên liệu</SelectItem>
-                            <SelectItem value="sellable_product">Hàng bán</SelectItem>
-                            <SelectItem value="packaging">Bao bì</SelectItem>
-                            <SelectItem value="other">Khác</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-1.5">
                         <Label htmlFor="unit">Đơn vị</Label>
                         <Input id="unit" name="unit" required placeholder="g, ml, chai..." />
                       </div>
-                      <div className="space-y-1.5">
-                        <Label htmlFor="costPrice">Giá vốn</Label>
-                        <NumberInput id="costPrice" name="costPrice" defaultValue={0} required />
+                    </div>
+                    <label className="flex items-center gap-2 text-sm">
+                      <input type="checkbox" checked={canBeIngredient} onChange={(e) => setCanBeIngredient(e.target.checked)} />
+                      Dùng làm nguyên liệu
+                    </label>
+                    <label className="flex items-center gap-2 text-sm">
+                      <input type="checkbox" checked={canBeSold} onChange={(e) => setCanBeSold(e.target.checked)} />
+                      Bán trên thực đơn
+                    </label>
+                    {canBeSold ? (
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
+                          <Label htmlFor="salePrice">Giá bán (đ)</Label>
+                          <NumberInput id="salePrice" name="salePrice" defaultValue={0} required />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label>Nhóm món</Label>
+                          <Select name="categoryId" defaultValue="none">
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">Chưa gán</SelectItem>
+                              {categories.map((c) => (
+                                <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
                       </div>
+                    ) : null}
+                    <div className="space-y-1.5">
+                      <Label htmlFor="costPrice">Giá vốn</Label>
+                      <NumberInput id="costPrice" name="costPrice" defaultValue={0} required />
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1.5">
@@ -311,8 +320,7 @@ export function InventoryManager({
             <div className="overflow-x-auto">
             <Table className="min-w-[1100px] table-fixed">
               <colgroup>
-                <col className="w-[150px]" />
-                <col className="w-[260px]" />
+                <col className="w-[280px]" />
                 <col className="w-[90px]" />
                 <col className="w-[140px]" />
                 <col className="w-[120px]" />
@@ -322,7 +330,6 @@ export function InventoryManager({
               </colgroup>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="px-3">Mã</TableHead>
                   <TableHead className="px-3">Tên hàng</TableHead>
                   <TableHead className="px-3">Đơn vị</TableHead>
                   <TableHead className="px-3 text-right">Giá vốn</TableHead>
@@ -342,13 +349,12 @@ export function InventoryManager({
                   const isLow = lowStockAlertEnabled && !isNegative && !isOut && low > 0 && qty <= low;
                   return (
                     <TableRow key={it.id}>
-                      <TableCell className="px-3 font-mono text-xs">
-                        <span className="block truncate" title={it.code}>{it.code}</span>
-                      </TableCell>
                       <TableCell className="px-3">
                         <div className="min-w-0">
                           <p className="truncate font-medium" title={it.name}>{it.name}</p>
-                          <p className="truncate text-xs text-muted-foreground">{ITEM_TYPE_LABEL[it.item_type] ?? it.item_type}</p>
+                          <p className="truncate text-xs text-muted-foreground">
+                            {[it.can_be_ingredient ? "Nguyên liệu" : null, it.can_be_sold ? "Bán liền" : null].filter(Boolean).join(" · ") || "Chưa gán vai trò"}
+                          </p>
                         </div>
                       </TableCell>
                       <TableCell className="px-3">{it.unit}</TableCell>
@@ -407,7 +413,7 @@ export function InventoryManager({
           <DialogHeader>
             <DialogTitle>Thẻ kho & phiếu nhập / xuất</DialogTitle>
             <DialogDescription>
-              {activeMovementItem ? `${activeMovementItem.name} (${activeMovementItem.code})` : ""}
+              {activeMovementItem ? activeMovementItem.name : ""}
             </DialogDescription>
           </DialogHeader>
           {movementIntent && movementIntent.showForm && canManage ? (

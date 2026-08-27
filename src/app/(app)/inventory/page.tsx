@@ -1,5 +1,6 @@
 import { requireActiveContext, canManageInventory, getActiveMembership } from "@/lib/auth/permissions";
 import { listInventoryItems, listInventoryBalances } from "@/server/queries/inventory";
+import { listCategories } from "@/server/queries/menu";
 import { getOperationalSettings } from "@/server/queries/settings";
 import { InventoryManager } from "@/components/inventory/inventory-manager";
 
@@ -13,10 +14,11 @@ export default async function InventoryPage({ searchParams }: PageProps) {
   const active = await getActiveMembership();
   if (!active) return null;
   const ctx = await requireActiveContext();
-  const [items, balances, settings] = await Promise.all([
+  const [items, balances, settings, categories] = await Promise.all([
     listInventoryItems(ctx.organizationId, searchParams.q || undefined),
     listInventoryBalances(ctx.organizationId, ctx.branchId),
     getOperationalSettings(ctx.organizationId),
+    listCategories(ctx.organizationId),
   ]);
   return (
     <div className="space-y-4">
@@ -30,6 +32,7 @@ export default async function InventoryPage({ searchParams }: PageProps) {
         canManage={canManageInventory.includes(active.role)}
         items={items}
         balances={balances}
+        categories={categories}
         initialQuery={searchParams.q ?? ""}
         defaultLowStockThreshold={settings.defaultLowStockThreshold}
         lowStockAlertEnabled={settings.lowStockAlertEnabled}

@@ -320,58 +320,57 @@ export async function payOrder(organizationId: string, input: unknown): Promise<
   };
 
   if (shouldDeductStock) {
-    // Regular products deduct directly from a sellable inventory item with the same code.
-    // Prepared products deduct ingredients from the active recipe.
     for (const it of order.items ?? []) {
       const product = it.product;
       if (!product) continue;
       if (product.product_type === "regular") {
+        const linkedId = product.inventory_item_id as string | null;
+        if (!linkedId) continue;
         const { data: link } = await supabase
           .from("inventory_items")
           .select("id, name, unit")
+          .eq("id", linkedId)
           .eq("organization_id", m.organization.id)
-          .eq("item_type", "sellable_product")
-          .eq("code", product.code)
           .maybeSingle();
-        if (link) {
-          const { data: balance } = await supabase
-            .from("inventory_balances")
-            .select("quantity_on_hand")
-            .eq("branch_id", order.branch_id)
-            .eq("inventory_item_id", link.id)
-            .maybeSingle();
-          addCheck({
-            inventoryItemId: link.id,
-            itemName: link.name,
-            unit: link.unit,
-            quantityAvailable: Number(balance?.quantity_on_hand ?? 0),
-            quantityNeeded: Number(it.quantity),
-          });
-        }
-      } else {
-        const { data: recipe } = await supabase
-          .from("recipes")
-          .select("id, recipe_items(*, inventory_item:inventory_items(id, name, unit))")
-          .eq("product_id", product.id)
-          .eq("is_active", true)
-          .order("version", { ascending: false })
-          .limit(1)
+        if (!link) continue;
+        const { data: balance } = await supabase
+          .from("inventory_balances")
+          .select("quantity_on_hand")
+          .eq("branch_id", order.branch_id)
+          .eq("inventory_item_id", link.id)
           .maybeSingle();
-        for (const ri of (recipe?.recipe_items ?? []) as any[]) {
-          const { data: balance } = await supabase
-            .from("inventory_balances")
-            .select("quantity_on_hand")
-            .eq("branch_id", order.branch_id)
-            .eq("inventory_item_id", ri.inventory_item_id)
-            .maybeSingle();
-          addCheck({
-            inventoryItemId: ri.inventory_item_id,
-            itemName: ri.inventory_item?.name ?? "Hàng kho",
-            unit: ri.inventory_item?.unit ?? ri.unit ?? "",
-            quantityAvailable: Number(balance?.quantity_on_hand ?? 0),
-            quantityNeeded: Number(it.quantity) * Number(ri.quantity),
-          });
-        }
+        addCheck({
+          inventoryItemId: link.id,
+          itemName: link.name,
+          unit: link.unit,
+          quantityAvailable: Number(balance?.quantity_on_hand ?? 0),
+          quantityNeeded: Number(it.quantity),
+        });
+        continue;
+      }
+
+      const { data: recipe } = await supabase
+        .from("recipes")
+        .select("id, recipe_items(*, inventory_item:inventory_items(id, name, unit))")
+        .eq("product_id", product.id)
+        .eq("is_active", true)
+        .order("version", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      for (const ri of (recipe?.recipe_items ?? []) as any[]) {
+        const { data: balance } = await supabase
+          .from("inventory_balances")
+          .select("quantity_on_hand")
+          .eq("branch_id", order.branch_id)
+          .eq("inventory_item_id", ri.inventory_item_id)
+          .maybeSingle();
+        addCheck({
+          inventoryItemId: ri.inventory_item_id,
+          itemName: ri.inventory_item?.name ?? "Hàng kho",
+          unit: ri.inventory_item?.unit ?? ri.unit ?? "",
+          quantityAvailable: Number(balance?.quantity_on_hand ?? 0),
+          quantityNeeded: Number(it.quantity) * Number(ri.quantity),
+        });
       }
     }
   }

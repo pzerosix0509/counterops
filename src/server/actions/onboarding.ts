@@ -87,9 +87,19 @@ export async function createOrganizationWithFirstBranch(
   ];
   await supabase.from("sales_channels").insert(defaultChannels);
 
-  const defaultCategories = ["Cà phê", "Trà", "Đồ ăn", "Khác"].map((name) => ({
+  const defaultCategories = [
+    { name: "Cà phê", menu_type: "drink" },
+    { name: "Trà", menu_type: "drink" },
+    { name: "Nước ép", menu_type: "drink" },
+    { name: "Chiên", menu_type: "food" },
+    { name: "Luộc", menu_type: "food" },
+    { name: "Mì", menu_type: "food" },
+    { name: "Dịch vụ", menu_type: "service" },
+  ].map((c, i) => ({
     organization_id: org.id,
-    name,
+    name: c.name,
+    menu_type: c.menu_type,
+    sort_order: i + 1,
   }));
   await supabase.from("menu_categories").insert(defaultCategories);
 

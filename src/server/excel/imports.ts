@@ -17,6 +17,7 @@ import type { ActionResult } from "@/lib/utils/action-result";
 import { actionFail, actionOk } from "@/lib/utils/action-result";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
+import { flagsFromItemType, generateSkuCode, inferCategoryMenuType } from "@/lib/inventory/sku";
 
 export interface ImportPreviewError {
   rowNumber: number;
@@ -147,16 +148,22 @@ export async function commitProducts(
   if (preview.cleaned.length === 0) {
     return actionFail("NO_ROWS", "Không có dòng hợp lệ để ghi.");
   }
+  if (preview.cleaned.some((row) => row.data.productType === "prepared")) {
+    return actionFail("VALIDATION_ERROR", "Import Excel không tạo món chế biến (thiếu công thức). Tạo món chế biến trên Thực đơn.");
+  }
   const admin = createSupabaseAdminClient();
-  const codes = Array.from(new Set(preview.cleaned.map((c) => c.data.code)));
-  const { data: existing } = await admin
-    .from("products")
-    .select("id, code, category_id")
-    .eq("organization_id", organizationId)
-    .in("code", codes);
-  const existingByCode = new Map<string, { id: string; code: string; category_id: string | null }>(
-    (existing ?? []).map((row) => [row.code as string, row as { id: string; code: string; category_id: string | null }])
-  );
+  const codes = Array.from(new Set(preview.cleaned.map((c) => c.data.code).filter((c) => Boolean(c && c.length > 0))));
+  const existingByCode = new Map<string, { id: string; code: string; category_id: string | null }>();
+  if (codes.length > 0) {
+    const { data: existing } = await admin
+      .from("products")
+      .select("id, code, category_id")
+      .eq("organization_id", organizationId)
+      .in("code", codes);
+    for (const row of existing ?? []) {
+      existingByCode.set(row.code as string, row as { id: string; code: string; category_id: string | null });
+    }
+  }
 
   const { data: categoryRows } = await admin
     .from("menu_categories")
@@ -178,7 +185,12 @@ export async function commitProducts(
     const sortOrder = (categoryRows?.length ?? 0) + categoriesByName.size;
     const { data: created, error } = await admin
       .from("menu_categories")
-      .insert({ organization_id: organizationId, name, sort_order: sortOrder })
+      .insert({
+        organization_id: organizationId,
+        name,
+        sort_order: sortOrder,
+        menu_type: inferCategoryMenuType(name),
+      })
       .select("id, name")
       .single();
     if (error || !created) {
@@ -191,16 +203,17 @@ export async function commitProducts(
   let updated = 0;
   for (const row of preview.cleaned) {
     const data = row.data;
-    const existingProduct = existingByCode.get(data.code);
+    const code = (data.code && data.code.trim()) || generateSkuCode(data.name);
+    const existingProduct = existingByCode.get(code);
     const category = data.category
       ? categoriesByName.get(data.category.toLowerCase()) ?? null
       : null;
     const payload = {
       organization_id: organizationId,
-      code: data.code,
+      code,
       name: data.name,
       category_id: category ? category.id : null,
-      menu_type: data.menuType,
+      menu_type: data.menuType ?? inferCategoryMenuType(data.category || data.name),
       product_type: data.productType,
       cost_price: data.costPrice ?? 0,
       sale_price: data.salePrice ?? 0,
@@ -212,7 +225,7 @@ export async function commitProducts(
     if (existingProduct) {
       const update = category ? payload : { ...payload, category_id: existingProduct.category_id };
       const { error } = await admin.from("products").update(update).eq("id", existingProduct.id);
-      if (error) return actionFail("INTERNAL_ERROR", `Không cập nhật được món ${data.code}: ${error.message}`);
+      if (error) return actionFail("INTERNAL_ERROR", `Không cập nhật được món ${code}: ${error.message}`);
       updated += 1;
     } else {
       const { data: inserted, error } = await admin
@@ -221,7 +234,7 @@ export async function commitProducts(
         .select("id")
         .single();
       if (error || !inserted) {
-        return actionFail("INTERNAL_ERROR", `Không tạo được món ${data.code}: ${error?.message ?? ""}`);
+        return actionFail("INTERNAL_ERROR", `Không tạo được món ${code}: ${error?.message ?? ""}`);
       }
       created += 1;
     }
@@ -271,21 +284,26 @@ export async function commitInventoryItems(
     return actionFail("NO_ROWS", "Không có dòng hợp lệ để ghi.");
   }
   const admin = createSupabaseAdminClient();
-  const codes = Array.from(new Set(preview.cleaned.map((c) => c.data.code)));
-  const { data: existing } = await admin
-    .from("inventory_items")
-    .select("id, code")
-    .eq("organization_id", organizationId)
-    .in("code", codes);
-  const existingByCode = new Map<string, { id: string; code: string }>(
-    (existing ?? []).map((row) => [row.code as string, row as { id: string; code: string }])
-  );
+  const codes = Array.from(new Set(preview.cleaned.map((c) => c.data.code).filter((c) => Boolean(c && c.length > 0))));
+  const existingByCode = new Map<string, { id: string; code: string }>();
+  if (codes.length > 0) {
+    const { data: existing } = await admin
+      .from("inventory_items")
+      .select("id, code")
+      .eq("organization_id", organizationId)
+      .in("code", codes);
+    for (const row of existing ?? []) {
+      existingByCode.set(row.code as string, row as { id: string; code: string });
+    }
+  }
 
   let created = 0;
   let updated = 0;
   for (const row of preview.cleaned) {
     const data = row.data;
-    const existingItem = existingByCode.get(data.code);
+    const flags = flagsFromItemType(data.itemType);
+    const code = (data.code && data.code.trim()) || generateSkuCode(data.name);
+    const existingItem = data.code ? existingByCode.get(data.code) : undefined;
     if (existingItem) {
       const quantity = Number(data.initialQuantity ?? 0);
       const threshold = Number(data.lowStockThreshold ?? 0);
@@ -294,6 +312,8 @@ export async function commitInventoryItems(
         .update({
           name: data.name,
           item_type: data.itemType,
+          can_be_ingredient: flags.canBeIngredient,
+          can_be_sold: flags.canBeSold,
           unit: data.unit,
           cost_price: data.costPrice ?? 0,
           description: data.description ?? null,
@@ -301,7 +321,7 @@ export async function commitInventoryItems(
         })
         .eq("id", existingItem.id);
       if (error) {
-        return actionFail("INTERNAL_ERROR", `Không cập nhật được hàng ${data.code}: ${error.message}`);
+        return actionFail("INTERNAL_ERROR", `Không cập nhật được hàng ${data.name}: ${error.message}`);
       }
       await admin.from("inventory_balances").upsert({
         organization_id: organizationId,
@@ -320,8 +340,10 @@ export async function commitInventoryItems(
       .insert({
         organization_id: organizationId,
         name: data.name,
-        code: data.code,
+        code,
         item_type: data.itemType,
+        can_be_ingredient: flags.canBeIngredient,
+        can_be_sold: flags.canBeSold,
         unit: data.unit,
         cost_price: data.costPrice ?? 0,
         description: data.description ?? null,
@@ -330,7 +352,7 @@ export async function commitInventoryItems(
       .select("id")
       .single();
     if (error || !inserted) {
-      return actionFail("INTERNAL_ERROR", `Không tạo được hàng ${data.code}: ${error?.message ?? ""}`);
+      return actionFail("INTERNAL_ERROR", `Không tạo được hàng ${data.name}: ${error?.message ?? ""}`);
     }
     await admin.from("inventory_balances").upsert({
       organization_id: organizationId,

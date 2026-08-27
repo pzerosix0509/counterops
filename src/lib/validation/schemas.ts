@@ -21,14 +21,15 @@ export const onboardingSchema = z.object({
 export type OnboardingInput = z.infer<typeof onboardingSchema>;
 
 export const productSchema = z.object({
+  id: z.string().uuid().optional(),
   name: z.string().min(1, "Tên món không được trống"),
-  code: z.string().min(1, "Mã món không được trống"),
+  code: z.string().optional(),
   categoryId: z.string().uuid().nullable().optional(),
   description: z.string().nullable().optional(),
   imageUrl: z.string().url().nullable().optional(),
-  menuType: z.enum(["food", "drink", "service", "other"]),
+  menuType: z.enum(["food", "drink", "service", "other"]).optional(),
   productType: z.enum(["regular", "prepared"]),
-  costPrice: z.number().int().min(0, "Giá vốn không âm"),
+  costPrice: z.number().int().min(0, "Giá vốn không âm").optional(),
   salePrice: z.number().int().min(0, "Giá bán không âm"),
   unit: z.string().min(1),
   isActive: z.boolean().default(true),
@@ -55,18 +56,24 @@ export type RecipeItemInput = z.infer<typeof recipeItemInputSchema>;
 export const categorySchema = z.object({
   name: z.string().min(1),
   sortOrder: z.number().int().default(0),
+  menuType: z.enum(["food", "drink", "service", "other"]),
 });
 
 export const inventoryItemSchema = z.object({
-  name: z.string().min(1),
-  code: z.string().min(1),
-  itemType: z.enum(["ingredient", "sellable_product", "packaging", "other"]),
+  name: z.string().min(1, "Tên hàng không được trống"),
+  code: z.string().optional(),
+  canBeIngredient: z.boolean().default(true),
+  canBeSold: z.boolean().default(false),
+  salePrice: z.number().int().min(0).optional(),
+  categoryId: z.string().uuid().nullable().optional(),
   unit: z.string().min(1),
   costPrice: z.number().int().min(0),
   description: z.string().nullable().optional(),
   imageUrl: z.string().url().nullable().optional(),
   initialQuantity: z.number().min(0).default(0),
   lowStockThreshold: z.number().min(0).default(0),
+}).refine((v) => v.canBeIngredient || v.canBeSold, {
+  message: "Chọn dùng làm nguyên liệu hoặc bán trên thực đơn",
 });
 export type InventoryItemInput = z.infer<typeof inventoryItemSchema>;
 
