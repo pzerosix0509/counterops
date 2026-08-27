@@ -1,4 +1,5 @@
 import { buildAiPlan } from "@/lib/ai/semantic-layer";
+import type { SemanticQuery } from "@/lib/ai/semantic-compiler";
 import type { AiIntent, AiModelTier, AiToolName } from "@/types/ai";
 
 export interface AiGoldenQuestion {
@@ -9,7 +10,59 @@ export interface AiGoldenQuestion {
   expectedRangeLabel: string;
   expectedDeterministic: boolean;
   expectedModelTier: AiModelTier;
+  /** Semantic query kỳ vọng (metric/dimensions/grain/comparison) — chấm provenance */
+  expectedQuery?: Pick<SemanticQuery, "metric" | "dimensions" | "grain" | "comparison">;
+  /** Câu mơ hồ phải kích hoạt clarification (không được đoán) */
+  expectedClarification?: boolean;
 }
+
+/**
+ * EXEMPLAR — câu hỏi verified dùng để định hướng LLM (few-shot).
+ * TÁCH KHỎI eval set để tránh "học thuộc" (pattern Snowflake Verified Queries):
+ * eval set không bao giờ được inject vào prompt.
+ */
+export const EXEMPLAR_QUESTIONS: AiGoldenQuestion[] = [
+  {
+    question: "Doanh thu hôm nay là bao nhiêu?",
+    mode: "chat",
+    expectedIntent: "metric_lookup",
+    expectedTools: ["sales_summary"],
+    expectedRangeLabel: "Hôm nay",
+    expectedDeterministic: true,
+    expectedModelTier: "none",
+    expectedQuery: { metric: "net_revenue", dimensions: [], grain: "day" },
+  },
+  {
+    question: "Xu hướng doanh thu theo giờ hôm nay",
+    mode: "chat",
+    expectedIntent: "trend",
+    expectedTools: ["sales_summary", "sales_timeseries"],
+    expectedRangeLabel: "Hôm nay",
+    expectedDeterministic: true,
+    expectedModelTier: "none",
+    expectedQuery: { metric: "net_revenue", dimensions: ["time"], grain: "hour" },
+  },
+  {
+    question: "So sánh doanh thu tuần này với kỳ trước",
+    mode: "chat",
+    expectedIntent: "comparison",
+    expectedTools: ["sales_summary", "period_comparison"],
+    expectedRangeLabel: "Tuần này",
+    expectedDeterministic: true,
+    expectedModelTier: "none",
+    expectedQuery: { metric: "net_revenue", dimensions: [], grain: "day", comparison: "previous_period" },
+  },
+  {
+    question: "Top món bán chạy nhất 7 ngày qua",
+    mode: "chat",
+    expectedIntent: "product_ranking",
+    expectedTools: ["sales_summary", "top_products"],
+    expectedRangeLabel: "7 ngày qua",
+    expectedDeterministic: true,
+    expectedModelTier: "none",
+    expectedQuery: { metric: "net_revenue", dimensions: ["product"], grain: "day" },
+  },
+];
 
 export const AI_GOLDEN_QUESTIONS: AiGoldenQuestion[] = [
   {
@@ -396,6 +449,215 @@ export const AI_GOLDEN_QUESTIONS: AiGoldenQuestion[] = [
     expectedDeterministic: false,
     expectedModelTier: "fast",
   },
+  // Forecast cases (training window phải là quá khứ)
+  {
+    question: "Dự đoán doanh thu tháng tới",
+    mode: "chat",
+    expectedIntent: "forecast",
+    expectedTools: ["sales_summary", "sales_timeseries", "forecast_revenue"],
+    expectedRangeLabel: "30 ngày qua",
+    expectedDeterministic: false,
+    expectedModelTier: "fast",
+  },
+  {
+    question: "Dự báo doanh thu tuần tới",
+    mode: "chat",
+    expectedIntent: "forecast",
+    expectedTools: ["sales_summary", "sales_timeseries", "forecast_revenue"],
+    expectedRangeLabel: "14 ngày qua",
+    expectedDeterministic: false,
+    expectedModelTier: "fast",
+  },
+  // Metric khác trong catalog
+  {
+    question: "Giá vốn tháng này là bao nhiêu?",
+    mode: "chat",
+    expectedIntent: "metric_lookup",
+    expectedTools: ["sales_summary"],
+    expectedRangeLabel: "Tháng này",
+    expectedDeterministic: true,
+    expectedModelTier: "none",
+    expectedQuery: { metric: "cost_of_goods", dimensions: [], grain: "day" },
+  },
+  {
+    question: "Lợi nhuận sau phí tuần này",
+    mode: "chat",
+    expectedIntent: "metric_lookup",
+    expectedTools: ["sales_summary"],
+    expectedRangeLabel: "Tuần này",
+    expectedDeterministic: true,
+    expectedModelTier: "none",
+    expectedQuery: { metric: "net_profit", dimensions: [], grain: "day" },
+  },
+  // Không dấu / colloquial
+  {
+    question: "doanh thu kenh ban 7 ngay qua",
+    mode: "chat",
+    expectedIntent: "channel_analysis",
+    expectedTools: ["sales_summary", "channel_summary"],
+    expectedRangeLabel: "7 ngày qua",
+    expectedDeterministic: true,
+    expectedModelTier: "none",
+    expectedQuery: { metric: "net_revenue", dimensions: ["channel"], grain: "day" },
+  },
+  {
+    question: "hom nay ban duoc nhieu tien khong",
+    mode: "chat",
+    expectedIntent: "metric_lookup",
+    expectedTools: ["sales_summary"],
+    expectedRangeLabel: "Hôm nay",
+    expectedDeterministic: true,
+    expectedModelTier: "none",
+  },
+  {
+    question: "so don hom qua la bao nhieu",
+    mode: "chat",
+    expectedIntent: "metric_lookup",
+    expectedTools: ["sales_summary"],
+    expectedRangeLabel: "Hôm qua",
+    expectedDeterministic: true,
+    expectedModelTier: "none",
+  },
+  // Kỳ hiện tại / tháng hiện tại
+  {
+    question: "Số đơn tháng này",
+    mode: "chat",
+    expectedIntent: "metric_lookup",
+    expectedTools: ["sales_summary"],
+    expectedRangeLabel: "Tháng này",
+    expectedDeterministic: true,
+    expectedModelTier: "none",
+    expectedQuery: { metric: "total_orders", dimensions: [], grain: "day" },
+  },
+  // Câu chứa "kho" nhưng không phải tồn kho
+  {
+    question: "Cách tính lợi nhuận khó không?",
+    mode: "chat",
+    expectedIntent: "metric_lookup",
+    expectedTools: ["sales_summary"],
+    expectedRangeLabel: "7 ngày qua",
+    expectedDeterministic: true,
+    expectedModelTier: "none",
+  },
+  // Entity ambiguity — tên có thể là kênh hoặc món (detect qua module clarification,
+  // cần entity data từ DB — không test trong golden thuần)
+  {
+    question: "Doanh thu Grab tháng này bao nhiêu?",
+    mode: "chat",
+    expectedIntent: "channel_analysis",
+    expectedTools: ["sales_summary", "channel_summary"],
+    expectedRangeLabel: "Tháng này",
+    expectedDeterministic: true,
+    expectedModelTier: "none",
+  },
+  // Câu mơ hồ intent
+  {
+    question: "Giá hôm nay thế nào?",
+    mode: "chat",
+    expectedIntent: "web_search",
+    expectedTools: ["search_web"],
+    expectedRangeLabel: "Hôm nay",
+    expectedDeterministic: false,
+    expectedModelTier: "fast",
+  },
+  // Thêm cases đa dạng — kênh/tuần/tháng, không dấu, colloquial, metric khác
+  {
+    question: "Doanh thu kênh bán tuần này",
+    mode: "chat",
+    expectedIntent: "channel_analysis",
+    expectedTools: ["sales_summary", "channel_summary"],
+    expectedRangeLabel: "Tuần này",
+    expectedDeterministic: true,
+    expectedModelTier: "none",
+    expectedQuery: { metric: "net_revenue", dimensions: ["channel"], grain: "day" },
+  },
+  {
+    question: "Phí kênh bán tháng trước",
+    mode: "chat",
+    expectedIntent: "channel_analysis",
+    expectedTools: ["sales_summary", "channel_summary"],
+    expectedRangeLabel: "Tháng trước",
+    expectedDeterministic: true,
+    expectedModelTier: "none",
+    expectedQuery: { metric: "channel_fees", dimensions: ["channel"], grain: "day" },
+  },
+  {
+    question: "Lợi nhuận gộp 7 ngày qua",
+    mode: "chat",
+    expectedIntent: "metric_lookup",
+    expectedTools: ["sales_summary"],
+    expectedRangeLabel: "7 ngày qua",
+    expectedDeterministic: true,
+    expectedModelTier: "none",
+    expectedQuery: { metric: "gross_profit", dimensions: [], grain: "day" },
+  },
+  {
+    question: "nhom mon nao ban chay nhat",
+    mode: "chat",
+    expectedIntent: "category_analysis",
+    expectedTools: ["sales_summary", "category_summary"],
+    expectedRangeLabel: "7 ngày qua",
+    expectedDeterministic: true,
+    expectedModelTier: "none",
+    expectedQuery: { metric: "net_revenue", dimensions: ["category"], grain: "day" },
+  },
+  {
+    question: "so sanh loi nhuan 2 tuan nay voi 2 tuan truoc",
+    mode: "chat",
+    expectedIntent: "comparison",
+    expectedTools: ["sales_summary", "period_comparison"],
+    expectedRangeLabel: "Tuần trước",
+    expectedDeterministic: true,
+    expectedModelTier: "none",
+    expectedQuery: { metric: "gross_profit", dimensions: [], grain: "day", comparison: "previous_period" },
+  },
+  {
+    question: "doanh thu hom qua so voi hom kia",
+    mode: "chat",
+    expectedIntent: "comparison",
+    expectedTools: ["sales_summary", "period_comparison"],
+    expectedRangeLabel: "Hôm qua",
+    expectedDeterministic: true,
+    expectedModelTier: "none",
+    expectedQuery: { metric: "net_revenue", dimensions: [], grain: "day", comparison: "previous_period" },
+  },
+  {
+    question: "mon nao dang het nguyen lieu",
+    mode: "chat",
+    expectedIntent: "inventory_risk",
+    expectedTools: ["inventory_risk"],
+    expectedRangeLabel: "7 ngày qua",
+    expectedDeterministic: true,
+    expectedModelTier: "none",
+  },
+  {
+    question: "tong doanh thu nam nay la bao nhieu",
+    mode: "chat",
+    expectedIntent: "metric_lookup",
+    expectedTools: ["sales_summary"],
+    expectedRangeLabel: "7 ngày qua",
+    expectedDeterministic: true,
+    expectedModelTier: "none",
+  },
+  {
+    question: "cho toi xem bieu do doanh thu theo tuan",
+    mode: "chat",
+    expectedIntent: "trend",
+    expectedTools: ["sales_summary", "sales_timeseries"],
+    expectedRangeLabel: "7 ngày qua",
+    expectedDeterministic: true,
+    expectedModelTier: "none",
+    expectedQuery: { metric: "net_revenue", dimensions: ["time"], grain: "week" },
+  },
+  {
+    question: "ke hoach du bao doanh thu 30 ngay toi",
+    mode: "chat",
+    expectedIntent: "forecast",
+    expectedTools: ["sales_summary", "sales_timeseries", "forecast_revenue"],
+    expectedRangeLabel: "30 ngày qua",
+    expectedDeterministic: false,
+    expectedModelTier: "fast",
+  },
 ];
 
 export function evaluateGoldenQuestions(now = new Date()) {
@@ -405,12 +667,25 @@ export function evaluateGoldenQuestions(now = new Date()) {
     const toolsMatch =
       plannedTools.length === golden.expectedTools.length
       && plannedTools.every((tool, index) => tool === golden.expectedTools[index]);
+    const queryMatch = golden.expectedQuery
+      ? plan.semanticQuery != null
+        && plan.semanticQuery.metric === golden.expectedQuery.metric
+        && plan.semanticQuery.dimensions.length === golden.expectedQuery.dimensions.length
+        && golden.expectedQuery.dimensions.every((dim) => plan.semanticQuery!.dimensions.includes(dim))
+        && plan.semanticQuery.grain === golden.expectedQuery.grain
+        && (plan.semanticQuery.comparison ?? undefined) === golden.expectedQuery.comparison
+      : true;
+    const clarificationMatch = golden.expectedClarification
+      ? plan.clarification != null
+      : true;
     const passed =
       toolsMatch
       && plan.intent === golden.expectedIntent
       && plan.range.label === golden.expectedRangeLabel
       && plan.deterministic === golden.expectedDeterministic
-      && plan.modelTier === golden.expectedModelTier;
+      && plan.modelTier === golden.expectedModelTier
+      && queryMatch
+      && clarificationMatch;
     return {
       question: golden.question,
       passed,
@@ -424,6 +699,10 @@ export function evaluateGoldenQuestions(now = new Date()) {
       actualDeterministic: plan.deterministic,
       expectedModelTier: golden.expectedModelTier,
       actualModelTier: plan.modelTier,
+      expectedQuery: golden.expectedQuery,
+      actualQuery: plan.semanticQuery,
+      expectedClarification: golden.expectedClarification,
+      actualClarification: plan.clarification != null,
     };
   });
   const passed = cases.filter((item) => item.passed).length;

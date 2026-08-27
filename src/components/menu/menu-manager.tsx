@@ -1,7 +1,7 @@
 ﻿"use client";
 import { useState, useTransition, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Search, FileUp } from "lucide-react";
+import { Plus, Search, FileUp, ChefHat } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NumberInput } from "@/components/ui/number-input";
@@ -20,8 +20,9 @@ import {
   previewProductImport,
 } from "@/server/actions/excel";
 import { ExcelImportDialog, ExcelDownloadButton } from "@/components/common/excel-import";
+import { RecipeDialog } from "@/components/menu/recipe-dialog";
 import { formatVND } from "@/lib/date/ranges";
-import type { MenuCategory, Product } from "@/types/database";
+import type { MenuCategory, Product, InventoryItem } from "@/types/database";
 import { EmptyState } from "@/components/common/states";
 import { notifyError, notifySuccess } from "@/hooks/use-notify";
 import {
@@ -45,18 +46,21 @@ export function MenuManager({
   canManage,
   categories,
   products,
+  inventoryItems,
   initialQuery,
 }: {
   organizationId: string;
   canManage: boolean;
   categories: MenuCategory[];
   products: Product[];
+  inventoryItems: InventoryItem[];
   initialQuery: string;
 }) {
   const router = useRouter();
   const [query, setQuery] = useState(initialQuery);
   const [open, setOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [recipeProduct, setRecipeProduct] = useState<Product | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -297,22 +301,34 @@ export function MenuManager({
                     </TableCell>
                     <TableCell className="px-3 text-right font-medium">{formatVND(p.sale_price)}</TableCell>
                     <TableCell className="px-3 text-center">
-                      {canManage ? (
-                        <button
-                          type="button"
-                          className="rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                          title={p.is_active ? "Bấm để ngừng bán" : "Bấm để bật bán"}
-                          onClick={() => onToggleActive(p.id, p.is_active)}
-                        >
+                      <div className="flex items-center justify-center gap-2">
+                        {canManage ? (
+                          <button
+                            type="button"
+                            className="rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            title={p.is_active ? "Bấm để ngừng bán" : "Bấm để bật bán"}
+                            onClick={() => onToggleActive(p.id, p.is_active)}
+                          >
+                            <Badge variant={p.is_active ? "success" : "outline"}>
+                              {p.is_active ? "Đang bán" : "Ngừng bán"}
+                            </Badge>
+                          </button>
+                        ) : (
                           <Badge variant={p.is_active ? "success" : "outline"}>
                             {p.is_active ? "Đang bán" : "Ngừng bán"}
                           </Badge>
-                        </button>
-                      ) : (
-                        <Badge variant={p.is_active ? "success" : "outline"}>
-                          {p.is_active ? "Đang bán" : "Ngừng bán"}
-                        </Badge>
-                      )}
+                        )}
+                        {canManage ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setRecipeProduct(p)}
+                          >
+                            <ChefHat className="h-3.5 w-3.5" /> Công thức
+                          </Button>
+                        ) : null}
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -321,6 +337,15 @@ export function MenuManager({
           )}
         </CardContent>
       </Card>
+      {recipeProduct ? (
+        <RecipeDialog
+          open={recipeProduct !== null}
+          onOpenChange={(o) => { if (!o) setRecipeProduct(null); }}
+          product={recipeProduct}
+          inventoryItems={inventoryItems}
+          organizationId={organizationId}
+        />
+      ) : null}
     </div>
   );
 }

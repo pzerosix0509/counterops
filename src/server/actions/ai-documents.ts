@@ -128,3 +128,51 @@ export async function uploadAiDocument(
   revalidatePath("/ai");
   return actionOk({ documentId: doc.id, chunks: chunks.length, embedded: embeddingResult?.vectors.length ?? 0 });
 }
+
+const deleteDocumentSchema = z.object({
+  documentId: z.string().uuid(),
+}).strict();
+
+export async function deleteAiDocument(
+  organizationId: string,
+  input: unknown
+): Promise<ActionResult<{ deleted: boolean }>> {
+  const membership = await requireRole(organizationId, canViewReports);
+  const activeContext = await requireActiveContext();
+  const parsed = deleteDocumentSchema.safeParse(input);
+  if (!parsed.success) return actionFail("VALIDATION_ERROR", "Tài liệu không hợp lệ.");
+
+  const supabase = createSupabaseServerClient();
+  const { data: doc, error: docError } = await supabase
+    .from("ai_documents")
+    .select("id, title, branch_id")
+    .eq("id", parsed.data.documentId)
+    .eq("organization_id", organizationId)
+    .maybeSingle();
+  if (docError || !doc) return actionFail("NOT_FOUND", "Không tìm thấy tài liệu.");
+  if (
+    activeContext.organizationId !== organizationId
+    || (doc.branch_id && doc.branch_id !== activeContext.branchId)
+  ) {
+    return actionFail("FORBIDDEN", "Bạn không có quyền xóa tài liệu này.");
+  }
+
+  // ai_document_chunks.document_id has on delete cascade.
+  const { error } = await supabase.from("ai_documents").delete().eq("id", doc.id);
+  if (error) return actionFail("INTERNAL_ERROR", `Không xóa được tài liệu: ${error.message}`);
+
+  await supabase.from("audit_logs").insert({
+    organization_id: membership.organization.id,
+    branch_id: activeContext.branchId,
+    actor_user_id: membership.membership.user_id,
+    action: "ai.document.delete",
+    entity_type: "ai_documents",
+    entity_id: doc.id,
+    before: {
+      title: doc.title,
+    },
+  });
+
+  revalidatePath("/ai");
+  return actionOk({ deleted: true });
+}

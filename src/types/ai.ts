@@ -7,6 +7,29 @@ export interface AiSource {
   meta?: Record<string, unknown>;
 }
 
+/** Provenance bắt buộc cho mọi source dữ liệu (analytic + retrieval) */
+export interface AiSourceProvenance {
+  /** Thời điểm dữ liệu được chụp (chung cho cả phiên chạy tool) */
+  asOf: string;
+  /** Id snapshot cho cả phiên — mọi tool cùng một snapshot */
+  snapshotId: string;
+  /** Hash ổn định của {rpc, arguments} — dùng để đối chiếu query khi eval */
+  queryHash?: string;
+  /** Thời điểm dữ liệu thực sự được lấy (khác asOf khi trúng cache) */
+  sourceAsOf?: string;
+  cacheHit?: boolean;
+  /** Catalog version dùng khi compile semantic query */
+  catalogVersion?: string;
+  /** Metric được hỏi (nếu có) */
+  metricKey?: string;
+  metricVersion?: string;
+  grain?: string;
+  rangeLabel?: string;
+  timezone?: string;
+  /** Đã qua đối soát số liệu chưa */
+  reconciled?: boolean;
+}
+
 export type AiIntent =
   | "greeting"
   | "capability"
@@ -28,6 +51,34 @@ export type AiIntent =
 export type AiModelTier = "none" | "fast" | "quality";
 export type AiResponseMode = "deterministic" | "model" | "fallback";
 
+export interface AiClarification {
+  question: string;
+  options: string[];
+  reason: "intent" | "entity";
+}
+
+/** Structured conversation state — lưu jsonb trong ai_chat_sessions.memory_state */
+export interface AiMemoryState {
+  lastRange?: { from: string; to: string; label: string };
+  lastMetric?: { key: string; version: string };
+  lastDimensions?: string[];
+  lastGrain?: string;
+  lastComparison?: string;
+  lastChart?: { type: string; title: string } | null;
+  lastQuery?: { tool: string; arguments: Record<string, unknown> } | null;
+  /** Tên kênh/món đã nhắc trong hội thoại */
+  mentionedEntities?: string[];
+  updatedAt: string;
+}
+
+export interface AiStatisticalFindings {
+  correlation?: { metric: "revenue_vs_orders"; r: number; pValue: number; significant: boolean };
+  outliers?: Array<{ date: string; value: number; zScore: number; direction: "up" | "down" }>;
+  seasonality?: { dayOfWeek: Record<string, number>; strongestDay: string; weakestDay: string };
+  tTest?: { label: string; t: number; pValue: number; significant: boolean };
+  growth?: { cagr: number; total: number } | null;
+}
+
 export interface AiPlan {
   intent: AiIntent;
   intentConfidence: number;
@@ -36,6 +87,16 @@ export interface AiPlan {
   rationale: string;
   range: { from: string; to: string; label: string };
   tools: AiToolCall[];
+  /** Semantic query đã compile (chỉ với intent analytics) — nguồn provenance */
+  semanticQuery?: {
+    metric: string;
+    metricVersion: string;
+    dimensions: string[];
+    grain: string;
+    comparison?: string;
+  };
+  /** Cần làm rõ trước khi chạy tool (câu mơ hồ) */
+  clarification?: AiClarification;
 }
 
 export interface AiDataQualityIssue {
@@ -44,11 +105,25 @@ export interface AiDataQualityIssue {
   message: string;
 }
 
+export interface AiConfidenceComponents {
+  /** Độ đúng của query: tool errors, intent confidence, semantic query hợp lệ */
+  query: number;
+  /** Độ đầy đủ dữ liệu: sample size, missing summary, empty/partial period */
+  dataCompleteness: number;
+  /** Độ nhất quán số liệu: kết quả đối soát (reconciliation) */
+  consistency: number;
+  /** Độ phù hợp của phân tích: anomaly, forecast insufficient data, intent-data khớp */
+  analysisFit: number;
+  /** Độ tin cậy dự báo (null nếu không phải câu hỏi forecast) */
+  forecastReliability: number | null;
+}
+
 export interface AiConfidence {
   score: number;
   level: "low" | "medium" | "high";
   reasons: string[];
   sampleSize: number | null;
+  components: AiConfidenceComponents;
 }
 
 export interface AiAnomaly {
@@ -75,6 +150,10 @@ export interface AiTelemetry {
   cacheHits: number;
   cacheMisses: number;
   providerAttempts: AiProviderAttempt[];
+  /** Số vòng loop của multi-step planner (1 = không loop) */
+  plannerRounds?: number;
+  /** Loop dừng sớm do confidence đủ cao? */
+  plannerStoppedEarly?: boolean;
 }
 
 export type AiProgressStage =
@@ -134,6 +213,18 @@ export interface AiForecastPoint {
   upper_bound: number;
 }
 
+export interface ForecastBacktestResult {
+  method: string;
+  trainDays: number;
+  testDays: number;
+  /** Weighted Mean Absolute Percentage Error trên test */
+  wmape: number | null;
+  /** Mean Absolute Scaled Error (baseline = naive 1-step) */
+  mase: number | null;
+  byHorizon: Array<{ horizon: number; wmape: number | null; mase: number | null }>;
+  sampleSize: number;
+}
+
 export interface AiForecastResult {
   horizon_days: number;
   method: "weighted_moving_average";
@@ -141,6 +232,8 @@ export interface AiForecastResult {
   points: AiForecastPoint[];
   insufficient_data: boolean;
   min_days_required: number;
+  /** Backtest WMAPE/MASE — null nếu chưa đủ dữ liệu hoặc không chạy */
+  backtest?: ForecastBacktestResult | null;
 }
 
 export interface AiAnalyticsContext {
@@ -194,6 +287,16 @@ export interface AiAnalyticsContext {
     previous_profit: number;
     profit_delta_percent: number | null;
   } | null;
+  /** Driver decomposition (orders × AOV) — tính khi có periodComparison */
+  decomposition?: {
+    delta: number;
+    ordersEffect: number;
+    aovEffect: number;
+    ordersSharePct: number | null;
+    aovSharePct: number | null;
+  } | null;
+  /** Kết quả phân tích thống kê (chạy khi intent diagnosis/trend đủ dữ liệu) */
+  statisticalFindings?: AiStatisticalFindings | null;
   forecastRevenue: AiForecastResult | null;
 }
 
@@ -260,6 +363,8 @@ export interface AiChatResponse {
   qualityIssues: AiDataQualityIssue[];
   anomalies: AiAnomaly[];
   telemetry: AiTelemetry;
+  /** Câu hỏi làm rõ (câu mơ hồ) — client render như message text */
+  clarification?: AiClarification;
 }
 
 export interface AiChatSessionSummary {

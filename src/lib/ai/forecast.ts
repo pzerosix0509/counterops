@@ -1,7 +1,10 @@
-import type { AiForecastPoint, AiForecastResult } from "@/types/ai";
+import type { AiForecastPoint, AiForecastResult, ForecastBacktestResult } from "@/types/ai";
 
 const MIN_DAYS_REQUIRED = 14;
 const DEFAULT_HORIZON_DAYS = 30;
+/** Cần ít nhất 21 ngày để backtest (14 train + 7 test) */
+const MIN_BACKTEST_DAYS = 21;
+const BACKTEST_TEST_DAYS = 7;
 
 interface DailyDataPoint {
   date: string; // ISO date string YYYY-MM-DD
@@ -102,5 +105,56 @@ export function computeForecast(
     points,
     insufficient_data: false,
     min_days_required: MIN_DAYS_REQUIRED,
+  };
+}
+
+/**
+ * Backtest forecast: cắt BACKTEST_TEST_DAYS ngày cuối làm test, train trên phần
+ * còn lại (WMA), đo WMAPE + MASE (baseline = naive 1-step: giá trị hôm trước).
+ * Trả null nếu < MIN_BACKTEST_DAYS ngày (cần đủ train + test).
+ */
+export function backtestForecast(
+  dailyPoints: DailyDataPoint[],
+): ForecastBacktestResult | null {
+  if (dailyPoints.length < MIN_BACKTEST_DAYS) return null;
+
+  const train = dailyPoints.slice(0, dailyPoints.length - BACKTEST_TEST_DAYS);
+  const test = dailyPoints.slice(-BACKTEST_TEST_DAYS);
+
+  // Train WMA trên phần train (dùng chính computeForecast để cùng phương pháp)
+  const trainForecast = computeForecast(train, BACKTEST_TEST_DAYS);
+  const forecastRevenues = trainForecast.points.map((point) => point.forecasted_revenue);
+
+  const byHorizon: ForecastBacktestResult["byHorizon"] = [];
+  for (let h = 0; h < BACKTEST_TEST_DAYS; h += 1) {
+    const actual = test[h]?.revenue ?? 0;
+    const predicted = forecastRevenues[h] ?? 0;
+    const naive = h === 0 ? train.at(-1)?.revenue ?? 0 : test[h - 1]?.revenue ?? 0;
+    const absError = Math.abs(actual - predicted);
+    const naiveError = Math.abs(actual - naive);
+    byHorizon.push({
+      horizon: h + 1,
+      wmape: actual > 0 ? absError / actual : null,
+      mase: naiveError > 0 ? absError / Math.max(naiveError, 1) : null,
+    });
+  }
+
+  const totalActual = test.reduce((sum, point) => sum + point.revenue, 0);
+  const totalAbsError = byHorizon.reduce((sum, item) => sum + (item.wmape != null ? item.wmape * (test[item.horizon - 1]?.revenue ?? 0) : 0), 0);
+  const wmape = totalActual > 0 ? totalAbsError / totalActual : null;
+
+  const maseValues = byHorizon.map((item) => item.mase).filter((value): value is number => value != null);
+  const mase = maseValues.length > 0
+    ? maseValues.reduce((sum, value) => sum + value, 0) / maseValues.length
+    : null;
+
+  return {
+    method: "weighted_moving_average",
+    trainDays: train.length,
+    testDays: test.length,
+    wmape,
+    mase,
+    byHorizon,
+    sampleSize: dailyPoints.length,
   };
 }

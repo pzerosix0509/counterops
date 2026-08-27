@@ -1,5 +1,8 @@
 import "server-only";
 import { assessAiEvidence } from "@/lib/ai/assessment";
+import { CATALOG_VERSION } from "@/lib/ai/metric-catalog";
+import { redactPii } from "@/lib/ai/redact";
+import { filterViolatingTools, validateToolPlan } from "@/lib/ai/policy";
 import { aiDashboardSpecSchema } from "@/lib/ai/schemas";
 import { buildAiPlanAsync, isDashboardIntent } from "@/lib/ai/semantic-layer";
 import {
@@ -15,17 +18,22 @@ import {
   ensureAiChatSession,
   findAiResponseByRequest,
   getConversationMemory,
+  getConversationState,
   logAiRun,
   updateAiSessionMemory,
+  updateConversationState,
 } from "@/server/ai/conversations";
 import { generateAiModelAnswer, type AiProviderResult } from "@/server/ai/provider";
-import { buildSourcesFromToolExecutions, executeAiToolPlan } from "@/server/ai/tools";
-import type { AiChatResponse, AiProgressStage, AiSource, AiToolCall } from "@/types/ai";
+import { runPlannerLoop } from "@/lib/ai/planner-loop";
+import { runStatisticalAnalysis, describeStatisticalFindings } from "@/lib/ai/analysis";
+import { buildSourcesFromToolExecutions } from "@/server/ai/tools";
+import type { AiChatResponse, AiProgressStage, AiSource } from "@/types/ai";
 
 export interface RunAiAnalysisInput {
   organizationId: string;
   branchId: string;
   userId: string;
+  role: string;
   timezone: string;
   question: string;
   mode: "chat" | "dashboard";
@@ -70,6 +78,7 @@ export async function runAiAnalysis(input: RunAiAnalysisInput): Promise<AiChatRe
   }
 
   const memory = await getConversationMemory(session.id);
+  const memoryState = await getConversationState(session.id);
   const userMessageId = crypto.randomUUID();
   await appendAiUserMessage({
     id: userMessageId,
@@ -88,8 +97,20 @@ export async function runAiAnalysis(input: RunAiAnalysisInput): Promise<AiChatRe
     new Date(),
     memory.turns.filter((turn) => turn.role === "user").map((turn) => turn.content),
     input.timezone,
+    memoryState,
   );
   const plannerMs = Date.now() - plannerStartedAt;
+
+  // Structured memory: lưu range/metric/dimensions của lần hỏi này
+  void updateConversationState(session.id, {
+    lastRange: plan.range,
+    lastMetric: plan.semanticQuery
+      ? { key: plan.semanticQuery.metric, version: plan.semanticQuery.metricVersion }
+      : undefined,
+    lastDimensions: plan.semanticQuery?.dimensions,
+    lastGrain: plan.semanticQuery?.grain,
+    lastComparison: plan.semanticQuery?.comparison,
+  }).catch(() => {});
 
   // If the user attached an image, force the pipeline to use the LLM so the
   // extracted image text is actually consumed (deterministic intents skip the model).
@@ -103,7 +124,7 @@ export async function runAiAnalysis(input: RunAiAnalysisInput): Promise<AiChatRe
       meta: { tool: "image_to_text", source: "attachment" },
     }
     : null;
-  const effectivePlan = input.imageText && plan.deterministic
+  let effectivePlan = input.imageText && plan.deterministic
     ? {
       ...plan,
       intent: "document_search" as const,
@@ -119,56 +140,116 @@ export async function runAiAnalysis(input: RunAiAnalysisInput): Promise<AiChatRe
     }
     : plan;
 
+  // Câu hỏi mơ hồ → hỏi lại ngay, không chạy tool/LLM (rẻ và nhanh)
+  if (effectivePlan.clarification) {
+    const clarification = effectivePlan.clarification;
+    const assistantMessageId = crypto.randomUUID();
+    const runId = crypto.randomUUID();
+    const responseReadyMs = Date.now() - startedAt;
+    const response: AiChatResponse = {
+      answer: clarification.question,
+      bullets: [],
+      chart: null,
+      dashboard: null,
+      sources: [],
+      modelUsed: null,
+      usedFallback: false,
+      sessionId: session.id,
+      messageId: assistantMessageId,
+      runId,
+      toolCalls: [],
+      usage: null,
+      responseMode: "deterministic",
+      intent: effectivePlan.intent,
+      intentConfidence: effectivePlan.intentConfidence,
+      confidence: {
+        score: 1,
+        level: "high",
+        reasons: ["Câu hỏi cần làm rõ trước khi truy vấn."],
+        sampleSize: null,
+        components: {
+          query: 1,
+          dataCompleteness: 1,
+          consistency: 1,
+          analysisFit: 1,
+          forecastReliability: null,
+        },
+      },
+      qualityIssues: [],
+      anomalies: [],
+      telemetry: {
+        plannerMs,
+        toolsMs: 0,
+        retrievalMs: 0,
+        providerMs: 0,
+        responseReadyMs,
+        totalMs: responseReadyMs,
+        cacheHits: 0,
+        cacheMisses: 0,
+        providerAttempts: [],
+      },
+      clarification: {
+        question: clarification.question,
+        options: clarification.options,
+        reason: clarification.reason,
+      },
+    };
+    await appendAiAssistantMessage({
+      id: assistantMessageId,
+      organizationId: input.organizationId,
+      branchId: input.branchId,
+      sessionId: session.id,
+      response,
+      requestId: input.requestId,
+    });
+    return response;
+  }
+
   emitProgress(input.onProgress, "querying", "Đang truy vấn dữ liệu đã được phân quyền...");
   const toolsStartedAt = Date.now();
+  // Policy validator: lọc tool vi phạm (role không đủ, search_web quá nhiều, tool lạ)
+  const policyViolations = validateToolPlan(effectivePlan, {
+    role: input.role,
+    isDashboardMode: effectiveMode === "dashboard",
+  });
+  if (policyViolations.length > 0) {
+    effectivePlan = {
+      ...effectivePlan,
+      tools: filterViolatingTools(effectivePlan.tools, policyViolations),
+    };
+  }
+  const dataAsOf = new Date().toISOString();
+  const snapshotId = crypto.randomUUID();
+  const provenance = {
+    asOf: dataAsOf,
+    snapshotId,
+    catalogVersion: CATALOG_VERSION,
+    metricKey: effectivePlan.semanticQuery?.metric,
+    metricVersion: effectivePlan.semanticQuery?.metricVersion,
+  };
   const toolContext = {
     organizationId: input.organizationId,
     branchId: input.branchId,
     timezone: input.timezone,
+    dataAsOf,
+    snapshotId,
+    catalogVersion: CATALOG_VERSION,
   };
-  let executions = await executeAiToolPlan(effectivePlan.tools, toolContext);
-
-  // Agentic loop: if confidence is low after first pass, run supplemental tools
-  // that weren't in the original plan (up to 1 refinement round).
-  const firstPassAnalytics = buildAnalyticsContext(executions);
-  const firstPassAssessment = assessAiEvidence(firstPassAnalytics, executions, buildSourcesFromToolExecutions(executions));
-  if (firstPassAssessment.confidence.score < 0.6 && effectivePlan.modelTier !== "none") {
-    const rangeCall = effectivePlan.tools.find((tool) => "from" in tool.arguments);
-    const rangeArgs = rangeCall?.arguments as { from: string; to: string; rangeLabel: string } | undefined;
-    const executedNames = new Set(executions.map((execution) => execution.call.name));
-    const supplementalCalls: AiToolCall[] = [];
-
-    // Add period_comparison if missing and we have sales data (helps explain drops/spikes)
-    if (!executedNames.has("period_comparison") && firstPassAnalytics.salesSummary && rangeArgs) {
-      supplementalCalls.push({
-        id: "refine-period-comparison",
-        name: "period_comparison",
-        arguments: { from: rangeArgs.from, to: rangeArgs.to, rangeLabel: rangeArgs.rangeLabel },
-      });
-    }
-    // Add top_products if missing and revenue data exists (helps diagnose anomalies)
-    if (!executedNames.has("top_products") && firstPassAnalytics.salesSummary?.total_orders && rangeArgs) {
-      supplementalCalls.push({
-        id: "refine-top-products",
-        name: "top_products",
-        arguments: { from: rangeArgs.from, to: rangeArgs.to, rangeLabel: rangeArgs.rangeLabel, limit: 10 },
-      });
-    }
-    // Add inventory_risk if there are anomalies but no inventory context
-    if (!executedNames.has("inventory_risk") && firstPassAssessment.anomalies.length > 0) {
-      supplementalCalls.push({
-        id: "refine-inventory-risk",
-        name: "inventory_risk",
-        arguments: { status: "attention" },
-      });
-    }
-
-    if (supplementalCalls.length > 0) {
-      emitProgress(input.onProgress, "querying", "Đang bổ sung dữ liệu để tăng độ tin cậy...");
-      const supplementalExecutions = await executeAiToolPlan(supplementalCalls, toolContext);
-      executions = [...executions, ...supplementalExecutions];
-    }
-  }
+  // Multi-step planner có budget: loop tối đa 3 vòng, tổng tool ≤ 8,
+  // dừng sớm khi confidence đủ cao. Deterministic intents không loop.
+  const loopResult = await runPlannerLoop({
+    question: input.question,
+    mode: effectiveMode,
+    timezone: input.timezone,
+    memory,
+    state: memoryState,
+    initialPlan: effectivePlan,
+    toolContext,
+    onProgress: (stage, message) => emitProgress(input.onProgress, stage as AiProgressStage, message),
+  });
+  const executions = loopResult.executions;
+  const plannerRounds = loopResult.rounds;
+  const plannerStoppedEarly = loopResult.stoppedEarly;
 
   const toolsMs = Date.now() - toolsStartedAt;
   const retrievalMs = executions
@@ -180,9 +261,14 @@ export async function runAiAnalysis(input: RunAiAnalysisInput): Promise<AiChatRe
   ).length;
 
   emitProgress(input.onProgress, "assessing", "Đang kiểm tra chất lượng và độ tin cậy...");
-  const sources = [...buildSourcesFromToolExecutions(executions), ...(imageSource ? [imageSource] : [])];
+  const sources = [...buildSourcesFromToolExecutions(executions, provenance), ...(imageSource ? [imageSource] : [])];
   const analytics = buildAnalyticsContext(executions);
   const assessment = assessAiEvidence(analytics, executions, sources);
+  // Statistical analysis: chạy cho diagnosis/trend khi đủ dữ liệu chuỗi thời gian
+  const statisticalFindings = runStatisticalAnalysis(analytics, effectivePlan.intent);
+  if (statisticalFindings) {
+    analytics.statisticalFindings = statisticalFindings;
+  }
   const chart = buildChartForQuestion(input.question, analytics);
 
   let modelResult = emptyProviderResult();
@@ -202,6 +288,9 @@ export async function runAiAnalysis(input: RunAiAnalysisInput): Promise<AiChatRe
       anomalies: assessment.anomalies,
       imageText: input.imageText,
       timezone: input.timezone,
+      statisticalFindings: statisticalFindings
+        ? describeStatisticalFindings(statisticalFindings)
+        : undefined,
     }, effectivePlan.modelTier).catch((error) => ({
       ...emptyProviderResult(),
       error: error instanceof Error ? error.message : "Không gọi được AI provider.",
@@ -267,6 +356,8 @@ export async function runAiAnalysis(input: RunAiAnalysisInput): Promise<AiChatRe
       cacheHits,
       cacheMisses,
       providerAttempts: modelResult.attempts,
+      plannerRounds,
+      plannerStoppedEarly,
     },
   };
 
@@ -302,12 +393,12 @@ export async function runAiAnalysis(input: RunAiAnalysisInput): Promise<AiChatRe
       responseMode,
       confidenceScore: assessment.confidence.score,
       telemetry: response.telemetry,
-      toolCalls: executions.map((execution) => ({
+      toolCalls: redactPii(executions.map((execution) => ({
         ...execution.call,
         durationMs: execution.durationMs,
         cacheHit: execution.cacheHit,
         error: execution.error,
-      })),
+      }))),
       sourceCount: sources.length,
       usage: modelResult.usage,
       latencyMs: response.telemetry.totalMs,

@@ -53,8 +53,17 @@ export function aiToolCacheKey(parts: {
   branchId: string;
   tool: string;
   arguments: Record<string, unknown>;
+  /** Catalog version — đổi catalog → cache tự invalidate */
+  catalogVersion?: string;
 }) {
-  return JSON.stringify(stableValue(parts));
+  const { catalogVersion, ...rest } = parts;
+  return JSON.stringify({
+    organizationId: stableValue(rest.organizationId),
+    branchId: stableValue(rest.branchId),
+    tool: stableValue(rest.tool),
+    arguments: stableValue(rest.arguments),
+    catalogVersion: catalogVersion ?? "unknown",
+  });
 }
 
 export async function withAiToolCache<T>(
