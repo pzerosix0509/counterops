@@ -99,6 +99,7 @@ export interface MenuCategory {
   parent_id: string | null;
   name: string;
   sort_order: number;
+  menu_type: MenuType;
   created_at: string;
   updated_at: string;
 }
@@ -122,6 +123,7 @@ export interface Product {
   sale_price: number;
   unit: string;
   is_active: boolean;
+  inventory_item_id: string | null;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
@@ -151,6 +153,8 @@ export interface InventoryItem {
   cost_price: number;
   description: string | null;
   is_active: boolean;
+  can_be_ingredient: boolean;
+  can_be_sold: boolean;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;

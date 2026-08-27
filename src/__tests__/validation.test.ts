@@ -23,11 +23,9 @@ describe("validation schemas", () => {
     expect(r.success).toBe(false);
   });
 
-  it("requires product name and code", () => {
+  it("requires product name", () => {
     const r = productSchema.safeParse({
       name: "",
-      code: "",
-      menuType: "food",
       productType: "regular",
       costPrice: -1,
       salePrice: 0,

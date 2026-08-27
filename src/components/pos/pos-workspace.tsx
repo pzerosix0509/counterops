@@ -119,6 +119,7 @@ export function PosWorkspace(props: Props) {
   const filteredProducts = useMemo(() => {
     return products.filter((p) => {
       if (!p.available) return false;
+      if (activeCategory === "uncat") return !p.category_id;
       if (activeCategory !== "all" && p.category_id !== activeCategory) return false;
       if (search && !p.name.toLowerCase().includes(search.toLowerCase())) return false;
       return true;
@@ -419,6 +420,9 @@ export function PosWorkspace(props: Props) {
           <div className="flex flex-wrap gap-1">
             <Button size="sm" variant={activeCategory === "all" ? "default" : "outline"} onClick={() => setActiveCategory("all")}>
               Tất cả
+            </Button>
+            <Button size="sm" variant={activeCategory === "uncat" ? "default" : "outline"} onClick={() => setActiveCategory("uncat")}>
+              Chưa gán
             </Button>
             {categories.map((category) => (
               <Button

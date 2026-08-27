@@ -20,7 +20,7 @@ async function workbookToBuffer(wb: ExcelJS.Workbook): Promise<Buffer> {
 }
 
 const PRODUCT_HEADERS = [
-  "Mã món",
+  "Mã món (tuỳ chọn)",
   "Tên món",
   "Nhóm món",
   "Loại thực đơn (food|drink|service|other)",
@@ -34,7 +34,7 @@ const PRODUCT_HEADERS = [
 ];
 
 const INVENTORY_HEADERS = [
-  "Mã hàng",
+  "Mã hàng (tuỳ chọn)",
   "Tên hàng",
   "Loại (ingredient|sellable_product|packaging|other)",
   "Đơn vị",
@@ -171,7 +171,7 @@ describe("excel product import", () => {
     expect(preview.errorCount).toBe(1);
     expect(preview.errors[0].rowNumber).toBe(2);
     const fields = preview.errors[0].issues.map((i) => i.column);
-    expect(fields).toContain("Mã món");
+    expect(fields).not.toContain("Mã món (tuỳ chọn)");
     expect(fields).toContain("Giá vốn (đ)");
     expect(fields).toContain("Ảnh (URL)");
   });
@@ -203,7 +203,7 @@ describe("excel product import", () => {
     await wb.xlsx.load(buf as unknown as ArrayBuffer);
     const sheet = wb.getWorksheet("Products");
     expect(sheet).toBeTruthy();
-    expect(sheet!.getRow(1).getCell(1).value).toBe("Mã món");
+    expect(sheet!.getRow(1).getCell(1).value).toBe("Mã món (tuỳ chọn)");
   });
 
   it("exposes the same zod shape used for commit validation", () => {
@@ -254,7 +254,7 @@ describe("excel inventory import", () => {
     await wb.xlsx.load(buf as unknown as ArrayBuffer);
     const sheet = wb.getWorksheet("Inventory");
     expect(sheet).toBeTruthy();
-    expect(sheet!.getRow(1).getCell(1).value).toBe("Mã hàng");
+    expect(sheet!.getRow(1).getCell(1).value).toBe("Mã hàng (tuỳ chọn)");
   });
 
   it("inventory item zod rejects bad item type", () => {

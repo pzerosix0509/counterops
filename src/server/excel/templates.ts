@@ -73,7 +73,8 @@ export async function buildProductTemplate(): Promise<Buffer> {
   });
   addInstructionsSheet(wb, [
     "Import menu (Products).",
-    "- One row per product. 'Mã món' (code) is the unique business key inside the organization.",
+    "- 'Mã món' is optional. Blank codes are generated. Unique key for update is code when present.",
+    "- Prepared products are not imported here; create them in the Menu UI with a recipe.",
     "- If the code already exists, the system updates the existing product and preserves the existing category when the 'Nhóm món' column is blank.",
     "- 'Loại thực đơn' accepts: " + MENU_TYPE_VALUES.join(", ") + ".",
     "- 'Loại sản phẩm' accepts: " + PRODUCT_TYPE_VALUES.join(", ") + ".",
@@ -102,7 +103,7 @@ export async function buildInventoryItemTemplate(): Promise<Buffer> {
   });
   addInstructionsSheet(wb, [
     "Import inventory items (Inventory).",
-    "- 'Mã hàng' (code) is the unique business key. Existing items have their name, unit, and cost price updated.",
+    "- 'Mã hàng' is optional. Unique user-facing key is the item name.",
     "- 'Loại' accepts: " + INVENTORY_TYPE_VALUES.join(", ") + ".",
     "- 'Số lượng' sets the current stock quantity for the branch. Existing items update their stock to this value.",
     "- 'Định mức thấp' sets or updates the low-stock threshold for the branch.",

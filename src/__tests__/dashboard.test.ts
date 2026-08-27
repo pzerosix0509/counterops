@@ -36,6 +36,7 @@ function item(partial: Partial<DashboardItemRow>): DashboardItemRow {
 }
 
 describe("UC07 — Dashboard/Report: revenue trend", () => {
+  process.env.TZ = "UTC";
   it("UC07.S01 — Chỉ cộng doanh thu của đơn đã thanh toán", () => {
     // Bước: đưa vào 1 đơn paid và 1 đơn draft.
     // Kết quả mong đợi: chỉ đơn paid xuất hiện trong xu hướng.

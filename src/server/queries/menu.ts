@@ -6,7 +6,7 @@ export async function listCategories(organizationId: string): Promise<MenuCatego
   const supabase = createSupabaseServerClient();
   const { data, error } = await supabase
     .from("menu_categories")
-    .select("id, organization_id, parent_id, name, sort_order, created_at, updated_at")
+    .select("id, organization_id, parent_id, name, sort_order, menu_type, created_at, updated_at")
     .eq("organization_id", organizationId)
     .order("sort_order");
   if (error) throw new Error(error.message);
@@ -48,4 +48,15 @@ export async function getProductWithRecipe(organizationId: string, productId: st
     .limit(1)
     .maybeSingle();
   return { product, recipe: recipe ?? null };
+}
+
+export async function listActiveRecipes(organizationId: string) {
+  const supabase = createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("recipes")
+    .select("id, product_id, version, recipe_items(inventory_item_id, quantity, unit, estimated_cost)")
+    .eq("organization_id", organizationId)
+    .eq("is_active", true);
+  if (error) throw new Error(error.message);
+  return data ?? [];
 }

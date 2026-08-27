@@ -6,6 +6,13 @@ import { actionFail, actionOk, type ActionResult } from "@/lib/utils/action-resu
 import { canManageInventory, requireRole } from "@/lib/auth/permissions";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { clearAiToolCache } from "@/server/ai/cache";
+import { normalizeItemName } from "@/lib/inventory/sku";
+import {
+  ensureSellableProduct,
+  insertInventorySku,
+  inventoryNameTaken,
+  resolveCategoryMenuType,
+} from "@/server/catalog";
 
 export async function createInventoryItem(
   organizationId: string,
@@ -14,44 +21,39 @@ export async function createInventoryItem(
 ): Promise<ActionResult<{ id: string }>> {
   const m = await requireRole(organizationId, canManageInventory);
   const parsed = inventoryItemSchema.safeParse(input);
-  if (!parsed.success) return actionFail("VALIDATION_ERROR", "Thiếu hoặc sai thông tin hàng hóa");
+  if (!parsed.success) return actionFail("VALIDATION_ERROR", parsed.error.issues[0]?.message ?? "Thiếu hoặc sai thông tin hàng hóa");
   const supabase = createSupabaseServerClient();
-  const { data: exists } = await supabase
-    .from("inventory_items")
-    .select("id")
-    .eq("organization_id", m.organization.id)
-    .eq("code", parsed.data.code)
-    .maybeSingle();
-  if (exists) return actionFail("CONFLICT", "Mã hàng đã tồn tại", { code: ["Mã hàng đã tồn tại"] });
+  const name = normalizeItemName(parsed.data.name);
+  if (await inventoryNameTaken(supabase, m.organization.id, name)) {
+    return actionFail("CONFLICT", "Tên hàng đã tồn tại trong cửa hàng", { name: ["Tên hàng đã tồn tại"] });
+  }
+  if (parsed.data.canBeSold && (parsed.data.salePrice === undefined || parsed.data.salePrice < 0)) {
+    return actionFail("VALIDATION_ERROR", "Hàng bán trên thực đơn cần giá bán.");
+  }
 
-  const { data: item, error } = await supabase
-    .from("inventory_items")
-    .insert({
-      organization_id: m.organization.id,
-      name: parsed.data.name,
-      code: parsed.data.code,
-      item_type: parsed.data.itemType,
-      unit: parsed.data.unit,
-      cost_price: parsed.data.costPrice,
-      description: parsed.data.description ?? null,
-      image_url: parsed.data.imageUrl ?? null,
-    })
-    .select("id")
-    .single();
-  if (error || !item) return actionFail("INTERNAL_ERROR", "Không tạo được hàng hóa: " + (error?.message ?? ""));
+  const sku = await insertInventorySku(supabase, {
+    organizationId: m.organization.id,
+    name,
+    unit: parsed.data.unit,
+    costPrice: parsed.data.costPrice,
+    canBeIngredient: parsed.data.canBeIngredient,
+    canBeSold: parsed.data.canBeSold,
+    description: parsed.data.description,
+  });
+  if ("error" in sku) return actionFail("INTERNAL_ERROR", "Không tạo được hàng hóa: " + sku.error);
 
   if (parsed.data.initialQuantity > 0) {
     await supabase.from("inventory_balances").upsert({
       organization_id: m.organization.id,
       branch_id: branchId,
-      inventory_item_id: item.id,
+      inventory_item_id: sku.id,
       quantity_on_hand: parsed.data.initialQuantity,
       low_stock_threshold: parsed.data.lowStockThreshold,
     });
     await supabase.from("inventory_movements").insert({
       organization_id: m.organization.id,
       branch_id: branchId,
-      inventory_item_id: item.id,
+      inventory_item_id: sku.id,
       movement_type: "purchase",
       quantity_delta: parsed.data.initialQuantity,
       unit_cost: parsed.data.costPrice,
@@ -63,14 +65,31 @@ export async function createInventoryItem(
     await supabase.from("inventory_balances").insert({
       organization_id: m.organization.id,
       branch_id: branchId,
-      inventory_item_id: item.id,
+      inventory_item_id: sku.id,
       quantity_on_hand: 0,
       low_stock_threshold: parsed.data.lowStockThreshold,
     });
   }
+
+  if (parsed.data.canBeSold) {
+    const menuType = await resolveCategoryMenuType(supabase, m.organization.id, parsed.data.categoryId ?? null);
+    const linked = await ensureSellableProduct(supabase, {
+      organizationId: m.organization.id,
+      inventoryItemId: sku.id,
+      name,
+      unit: parsed.data.unit,
+      costPrice: parsed.data.costPrice,
+      salePrice: parsed.data.salePrice ?? 0,
+      categoryId: parsed.data.categoryId ?? null,
+      menuType,
+    });
+    if ("error" in linked) return actionFail("INTERNAL_ERROR", linked.error);
+  }
+
   revalidatePath("/inventory");
+  revalidatePath("/menu");
   clearAiToolCache();
-  return actionOk({ id: item.id });
+  return actionOk({ id: sku.id });
 }
 
 export async function createInventoryMovement(

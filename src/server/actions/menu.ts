@@ -7,6 +7,15 @@ import { actionFail, actionOk, type ActionResult } from "@/lib/utils/action-resu
 import { canManageMenu, requireRole } from "@/lib/auth/permissions";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { computeRecipeCost } from "@/lib/calculations/inventory";
+import { generateSkuCode, normalizeItemName } from "@/lib/inventory/sku";
+import {
+  deactivateSellableProduct,
+  ensureSellableProduct,
+  insertInventorySku,
+  inventoryNameTaken,
+  resolveCategoryMenuType,
+  writePreparedRecipe,
+} from "@/server/catalog";
 
 export async function createCategory(
   organizationId: string,
@@ -18,17 +27,92 @@ export async function createCategory(
   const supabase = createSupabaseServerClient();
   const { data, error } = await supabase
     .from("menu_categories")
-    .insert({ organization_id: m.organization.id, name: parsed.data.name, sort_order: parsed.data.sortOrder })
+    .insert({
+      organization_id: m.organization.id,
+      name: parsed.data.name.trim(),
+      sort_order: parsed.data.sortOrder,
+      menu_type: parsed.data.menuType,
+    })
     .select("id")
     .single();
-  if (error || !data) return actionFail("INTERNAL_ERROR", "Không tạo được nhóm món");
+  if (error || !data) {
+    if (error?.message?.includes("menu_categories_org_name")) {
+      return actionFail("CONFLICT", "Nhóm món này đã tồn tại");
+    }
+    return actionFail("INTERNAL_ERROR", "Không tạo được nhóm món");
+  }
   revalidatePath("/menu");
   return actionOk({ id: data.id });
 }
 
-export async function createProduct(
+export async function updateCategory(
   organizationId: string,
-  input: unknown
+  categoryId: string,
+  input: z.infer<typeof categorySchema>
+): Promise<ActionResult<{ id: string }>> {
+  const m = await requireRole(organizationId, canManageMenu);
+  const parsed = categorySchema.safeParse(input);
+  if (!parsed.success) return actionFail("VALIDATION_ERROR", "Nhóm món không hợp lệ");
+  const supabase = createSupabaseServerClient();
+  const { error } = await supabase
+    .from("menu_categories")
+    .update({
+      name: parsed.data.name.trim(),
+      sort_order: parsed.data.sortOrder,
+      menu_type: parsed.data.menuType,
+    })
+    .eq("id", categoryId)
+    .eq("organization_id", m.organization.id);
+  if (error) return actionFail("INTERNAL_ERROR", "Không cập nhật được nhóm món");
+  await supabase
+    .from("products")
+    .update({ menu_type: parsed.data.menuType })
+    .eq("category_id", categoryId)
+    .eq("organization_id", m.organization.id);
+  revalidatePath("/menu");
+  return actionOk({ id: categoryId });
+}
+
+export async function deleteCategory(organizationId: string, categoryId: string): Promise<ActionResult<{ id: string }>> {
+  const m = await requireRole(organizationId, canManageMenu);
+  const supabase = createSupabaseServerClient();
+  await supabase
+    .from("products")
+    .update({ category_id: null })
+    .eq("category_id", categoryId)
+    .eq("organization_id", m.organization.id);
+  const { error } = await supabase
+    .from("menu_categories")
+    .delete()
+    .eq("id", categoryId)
+    .eq("organization_id", m.organization.id);
+  if (error) return actionFail("INTERNAL_ERROR", "Không xóa được nhóm món");
+  revalidatePath("/menu");
+  return actionOk({ id: categoryId });
+}
+
+export async function setProductCategory(
+  organizationId: string,
+  productId: string,
+  categoryId: string | null
+): Promise<ActionResult<{ id: string }>> {
+  const m = await requireRole(organizationId, canManageMenu);
+  const supabase = createSupabaseServerClient();
+  const menuType = await resolveCategoryMenuType(supabase, m.organization.id, categoryId);
+  const { error } = await supabase
+    .from("products")
+    .update({ category_id: categoryId, menu_type: menuType })
+    .eq("id", productId)
+    .eq("organization_id", m.organization.id);
+  if (error) return actionFail("INTERNAL_ERROR", "Không gán được nhóm món");
+  revalidatePath("/menu");
+  return actionOk({ id: productId });
+}
+
+async function upsertProduct(
+  organizationId: string,
+  input: unknown,
+  mode: "create" | "update"
 ): Promise<ActionResult<{ id: string }>> {
   const m = await requireRole(organizationId, canManageMenu);
   const parsed = productSchema.safeParse(input);
@@ -41,66 +125,143 @@ export async function createProduct(
     }
     return actionFail("VALIDATION_ERROR", "Vui lòng kiểm tra các trường", fieldErrors);
   }
-  const supabase = createSupabaseServerClient();
-  const { data: codeTaken } = await supabase
-    .from("products")
-    .select("id")
-    .eq("organization_id", m.organization.id)
-    .eq("code", parsed.data.code)
-    .maybeSingle();
-  if (codeTaken) return actionFail("CONFLICT", "Mã món đã tồn tại trong cửa hàng", { code: ["Mã món đã tồn tại"] });
   if (parsed.data.productType === "prepared" && (!parsed.data.recipe || parsed.data.recipe.length === 0)) {
     return actionFail("VALIDATION_ERROR", "Món chế biến cần ít nhất 1 dòng công thức.", { recipe: ["Thiếu nguyên liệu"] });
   }
 
-  const { data: product, error } = await supabase
-    .from("products")
-    .insert({
-      organization_id: m.organization.id,
-      name: parsed.data.name,
-      code: parsed.data.code,
-      category_id: parsed.data.categoryId ?? null,
-      description: parsed.data.description ?? null,
-      image_url: parsed.data.imageUrl ?? null,
-      menu_type: parsed.data.menuType,
-      product_type: parsed.data.productType,
-      cost_price: parsed.data.costPrice,
-      sale_price: parsed.data.salePrice,
-      unit: parsed.data.unit,
-      is_active: parsed.data.isActive,
-    })
-    .select("id")
-    .single();
-  if (error || !product) return actionFail("INTERNAL_ERROR", "Không tạo được món: " + (error?.message ?? ""));
+  const supabase = createSupabaseServerClient();
+  const menuType = await resolveCategoryMenuType(
+    supabase,
+    m.organization.id,
+    parsed.data.categoryId ?? null,
+    parsed.data.menuType ?? "food"
+  );
+  const name = normalizeItemName(parsed.data.name);
+  const code = parsed.data.code?.trim() || generateSkuCode(name);
+  const productId = parsed.data.id;
 
-  if (parsed.data.recipe && parsed.data.recipe.length > 0) {
-    const { data: recipe, error: recipeErr } = await supabase
-      .from("recipes")
-      .insert({ organization_id: m.organization.id, product_id: product.id, version: 1, is_active: true })
+  if (mode === "update" && !productId) return actionFail("VALIDATION_ERROR", "Thiếu món cần sửa");
+
+  if (mode === "create") {
+    const { data: codeTaken } = await supabase
+      .from("products")
+      .select("id")
+      .eq("organization_id", m.organization.id)
+      .eq("code", code)
+      .maybeSingle();
+    if (codeTaken) return actionFail("CONFLICT", "Không tạo được mã món, thử lại.", { code: ["Mã món đã tồn tại"] });
+  }
+
+  const baseRow = {
+    name,
+    code,
+    category_id: parsed.data.categoryId ?? null,
+    description: parsed.data.description ?? null,
+    image_url: parsed.data.imageUrl ?? null,
+    menu_type: menuType,
+    product_type: parsed.data.productType,
+    cost_price: parsed.data.costPrice ?? 0,
+    sale_price: parsed.data.salePrice,
+    unit: parsed.data.unit,
+    is_active: parsed.data.isActive,
+  };
+
+  let id = productId ?? "";
+  if (mode === "create") {
+    const { data: product, error } = await supabase
+      .from("products")
+      .insert({ organization_id: m.organization.id, ...baseRow })
       .select("id")
       .single();
-    if (recipeErr || !recipe) return actionFail("INTERNAL_ERROR", "Không tạo được công thức");
-    const items = parsed.data.recipe.map((r) => ({
-      recipe_id: recipe.id,
-      inventory_item_id: r.inventoryItemId,
-      quantity: r.quantity,
-      unit: r.unit,
-      estimated_cost: r.estimatedCost,
-    }));
-    await supabase.from("recipe_items").insert(items);
+    if (error || !product) return actionFail("INTERNAL_ERROR", "Không tạo được món: " + (error?.message ?? ""));
+    id = product.id;
+  } else {
+    const { error } = await supabase
+      .from("products")
+      .update(baseRow)
+      .eq("id", id)
+      .eq("organization_id", m.organization.id);
+    if (error) return actionFail("INTERNAL_ERROR", "Không cập nhật được món");
+  }
+
+  if (parsed.data.productType === "prepared" && parsed.data.recipe) {
+    const written = await writePreparedRecipe(supabase, {
+      organizationId: m.organization.id,
+      productId: id,
+      recipe: parsed.data.recipe,
+    });
+    if ("error" in written) return actionFail("INTERNAL_ERROR", written.error);
+  }
+
+  if (parsed.data.productType === "regular") {
+    const { data: existing } = await supabase
+      .from("products")
+      .select("inventory_item_id")
+      .eq("id", id)
+      .maybeSingle();
+    let skuId = existing?.inventory_item_id as string | null;
+    if (!skuId) {
+      if (await inventoryNameTaken(supabase, m.organization.id, name)) {
+        if (mode === "create") await supabase.from("products").delete().eq("id", id);
+        return actionFail("CONFLICT", "Tên này đã có trong kho. Dùng đúng tên đó hoặc đổi tên món.");
+      }
+      const sku = await insertInventorySku(supabase, {
+        organizationId: m.organization.id,
+        name,
+        unit: parsed.data.unit,
+        costPrice: parsed.data.costPrice ?? 0,
+        canBeIngredient: false,
+        canBeSold: true,
+      });
+      if ("error" in sku) {
+        if (mode === "create") await supabase.from("products").delete().eq("id", id);
+        return actionFail("INTERNAL_ERROR", sku.error);
+      }
+      skuId = sku.id;
+      await supabase.from("products").update({ inventory_item_id: skuId }).eq("id", id);
+    } else {
+      await supabase
+        .from("inventory_items")
+        .update({
+          name,
+          unit: parsed.data.unit,
+          cost_price: parsed.data.costPrice ?? 0,
+          can_be_sold: true,
+        })
+        .eq("id", skuId);
+    }
+  } else if (mode === "update") {
+    const { data: existing } = await supabase
+      .from("products")
+      .select("inventory_item_id")
+      .eq("id", id)
+      .maybeSingle();
+    if (existing?.inventory_item_id) {
+      await deactivateSellableProduct(supabase, existing.inventory_item_id);
+      await supabase.from("products").update({ inventory_item_id: null }).eq("id", id);
+    }
   }
 
   await supabase.from("audit_logs").insert({
     organization_id: m.organization.id,
     actor_user_id: m.membership.user_id,
-    action: "product.create",
+    action: mode === "create" ? "product.create" : "product.update",
     entity_type: "products",
-    entity_id: product.id,
-    after: { name: parsed.data.name, code: parsed.data.code },
+    entity_id: id,
+    after: { name, product_type: parsed.data.productType },
   });
 
   revalidatePath("/menu");
-  return actionOk({ id: product.id });
+  revalidatePath("/inventory");
+  return actionOk({ id });
+}
+
+export async function createProduct(organizationId: string, input: unknown): Promise<ActionResult<{ id: string }>> {
+  return upsertProduct(organizationId, input, "create");
+}
+
+export async function updateProduct(organizationId: string, input: unknown): Promise<ActionResult<{ id: string }>> {
+  return upsertProduct(organizationId, input, "update");
 }
 
 export async function toggleProductActive(organizationId: string, productId: string, isActive: boolean): Promise<ActionResult<{ id: string }>> {
@@ -210,4 +371,17 @@ export async function upsertProductRecipe(
 
   revalidatePath("/menu");
   return actionOk({ id: recipe.id, costPrice: totalCost });
+}
+
+export async function createIngredientFromMenu(
+  organizationId: string,
+  branchId: string,
+  input: unknown
+): Promise<ActionResult<{ id: string }>> {
+  const { createInventoryItem } = await import("@/server/actions/inventory");
+  return createInventoryItem(organizationId, branchId, {
+    ...(typeof input === "object" && input ? input : {}),
+    canBeIngredient: true,
+    canBeSold: false,
+  });
 }
