@@ -301,6 +301,7 @@ function inferIntent(question: string, mode: "chat" | "dashboard"): {
   }
   const INTENT_META: Record<AiIntent, { modelTier: AiModelTier; deterministic: boolean; rationale: string }> = {
     greeting: { modelTier: "none", deterministic: true, rationale: "Lời chào không cần truy vấn dữ liệu." },
+    capability: { modelTier: "quality", deterministic: false, rationale: "Câu hỏi về khả năng của AI — dùng mô hình chất lượng cao để trả lời tự nhiên." },
     metric_lookup: { modelTier: "none", deterministic: true, rationale: "Yêu cầu tra cứu chỉ số kinh doanh." },
     trend: { modelTier: "none", deterministic: true, rationale: "Yêu cầu chuỗi thời gian." },
     comparison: { modelTier: "none", deterministic: true, rationale: "Yêu cầu so sánh hai kỳ." },
@@ -325,8 +326,10 @@ function scoreIntents(question: string, mode: "chat" | "dashboard"): Array<{ int
   const q = normalizeIntentText(question);
   const scores: Array<{ intent: AiIntent; confidence: number }> = [];
 
-  const isGreeting = /^(hi|hello|chao|xin chao|hey|m la ai|m là ai|m lam duoc gi|m làm được gì|ban la ai|ban lam duoc gi|ban co the giup|cam on|thank)\b/.test(q)
-    || hasPhrase(q, ["giup minh", "giup toi", "lam duoc gi", "co the lam gi", "tinh nang gi", "ban la ai", "m giup", "m la ai"]);
+  const isPureGreeting = /^(hi|hello|chao|xin chao|hey|ban on khong|cam on|thank)\b/.test(q)
+    || hasPhrase(q, ["chao ban", "chao em", "chao anh", "chao chi", "chao ong", "chao ba", "xin chao", "hello moi nguoi", "chao moi nguoi"]);
+  const isCapability = /^(m|ban|bạn|em)\s*(la ai|là ai|lam duoc gi|làm được gì|co the giup gi|có thể giúp gì|giup duoc gi)\b/.test(q)
+    || hasPhrase(q, ["lam duoc gi", "lam duoc nhung gi", "co the lam gi", "giup duoc gi", "giup duoc nhung gi", "giup minh nhung gi", "giup toi nhung gi", "tinh nang gi", "ban la ai", "ban lam duoc gi", "m giup", "m la ai", "em la ai", "em lam duoc gi"]);
   const documentIntent = hasPhrase(q, ["tai lieu", "da upload", "quy dinh", "huong dan", "document"]);
   const webIntent = hasPhrase(q, ["tim kiem web", "tra cuu web", "thong tin tren web", "tin tuc", "gia vang", "thoi tiet", "bitcoin", "crypto", "chung khoan", "thi truong", "web search", "ronaldo", "messi", "ca si", "cau thu", "nguoi noi tieng"])
     || /^(gia vang|thoi tiet|bitcoin|crypto|chung khoan)\b/.test(q)
@@ -353,7 +356,8 @@ function scoreIntents(question: string, mode: "chat" | "dashboard"): Array<{ int
   if (mode === "dashboard" || isDashboardIntent(question)) {
     return [{ intent: "dashboard", confidence: 0.99 }];
   }
-  if (isGreeting) scores.push({ intent: "greeting", confidence: 0.99 });
+  if (isCapability) scores.push({ intent: "capability", confidence: 0.97 });
+  if (isPureGreeting) scores.push({ intent: "greeting", confidence: 0.99 });
   if (documentIntent) scores.push({ intent: "document_search", confidence: 0.96 });
   if (hasPhrase(q, ["tom tat cuoc tro chuyen", "tom tat hoi thoai", "ket luan chinh"])) {
     scores.push({ intent: "conversation_summary", confidence: 0.94 });
@@ -552,6 +556,7 @@ export async function buildAiPlanAsync(
     label: llmRange.label,
   };
   const tools = buildToolsForPlan(llmPlan.intent, question, range, timezone);
+  const deterministic = llmPlan.intent === "greeting";
 
   return {
     intent: llmPlan.intent,
