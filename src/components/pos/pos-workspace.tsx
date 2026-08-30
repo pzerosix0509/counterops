@@ -305,6 +305,17 @@ export function PosWorkspace(props: Props) {
       const orderId = await persistOrder({ quiet: true });
       if (!orderId) return;
 
+      const targetTable = tables.find(table => table.id === tableId);
+
+      if (targetTable) {
+        if (targetTable.status === "occupied") {
+          setError("Table has been occupied");
+          notifyError("Bàn đã có người");
+          return;
+        }
+        // Logic if the table is NOT occupied goes here
+      }
+
       const result = await payOrder(organizationId, {
         orderId,
         payments: paymentLines.filter((payment) => payment.amount > 0).map((payment) => ({ method: payment.method, amount: payment.amount })),
