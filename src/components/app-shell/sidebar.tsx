@@ -10,6 +10,7 @@ import {
   Boxes,
   FileBarChart,
   Settings,
+  Users,
   Sparkles,
   Bot,
 } from "lucide-react";
@@ -29,6 +30,7 @@ const ITEMS: NavItem[] = [
   { href: "/kitchen", label: "Bếp", icon: ChefHat, allowed: ["owner", "admin", "manager", "kitchen"] },
   { href: "/tables", label: "Bàn / phòng", icon: Table2, allowed: ["owner", "admin", "manager", "cashier", "reception"] },
   { href: "/menu", label: "Thực đơn", icon: UtensilsCrossed, allowed: ["owner", "admin", "manager", "cashier", "reception", "kitchen"] },
+  { href: "/employees", label: "Nhân viên", icon: Users, allowed: ["owner", "admin", "manager"] },
   { href: "/inventory", label: "Kho hàng", icon: Boxes, allowed: ["owner", "admin", "manager", "cashier"] },
   { href: "/analytics", label: "Phân tích", icon: Sparkles, allowed: ["owner", "admin", "manager", "cashier"] },
   { href: "/reports", label: "Báo cáo", icon: FileBarChart, allowed: ["owner", "admin", "manager", "cashier"] },
