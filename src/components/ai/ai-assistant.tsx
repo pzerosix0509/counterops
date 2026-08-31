@@ -217,11 +217,11 @@ function SourceDetailDialog({ source }: { source: AiSource }) {
         <div className="grid gap-3">
           <div className="rounded-md border bg-muted/20 p-3">
             <p className="mb-2 text-xs font-medium text-muted-foreground">Metadata / query</p>
-            <pre className="max-h-48 overflow-auto whitespace-pre-wrap text-xs">{JSON.stringify(source.meta ?? {}, null, 2)}</pre>
+            <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words text-xs font-mono">{JSON.stringify(source.meta ?? {}, null, 2)}</pre>
           </div>
           <div className="rounded-md border bg-muted/20 p-3">
             <p className="mb-2 text-xs font-medium text-muted-foreground">Dữ liệu gốc</p>
-            <pre className="max-h-80 overflow-auto whitespace-pre-wrap text-xs">{source.excerpt ?? "Không có excerpt."}</pre>
+            <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-words text-xs font-mono">{source.excerpt ?? "Không có excerpt."}</pre>
           </div>
         </div>
       </DialogContent>
