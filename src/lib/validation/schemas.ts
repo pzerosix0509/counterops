@@ -59,7 +59,7 @@ export const categorySchema = z.object({
   menuType: z.enum(["food", "drink", "service", "other"]),
 });
 
-export const inventoryItemSchema = z.object({
+const inventoryItemBaseSchema = z.object({
   name: z.string().min(1, "Tên hàng không được trống"),
   code: z.string().optional(),
   canBeIngredient: z.boolean().default(true),
@@ -73,10 +73,20 @@ export const inventoryItemSchema = z.object({
   imageUrl: z.string().url().nullable().optional(),
   initialQuantity: z.number().min(0).default(0),
   lowStockThreshold: z.number().min(0).default(0),
-}).refine((v) => v.canBeIngredient || v.canBeSold, {
+});
+
+export const inventoryItemSchema = inventoryItemBaseSchema.refine((v) => v.canBeIngredient || v.canBeSold, {
   message: "Chọn dùng làm nguyên liệu hoặc bán trên thực đơn",
 });
 export type InventoryItemInput = z.infer<typeof inventoryItemSchema>;
+
+export const inventoryItemUpdateSchema = inventoryItemBaseSchema
+  .omit({ initialQuantity: true })
+  .extend({ id: z.string().uuid() })
+  .refine((v) => v.canBeIngredient || v.canBeSold, {
+    message: "Chọn dùng làm nguyên liệu hoặc bán trên thực đơn",
+  });
+export type InventoryItemUpdateInput = z.infer<typeof inventoryItemUpdateSchema>;
 
 export const inventoryMovementSchema = z.object({
   branchId: z.string().uuid(),

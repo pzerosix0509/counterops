@@ -1,6 +1,11 @@
 import { describe, it, expect } from "vitest";
 import { kitchenStatusSchema } from "@/lib/validation/schemas";
-import { transformKitchenItems, type KitchenBoardRow } from "@/lib/calculations/kitchen";
+import {
+  filterKitchenItemsForTab,
+  transformKitchenItems,
+  type KitchenBoardItem,
+  type KitchenBoardRow,
+} from "@/lib/calculations/kitchen";
 
 function makeRow(overrides: Partial<KitchenBoardRow> & { orderStatus?: string } = {}): KitchenBoardRow {
   return {
@@ -100,5 +105,39 @@ describe("UC06 — Update Kitchen Status: kitchen board transform", () => {
     });
     const result = transformKitchenItems([later, earlier]);
     expect(result.map((r) => r.item.id)).toEqual(["earlier", "later"]);
+  });
+});
+
+describe("UC06 — Kitchen board tab filtering", () => {
+  function makeItem(
+    id: string,
+    orderId: string,
+    name: string,
+    kitchenStatus: KitchenBoardRow["kitchen_status"]
+  ): KitchenBoardItem {
+    const row = makeRow({
+      id,
+      order_id: orderId,
+      product_name_snapshot: name,
+      kitchen_status: kitchenStatus,
+    });
+    return transformKitchenItems([row])[0];
+  }
+
+  it("UC06.S06 — Hiển thị cả món thường trong cùng đơn có món chế biến", () => {
+    const items = [
+      makeItem("regular", "order-1", "C", "not_required"),
+      makeItem("prepared", "order-1", "D", "pending"),
+    ];
+    const pending = filterKitchenItemsForTab(items, "pending");
+    expect(pending.map((it) => it.item.product_name_snapshot).sort()).toEqual(["C", "D"]);
+  });
+
+  it("UC06.S07 — Chỉ hiển thị món thường khi bật cài đặt showRegularItemsInKitchen", () => {
+    const items = [makeItem("regular-only", "order-2", "Nước suối", "not_required")];
+    expect(filterKitchenItemsForTab(items, "pending")).toEqual([]);
+    expect(filterKitchenItemsForTab(items, "pending", { includeRegular: true }).map((it) => it.item.id)).toEqual([
+      "regular-only",
+    ]);
   });
 });

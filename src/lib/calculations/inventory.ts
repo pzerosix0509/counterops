@@ -28,3 +28,12 @@ export function computeBomCost(items: { quantity: number; unitCost: number }[]):
 export function expectedNetProfit(salePrice: number, recipeCost: number): number {
   return salePrice - recipeCost;
 }
+
+export function buildInventoryDeleteConflictMessage(productNames: string[]): string {
+  if (productNames.length === 0) {
+    return "Hàng đang dùng trong công thức món chế biến. Gỡ khỏi công thức trước khi xóa.";
+  }
+  const preview = productNames.slice(0, 6).map((name) => `• ${name}`).join("\n");
+  const suffix = productNames.length > 6 ? `\n• ... và ${productNames.length - 6} món khác` : "";
+  return `Hàng đang là nguyên liệu của ${productNames.length} món chế biến. Gỡ khỏi công thức trước khi xóa:\n${preview}${suffix}`;
+}

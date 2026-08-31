@@ -261,19 +261,15 @@ export function PosWorkspace(props: Props) {
   function submitPay() {
     setError(null);
     startTransition(async () => {
+      const targetTable = tables.find((table) => table.id === tableId);
+      if (targetTable?.status === "occupied") {
+        setError("Bàn đã có khách, không thể tạo đơn mới trên bàn này.");
+        notifyError("Bàn đã có người", "Chọn đơn đang mở trên bàn hoặc chọn bàn trống.");
+        return;
+      }
+
       const orderId = await persistOrder({ quiet: true });
       if (!orderId) return;
-
-      const targetTable = tables.find(table => table.id === tableId);
-
-      if (targetTable) {
-        if (targetTable.status === "occupied") {
-          setError("Table has been occupied");
-          notifyError("Bàn đã có người");
-          return;
-        }
-        // Logic if the table is NOT occupied goes here
-      }
 
       const result = await payOrder(organizationId, {
         orderId,

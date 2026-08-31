@@ -21,7 +21,10 @@ export async function listProducts(organizationId: string, opts?: { search?: str
     .eq("organization_id", organizationId)
     .is("deleted_at", null)
     .order("name");
-  if (opts?.search) q = q.ilike("name", `%${opts.search}%`);
+  if (opts?.search) {
+    const term = opts.search.replace(/[%_,]/g, "");
+    if (term) q = q.or(`name.ilike.%${term}%,code.ilike.%${term}%`);
+  }
   if (opts?.categoryId) q = q.eq("category_id", opts.categoryId);
   if (typeof opts?.isActive === "boolean") q = q.eq("is_active", opts.isActive);
   const { data, error } = await q;

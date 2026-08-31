@@ -93,12 +93,22 @@ export function MenuManager({
 
   const filtered = useMemo(() => {
     return products.filter((p) => {
-      if (query && !p.name.toLowerCase().includes(query.toLowerCase())) return false;
+      if (query) {
+        const q = query.toLowerCase();
+        if (!p.name.toLowerCase().includes(q) && !p.code.toLowerCase().includes(q)) return false;
+      }
       if (categoryFilter === "uncat") return !p.category_id;
       if (categoryFilter !== "all" && p.category_id !== categoryFilter) return false;
       return true;
     });
   }, [products, query, categoryFilter]);
+
+  function onFilter(e: React.FormEvent) {
+    e.preventDefault();
+    const params = new URLSearchParams();
+    if (query.trim()) params.set("q", query.trim());
+    router.replace(params.size > 0 ? `/menu?${params.toString()}` : "/menu");
+  }
 
   const bomCost = useMemo(() => {
     return computeBomCost(
@@ -233,16 +243,12 @@ export function MenuManager({
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <form
-          className="flex w-full max-w-sm items-center gap-2"
-          onSubmit={(e) => {
-            e.preventDefault();
-          }}
-        >
+        <form className="flex w-full max-w-sm items-center gap-2" onSubmit={onFilter}>
           <div className="relative flex-1">
             <Search className="pointer-events-none absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input className="pl-8" placeholder="Tìm theo tên món" value={query} onChange={(e) => setQuery(e.target.value)} />
+            <Input className="pl-8" placeholder="Tìm theo tên hoặc mã món" value={query} onChange={(e) => setQuery(e.target.value)} />
           </div>
+          <Button type="submit" variant="outline">Lọc</Button>
         </form>
         <div className="flex flex-wrap items-center gap-2">
           {canManage ? (

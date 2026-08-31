@@ -1,7 +1,8 @@
 ﻿"use client";
-import { useState, useTransition, useMemo } from "react";
+import { useEffect, useState, useTransition, useMemo } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Plus, Search, History, FileUp } from "lucide-react";
+import { Plus, Search, Pencil, FileUp, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NumberInput } from "@/components/ui/number-input";
@@ -16,8 +17,9 @@ import { EmptyState } from "@/components/common/states";
 import { notifyError, notifySuccess } from "@/hooks/use-notify";
 import { ExcelDownloadButton, ExcelImportDialog } from "@/components/common/excel-import";
 import { formatVND } from "@/lib/date/ranges";
+import { buildInventoryDeleteConflictMessage } from "@/lib/calculations/inventory";
 import { formatDateTime } from "@/lib/utils/format";
-import { createInventoryItem, createInventoryMovement } from "@/server/actions/inventory";
+import { createInventoryItem, createInventoryMovement, deleteInventoryItem, getInventoryDeleteBlockers, updateInventoryItem } from "@/server/actions/inventory";
 import { CategoryFields, ensureCategoryId } from "@/components/menu/category-fields";
 import { readCategoryForm } from "@/lib/ui/category-form";
 import {
@@ -27,12 +29,12 @@ import {
   previewInventoryItemImport,
 } from "@/server/actions/excel";
 import { INVENTORY_ITEM_IMPORT_COLUMNS } from "@/lib/validation/excel-schemas";
-import type { InventoryItem, InventoryBalance, InventoryMovement, MenuCategory } from "@/types/database";
+import type { InventoryBalance, InventoryMovement, MenuCategory } from "@/types/database";
+import type { InventoryItemView } from "@/server/queries/inventory";
 
 type MovementIntent = {
   itemId: string;
   defaultKind: MovementKind;
-  showForm: boolean;
 };
 
 type MovementKind = "purchase" | "stock_out";
@@ -67,7 +69,7 @@ export function InventoryManager({
   organizationId: string;
   branchId: string;
   canManage: boolean;
-  items: InventoryItem[];
+  items: InventoryItemView[];
   balances: InventoryBalance[];
   categories: MenuCategory[];
   initialQuery: string;
@@ -77,6 +79,7 @@ export function InventoryManager({
   const router = useRouter();
   const [query, setQuery] = useState(initialQuery);
   const [openItem, setOpenItem] = useState(false);
+  const [editItem, setEditItem] = useState<InventoryItemView | null>(null);
   const [movementIntent, setMovementIntent] = useState<MovementIntent | null>(null);
   const [importMode, setImportMode] = useState<ImportMode>(null);
   const [error, setError] = useState<string | null>(null);
@@ -85,13 +88,24 @@ export function InventoryManager({
   const [loadingMv, setLoadingMv] = useState<string | null>(null);
   const [canBeIngredient, setCanBeIngredient] = useState(true);
   const [canBeSold, setCanBeSold] = useState(false);
+  const [editCanBeIngredient, setEditCanBeIngredient] = useState(true);
+  const [editCanBeSold, setEditCanBeSold] = useState(false);
+  const [deleteBlockedProducts, setDeleteBlockedProducts] = useState<string[]>([]);
 
   function onFilter(e: React.FormEvent) {
     e.preventDefault();
     const params = new URLSearchParams();
-    if (query) params.set("q", query);
-    router.replace(`/inventory?${params.toString()}`);
+    if (query.trim()) params.set("q", query.trim());
+    router.replace(params.size > 0 ? `/inventory?${params.toString()}` : "/inventory");
   }
+
+  const filteredItems = useMemo(() => {
+    if (!query.trim()) return items;
+    const q = query.trim().toLowerCase();
+    return items.filter(
+      (it) => it.name.toLowerCase().includes(q) || it.code.toLowerCase().includes(q)
+    );
+  }, [items, query]);
 
   function onCreateItem(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -134,6 +148,97 @@ export function InventoryManager({
       setOpenItem(false);
       router.refresh();
       notifySuccess("Đã thêm hàng hóa");
+    });
+  }
+
+  function openEdit(item: InventoryItemView) {
+    setError(null);
+    setDeleteBlockedProducts([]);
+    setEditCanBeIngredient(item.can_be_ingredient);
+    setEditCanBeSold(item.can_be_sold);
+    setEditItem(item);
+  }
+
+  useEffect(() => {
+    if (!editItem) {
+      setDeleteBlockedProducts([]);
+      return;
+    }
+    let cancelled = false;
+    void getInventoryDeleteBlockers(organizationId, editItem.id).then((res) => {
+      if (cancelled || !res.ok) return;
+      setDeleteBlockedProducts(res.data.productNames);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [editItem, organizationId]);
+
+  function onUpdateItem(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!editItem) return;
+    setError(null);
+    const f = new FormData(e.currentTarget);
+    const picked = readCategoryForm(f);
+    const payload = {
+      id: editItem.id,
+      name: String(f.get("name") || ""),
+      canBeIngredient: editCanBeIngredient,
+      canBeSold: editCanBeSold,
+      salePrice: editCanBeSold ? Number(f.get("salePrice") || 0) : undefined,
+      unit: String(f.get("unit") || ""),
+      costPrice: Number(f.get("costPrice") || 0),
+      description: String(f.get("description") || "") || null,
+      lowStockThreshold: Number(f.get("lowStockThreshold") || 0),
+    };
+    startTransition(async () => {
+      let categoryId: string | null = editItem.linkedProduct?.category_id ?? null;
+      const menuType = picked.menuType;
+      if (editCanBeSold) {
+        const resolved = await ensureCategoryId(organizationId, picked, categories.length);
+        if (resolved.error) {
+          setError(resolved.error);
+          notifyError("Cập nhật hàng hóa thất bại", resolved.error);
+          return;
+        }
+        categoryId = resolved.categoryId;
+      }
+      const res = await updateInventoryItem(organizationId, branchId, {
+        ...payload,
+        categoryId: editCanBeSold ? categoryId : null,
+        menuType: editCanBeSold ? menuType : undefined,
+      });
+      if (!res.ok) {
+        setError(res.error.message);
+        notifyError("Cập nhật hàng hóa thất bại", res.error.message);
+        return;
+      }
+      setEditItem(null);
+      router.refresh();
+      notifySuccess("Đã cập nhật hàng hóa");
+    });
+  }
+
+  function onDeleteItem() {
+    if (!editItem) return;
+    if (deleteBlockedProducts.length > 0) {
+      setError(buildInventoryDeleteConflictMessage(deleteBlockedProducts));
+      return;
+    }
+    if (!window.confirm(`Xóa hàng "${editItem.name}"? Hàng sẽ ẩn khỏi kho và thực đơn.`)) return;
+    setError(null);
+    startTransition(async () => {
+      const res = await deleteInventoryItem(organizationId, editItem.id);
+      if (!res.ok) {
+        const blocked = res.error.fieldErrors?.affectedProducts ?? deleteBlockedProducts;
+        setDeleteBlockedProducts(blocked);
+        setError(res.error.message);
+        notifyError("Không thể xóa hàng hóa", res.error.message);
+        return;
+      }
+      setEditItem(null);
+      router.refresh();
+      notifySuccess("Đã xóa hàng hóa");
     });
   }
 
@@ -198,7 +303,7 @@ export function InventoryManager({
         <form className="flex w-full max-w-sm items-center gap-2" onSubmit={onFilter}>
           <div className="relative flex-1">
             <Search className="pointer-events-none absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input className="pl-8" placeholder="Tìm hàng hoá" value={query} onChange={(e) => setQuery(e.target.value)} />
+            <Input className="pl-8" placeholder="Tìm theo tên hoặc mã hàng" value={query} onChange={(e) => setQuery(e.target.value)} />
           </div>
           <Button type="submit" variant="outline">Lọc</Button>
         </form>
@@ -328,11 +433,11 @@ export function InventoryManager({
       ) : null}
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm">Danh sách hàng ({items.length})</CardTitle>
+          <CardTitle className="text-sm">Danh sách hàng ({filteredItems.length}{query.trim() && filteredItems.length !== items.length ? ` / ${items.length}` : ""})</CardTitle>
         </CardHeader>
         <CardContent>
-          {items.length === 0 ? (
-            <EmptyState title="Chưa có hàng hoá" description="Tạo hàng hoá đầu tiên cho kho." />
+          {filteredItems.length === 0 ? (
+            <EmptyState title={items.length === 0 ? "Chưa có hàng hoá" : "Không có hàng phù hợp"} description={items.length === 0 ? "Tạo hàng hoá đầu tiên cho kho." : "Thử đổi từ khóa hoặc bấm Lọc để tìm trên toàn kho."} />
           ) : (
             <div className="overflow-x-auto">
             <Table className="min-w-[1100px] table-fixed">
@@ -353,11 +458,11 @@ export function InventoryManager({
                   <TableHead className="px-3 text-right">Tồn</TableHead>
                   <TableHead className="px-3 text-center">Trạng thái</TableHead>
                   <TableHead className="px-3 text-center">Thao tác</TableHead>
-                  <TableHead className="px-3" aria-label="Lịch sử" />
+                  <TableHead className="px-3" aria-label="Chỉnh sửa" />
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {items.map((it) => {
+                {filteredItems.map((it) => {
                   const b = balanceMap.get(it.id);
                   const qty = Number(b?.quantity_on_hand ?? 0);
                   const low = Number(b?.low_stock_threshold ?? 0);
@@ -397,7 +502,7 @@ export function InventoryManager({
                             size="sm"
                             variant="outline"
                             className="shrink-0"
-                            onClick={() => openMovement({ itemId: it.id, defaultKind: "purchase", showForm: true })}
+                            onClick={() => openMovement({ itemId: it.id, defaultKind: "purchase" })}
                           >
                             <Plus className="h-3.5 w-3.5" /> Nhập / xuất
                           </Button>
@@ -405,14 +510,11 @@ export function InventoryManager({
                       </TableCell>
                       <TableCell className="px-3">
                         <div className="flex justify-end">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="shrink-0"
-                            onClick={() => openMovement({ itemId: it.id, defaultKind: "purchase", showForm: false })}
-                          >
-                            <History className="h-3.5 w-3.5" /> Lịch sử
-                          </Button>
+                          {canManage ? (
+                            <Button size="sm" variant="ghost" className="shrink-0" onClick={() => openEdit(it)}>
+                              <Pencil className="h-3.5 w-3.5" /> Chỉnh sửa
+                            </Button>
+                          ) : null}
                         </div>
                       </TableCell>
                     </TableRow>
@@ -433,7 +535,7 @@ export function InventoryManager({
               {activeMovementItem ? activeMovementItem.name : ""}
             </DialogDescription>
           </DialogHeader>
-          {movementIntent && movementIntent.showForm && canManage ? (
+          {movementIntent && canManage ? (
             <form className="mb-4 grid grid-cols-1 gap-3 text-sm sm:grid-cols-[1.4fr_1fr]" onSubmit={(e) => onCreateMovement(movementIntent.itemId, e)}>
               <div className="space-y-1">
                 <Label>Loại phiếu</Label>
@@ -494,6 +596,112 @@ export function InventoryManager({
               <p className="p-4 text-sm text-muted-foreground">Chưa có lịch sử kho.</p>
             )}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!editItem} onOpenChange={(open) => !open && setEditItem(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Chỉnh sửa hàng hóa</DialogTitle>
+            <DialogDescription>Cập nhật tên, giá, vai trò hoặc xóa hàng khỏi kho.</DialogDescription>
+          </DialogHeader>
+          {editItem ? (
+            <form key={editItem.id} className="space-y-3" onSubmit={onUpdateItem}>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-name">Tên hàng</Label>
+                  <Input id="edit-name" name="name" defaultValue={editItem.name} required />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-unit">Đơn vị</Label>
+                  <Input id="edit-unit" name="unit" defaultValue={editItem.unit} required />
+                </div>
+              </div>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={editCanBeIngredient} onChange={(e) => setEditCanBeIngredient(e.target.checked)} />
+                Dùng làm nguyên liệu
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={editCanBeSold} onChange={(e) => setEditCanBeSold(e.target.checked)} />
+                Bán trên thực đơn
+              </label>
+              {editCanBeSold ? (
+                <CategoryFields
+                  organizationId={organizationId}
+                  categories={categories}
+                  defaultCategoryId={editItem.linkedProduct?.category_id ?? null}
+                  defaultMenuType={editItem.linkedProduct?.menu_type ?? "food"}
+                  onGroupCreated={() => router.refresh()}
+                />
+              ) : null}
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-lowStockThreshold">Ngưỡng cảnh báo sắp hết</Label>
+                <NumberInput
+                  id="edit-lowStockThreshold"
+                  name="lowStockThreshold"
+                  defaultValue={Number(balanceMap.get(editItem.id)?.low_stock_threshold ?? defaultLowStockThreshold)}
+                  decimals={1}
+                />
+              </div>
+              {editCanBeSold ? (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="edit-costPrice">Giá vốn</Label>
+                    <NumberInput id="edit-costPrice" name="costPrice" defaultValue={editItem.cost_price} required />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="edit-salePrice">Giá bán (đ)</Label>
+                    <NumberInput
+                      id="edit-salePrice"
+                      name="salePrice"
+                      defaultValue={editItem.linkedProduct?.sale_price ?? editItem.cost_price}
+                      required
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-costPrice">Giá vốn</Label>
+                  <NumberInput id="edit-costPrice" name="costPrice" defaultValue={editItem.cost_price} required />
+                </div>
+              )}
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-description">Mô tả</Label>
+                <Textarea id="edit-description" name="description" rows={2} defaultValue={editItem.description ?? ""} />
+              </div>
+              {deleteBlockedProducts.length > 0 ? (
+                <div className="rounded-md border border-amber-300/60 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+                  <p className="font-medium">Không thể xóa vì đang dùng trong {deleteBlockedProducts.length} món chế biến</p>
+                  <ul className="mt-2 list-disc space-y-1 pl-5">
+                    {deleteBlockedProducts.slice(0, 8).map((name) => (
+                      <li key={name}>{name}</li>
+                    ))}
+                  </ul>
+                  {deleteBlockedProducts.length > 8 ? (
+                    <p className="mt-1 text-xs text-amber-900">... và {deleteBlockedProducts.length - 8} món khác</p>
+                  ) : null}
+                  <Link href="/menu" className="mt-2 inline-block text-sm font-medium text-primary underline">
+                    Mở Thực đơn để sửa công thức
+                  </Link>
+                </div>
+              ) : null}
+              {error ? <p className="whitespace-pre-line text-sm text-destructive">{error}</p> : null}
+              <DialogFooter className="gap-2 sm:justify-between">
+                <Button
+                  type="button"
+                  variant="destructive"
+                  disabled={isPending || deleteBlockedProducts.length > 0}
+                  onClick={onDeleteItem}
+                >
+                  <Trash2 className="h-4 w-4" /> Xóa hàng
+                </Button>
+                <div className="flex gap-2">
+                  <Button type="button" variant="ghost" onClick={() => setEditItem(null)}>Huỷ</Button>
+                  <Button type="submit" disabled={isPending}>{isPending ? "Đang lưu..." : "Lưu"}</Button>
+                </div>
+              </DialogFooter>
+            </form>
+          ) : null}
         </DialogContent>
       </Dialog>
     </div>
