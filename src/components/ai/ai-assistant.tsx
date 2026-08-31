@@ -88,6 +88,12 @@ function parseSourceExcerpt(source: AiSource): unknown {
   }
 }
 
+function formatSourceExcerpt(source: AiSource): string {
+  if (!source.excerpt) return "Không có excerpt.";
+  const parsed = parseSourceExcerpt(source);
+  return typeof parsed === "string" ? parsed : JSON.stringify(parsed, null, 2);
+}
+
 function metricLabel(key: string): string {
   const labels: Record<string, string> = {
     total_orders: "Số đơn",
@@ -209,19 +215,19 @@ function SourceDetailDialog({ source }: { source: AiSource }) {
       <DialogTrigger asChild>
         <Button type="button" variant="ghost" size="sm">Chi tiết</Button>
       </DialogTrigger>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className="max-h-[calc(100vh-2rem)] max-w-3xl min-w-0 overflow-y-auto">
         <DialogHeader>
           <DialogTitle>[{source.id}] {source.label}</DialogTitle>
           <DialogDescription>{source.detail ?? "Nguồn dữ liệu AI đã dùng trong câu trả lời."}</DialogDescription>
         </DialogHeader>
-        <div className="grid gap-3">
-          <div className="rounded-md border bg-muted/20 p-3">
+        <div className="grid min-w-0 gap-3">
+          <div className="min-w-0 rounded-md border bg-muted/20 p-3">
             <p className="mb-2 text-xs font-medium text-muted-foreground">Metadata / query</p>
-            <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words text-xs font-mono">{JSON.stringify(source.meta ?? {}, null, 2)}</pre>
+            <pre className="max-h-48 max-w-full overflow-auto whitespace-pre-wrap break-words text-xs font-mono">{JSON.stringify(source.meta ?? {}, null, 2)}</pre>
           </div>
-          <div className="rounded-md border bg-muted/20 p-3">
+          <div className="min-w-0 rounded-md border bg-muted/20 p-3">
             <p className="mb-2 text-xs font-medium text-muted-foreground">Dữ liệu gốc</p>
-            <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-words text-xs font-mono">{source.excerpt ?? "Không có excerpt."}</pre>
+            <pre className="max-h-80 max-w-full overflow-auto whitespace-pre-wrap break-words text-xs font-mono">{formatSourceExcerpt(source)}</pre>
           </div>
         </div>
       </DialogContent>
