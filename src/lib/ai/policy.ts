@@ -28,6 +28,11 @@ const TOOL_MIN_ROLE: Partial<Record<AiToolName, string>> = {
   search_documents: "cashier",
   search_web: "cashier",
   forecast_revenue: "cashier",
+  forecast_demand: "manager",
+  rfm_summary: "manager",
+  sentiment_summary: "manager",
+  customer_segments: "manager",
+  render_line_chart: "cashier",
 };
 
 const ROLE_RANK: Record<string, number> = {

@@ -1,5 +1,6 @@
 import "server-only";
 import { formatVND } from "@/lib/date/ranges";
+import { extractChartType } from "@/lib/ai/render-line-chart";
 import { decomposeRevenueDelta } from "@/lib/ai/decomposition";
 import type {
   AiAnalyticsContext,
@@ -289,9 +290,12 @@ export function buildChartForQuestion(question: string, analytics: AiAnalyticsCo
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/đ/g, "d");
+  // Nếu user chỉ định loại biểu đồ cụ thể (line / pie / bar / area / donut / composed),
+  // ưu tiên dùng đúng loại đó cho data phù hợp — không ép kiểu mặc định theo data branch.
+  const requestedType = extractChartType(question);
   if ((q.includes("du bao") || q.includes("du doan") || q.includes("forecast") || q.includes("tuong lai") || q.includes("thang toi")) && analytics.forecastRevenue && !analytics.forecastRevenue.insufficient_data) {
     return {
-      type: "area",
+      type: requestedType ?? "area",
       title: `Dự báo doanh thu ${analytics.forecastRevenue.horizon_days} ngày tới`,
       xKey: "period",
       yKey: "revenue",
@@ -303,9 +307,16 @@ export function buildChartForQuestion(question: string, analytics: AiAnalyticsCo
       })),
     };
   }
-  if ((q.includes("theo ngay") || q.includes("xu huong") || q.includes("bieu do")) && analytics.salesTimeseries.length > 0) {
+  // Time-series-based chart types (line / area / composed) cần dữ liệu chuỗi thời gian
+  const wantsTimeChart = requestedType === "line" || requestedType === "area" || requestedType === "composed";
+  if (analytics.salesTimeseries.length > 0 && (
+    q.includes("theo ngay")
+    || q.includes("xu huong")
+    || q.includes("bieu do")
+    || wantsTimeChart
+  )) {
     return {
-      type: "composed",
+      type: requestedType ?? "composed",
       title: `Doanh thu và lợi nhuận - ${analytics.range.label}`,
       xKey: "period",
       yKey: "revenue",
@@ -319,7 +330,7 @@ export function buildChartForQuestion(question: string, analytics: AiAnalyticsCo
   }
   if ((q.includes("nhom") || q.includes("danh muc")) && analytics.categorySummary.length > 0) {
     return {
-      type: "donut",
+      type: requestedType ?? "donut",
       title: `Doanh thu theo nhóm món - ${analytics.range.label}`,
       xKey: "category",
       yKey: "revenue",
@@ -331,7 +342,7 @@ export function buildChartForQuestion(question: string, analytics: AiAnalyticsCo
   }
   if ((q.includes("kenh") || q.includes("channel")) && analytics.channelSummary.length > 0) {
     return {
-      type: "bar",
+      type: requestedType ?? "bar",
       title: `Doanh thu theo kênh bán - ${analytics.range.label}`,
       xKey: "channel",
       yKey: "revenue",
@@ -344,7 +355,7 @@ export function buildChartForQuestion(question: string, analytics: AiAnalyticsCo
   }
   if ((q.includes("mon") || q.includes("top")) && analytics.topProducts.length > 0) {
     return {
-      type: "composed",
+      type: requestedType ?? "composed",
       title: `Top món - ${analytics.range.label}`,
       xKey: "product",
       yKey: "revenue",

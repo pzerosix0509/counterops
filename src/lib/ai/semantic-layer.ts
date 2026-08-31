@@ -1,6 +1,7 @@
 import { compileSemanticQuery, semanticQueryForIntent } from "@/lib/ai/semantic-compiler";
 import { detectIntentAmbiguity } from "@/lib/ai/clarification";
 import { resolveMetricFromText } from "@/lib/ai/metric-catalog";
+import { extractChartType } from "@/lib/ai/render-line-chart";
 import type { AiIntent, AiModelTier, AiPlan, AiToolCall, AiToolName } from "@/types/ai";
 
 export interface AiDateRange {
@@ -567,40 +568,65 @@ function buildToolsForPlan(
     "category_analysis",
     "channel_analysis",
   ];
+  let calls: AiToolCall[] = [];
   if (analyticsIntents.includes(intent)) {
     const query = semanticQueryForIntent(intent, range, timezone, question);
     if (query) {
-      return compileSemanticQuery(query).map((call, index) => ({ ...call, id: `tool-${index + 1}` }));
+      calls = compileSemanticQuery(query).map((call, index) => ({ ...call, id: `tool-${index + 1}` }));
     }
   }
-  const names = [...toolsForIntent(intent)];
-  if (intent === "forecast" && wantsDemandForecast(question)) {
-    names.push("forecast_demand");
+  if (calls.length === 0) {
+    const names = [...toolsForIntent(intent)];
+    if (intent === "forecast" && wantsDemandForecast(question)) {
+      names.push("forecast_demand");
+    }
+    calls = names.map((name, index) => {
+      const common = { from: range.from, to: range.to, rangeLabel: range.label, timezone };
+      const argumentsByTool: Record<AiToolName, Record<string, string | number | boolean | null>> = {
+        sales_summary: common,
+        sales_timeseries: { ...common, granularity: chooseGranularity(range, question) },
+        top_products: { ...common, limit: 10 },
+        category_summary: { ...common, limit: 20 },
+        channel_summary: common,
+        period_comparison: common,
+        inventory_risk: { status: "attention" },
+        search_documents: { query: question, limit: 6 },
+        search_web: { query: question, limit: 5 },
+        forecast_revenue: { ...common, horizon_days: 30 },
+        forecast_demand: { ...common, horizon_days: 14 },
+        rfm_summary: {},
+        sentiment_summary: common,
+        customer_segments: {},
+        // Tool này không nằm trong toolsForIntent mặc định — args rỗng chỉ để vượt type check.
+        // LLM planner sẽ cung cấp data/xLabel/yLabel/title thực tế khi gọi.
+        render_line_chart: { data: [], xLabel: "", yLabel: "", title: "" } as unknown as Record<string, string | number | boolean | null>,
+      };
+      return {
+        id: `tool-${index + 1}`,
+        name,
+        arguments: argumentsByTool[name],
+      };
+    });
   }
-  return names.map((name, index) => {
-    const common = { from: range.from, to: range.to, rangeLabel: range.label, timezone };
-    const argumentsByTool: Record<AiToolName, Record<string, string | number | boolean | null>> = {
-      sales_summary: common,
-      sales_timeseries: { ...common, granularity: chooseGranularity(range, question) },
-      top_products: { ...common, limit: 10 },
-      category_summary: { ...common, limit: 20 },
-      channel_summary: common,
-      period_comparison: common,
-      inventory_risk: { status: "attention" },
-      search_documents: { query: question, limit: 6 },
-      search_web: { query: question, limit: 5 },
-      forecast_revenue: { ...common, horizon_days: 30 },
-      forecast_demand: { ...common, horizon_days: 14 },
-      rfm_summary: {},
-      sentiment_summary: common,
-      customer_segments: {},
-    };
-    return {
-      id: `tool-${index + 1}`,
-      name,
-      arguments: argumentsByTool[name],
-    };
-  });
+
+  // Fix bug: khi user yêu cầu chart (line/pie/bar/area/donut/composed) mà intent
+  // hiện tại không tự include sales_timeseries (vd metric_lookup), ta ép tool
+  // này vào plan để dữ liệu chuỗi thời gian có sẵn cho chart.
+  if (extractChartType(question) && !calls.some((call) => call.name === "sales_timeseries")) {
+    calls.push({
+      id: `tool-${calls.length + 1}`,
+      name: "sales_timeseries",
+      arguments: {
+        from: range.from,
+        to: range.to,
+        rangeLabel: range.label,
+        timezone,
+        granularity: chooseGranularity(range, question),
+      },
+    });
+  }
+
+  return calls;
 }
 
 /**

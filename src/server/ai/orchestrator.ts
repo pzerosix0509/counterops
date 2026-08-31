@@ -2,6 +2,7 @@ import "server-only";
 import { assessAiEvidence } from "@/lib/ai/assessment";
 import { CATALOG_VERSION } from "@/lib/ai/metric-catalog";
 import { redactPii } from "@/lib/ai/redact";
+import { extractChartType, analyticsTimeseriesToChartArgs } from "@/lib/ai/render-line-chart";
 import { filterViolatingTools, validateToolPlan } from "@/lib/ai/policy";
 import { aiDashboardSpecSchema } from "@/lib/ai/schemas";
 import { buildAiPlanAsync, isDashboardIntent } from "@/lib/ai/semantic-layer";
@@ -26,8 +27,8 @@ import {
 import { generateAiModelAnswer, type AiProviderResult } from "@/server/ai/provider";
 import { runPlannerLoop } from "@/lib/ai/planner-loop";
 import { runStatisticalAnalysis, describeStatisticalFindings } from "@/lib/ai/analysis";
-import { buildSourcesFromToolExecutions } from "@/server/ai/tools";
-import type { AiChatResponse, AiProgressStage, AiSource } from "@/types/ai";
+import { buildSourcesFromToolExecutions, executeAiTool } from "@/server/ai/tools";
+import type { AiChatResponse, AiProgressStage, AiSource, AiToolCall } from "@/types/ai";
 
 export interface RunAiAnalysisInput {
   organizationId: string;
@@ -269,7 +270,35 @@ export async function runAiAnalysis(input: RunAiAnalysisInput): Promise<AiChatRe
   if (statisticalFindings) {
     analytics.statisticalFindings = statisticalFindings;
   }
-  const chart = buildChartForQuestion(input.question, analytics);
+  let chart = buildChartForQuestion(input.question, analytics);
+  // Nếu user yêu cầu line chart VÀ analytics có timeseries → ép pipeline đi qua tool
+  // render_line_chart (không dùng kiểu mặc định theo data branch). Đây là fix bug
+  // "doanh thu luôn trả về bar/composed dù user yêu cầu đường/tròn".
+  if (
+    !executions.some((execution) => execution.chart)
+    && analytics.salesTimeseries.length > 0
+    && extractChartType(input.question) === "line"
+  ) {
+    const chartArgs = analyticsTimeseriesToChartArgs(
+      analytics,
+      `Doanh thu - ${analytics.range.label}`,
+    );
+    const syntheticCall: AiToolCall = {
+      id: "tool-render-line",
+      name: "render_line_chart",
+      arguments: {
+        data: chartArgs.data as unknown as string,
+        xLabel: chartArgs.xLabel,
+        yLabel: chartArgs.yLabel,
+        title: chartArgs.title,
+      },
+    };
+    const syntheticExecution = await executeAiTool(syntheticCall, toolContext);
+    executions.push(syntheticExecution);
+  }
+  // Nếu tool render_line_chart được gọi, ưu tiên chart do AI cung cấp thay vì chart tự sinh.
+  const renderedChart = executions.find((execution) => execution.chart)?.chart;
+  if (renderedChart) chart = renderedChart;
 
   let modelResult = emptyProviderResult();
   let providerMs = 0;
