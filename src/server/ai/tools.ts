@@ -2,6 +2,7 @@ import "server-only";
 import { z } from "zod";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { aggregateToDailyPoints, backtestForecast, computeForecast } from "@/lib/ai/forecast";
+import { buildLineChartSpec } from "@/lib/ai/render-line-chart";
 import { searchWeb } from "@/lib/ai/web-search";
 import { searchAiDocumentChunks } from "@/server/queries/ai";
 import { aiToolCacheKey, withAiToolCache } from "@/server/ai/cache";
@@ -53,6 +54,12 @@ const toolArgumentSchemas = {
   rfm_summary: z.object({}).strict(),
   sentiment_summary: rangeArgumentsSchema,
   customer_segments: z.object({}).strict(),
+  render_line_chart: z.object({
+    data: z.array(z.record(z.string(), z.unknown())).min(1).max(10_000),
+    xLabel: z.string().min(1).max(80),
+    yLabel: z.string().min(1).max(80),
+    title: z.string().min(1).max(200),
+  }).strict(),
 } satisfies Record<AiToolName, z.ZodType>;
 
 const sourceLabels: Record<Exclude<AiToolName, "search_documents" | "search_web">, string> = {
@@ -68,6 +75,7 @@ const sourceLabels: Record<Exclude<AiToolName, "search_documents" | "search_web"
   rfm_summary: "Phân khúc giá trị RFM",
   sentiment_summary: "Tổng hợp cảm xúc phản hồi",
   customer_segments: "Nhóm hành vi khách (KMeans)",
+  render_line_chart: "Biểu đồ đường (do AI cung cấp)",
 };
 
 const rpcNames: Partial<Record<AiToolName, string>> = {
@@ -375,6 +383,17 @@ export async function executeAiTool(
     if (call.name === "customer_segments") {
       const cached = await executeCustomerSegments(context);
       return { call, rows: cached.value, cacheHit: cached.hit, durationMs: Date.now() - startedAt };
+    }
+    if (call.name === "render_line_chart") {
+      // Tool trả về chart thay vì rows; orchestrator sẽ gán chart này vào response.chart
+      const args = call.arguments as Record<string, unknown>;
+      const chart = buildLineChartSpec({
+        data: args.data as Array<Record<string, unknown>>,
+        xLabel: String(args.xLabel),
+        yLabel: String(args.yLabel),
+        title: String(args.title),
+      });
+      return { call, rows: [], chart, durationMs: Date.now() - startedAt };
     }
     const result = await executeRpcTool(call, context);
     return { call, rows: result.rows, cacheHit: result.cacheHit, durationMs: Date.now() - startedAt };

@@ -100,11 +100,22 @@ Hỗ trợ 2 chế độ: JSON thường và NDJSON stream (`?stream=true` → s
 | `search_documents` | `searchAiDocumentChunks` | query (2-1000), limit (1-12) |
 | `search_web` | Tavily API | query (2-500), limit (1-10, optional) |
 | `forecast_revenue` | `ai_sales_timeseries` + `computeForecast` | from, to, rangeLabel, timezone, horizon_days (7-90, optional) |
+| `render_line_chart` | `buildLineChartSpec` (pure TS) | data (1-10000 rows), xLabel, yLabel, title |
 
 ### ⚠️ Schema validation (đã fix lỗi nghiêm trọng)
 - **KHÔNG dùng `z.string().datetime()`** cho `from`/`to` — nó chỉ chấp nhận ISO có `Z`, từ chối `+07:00`. LLM planner trả range có offset → cả 3 tool fail "Tham số tool không hợp lệ".
 - Đã thay bằng `isoDateTime = z.string().refine(v => !isNaN(Date.parse(v)))`.
 - `forecast_revenue`: range từ tool arguments phải là **quá khứ** (lịch sử training). `horizon_days` mặc định 30.
+- `render_line_chart`: `data` là `z.array(z.record(z.string(), z.unknown()))` (Zod 4 yêu cầu cả key + value schema); `xLabel`/`yLabel` đồng thời là tên trục VÀ key trong data; phải có ≥ 1 phần tử có key `yLabel` mang giá trị `number` (nếu không `buildLineChartSpec` throw "không có phần tử nào có key yLabel là số").
+
+### Tool đặc biệt — `render_line_chart` (chart do AI cung cấp)
+Khác với tool analytics (lấy số từ RPC) hay tool retrieval (lấy từ tài liệu/web), `render_line_chart` là tool **visualization do AI/LLM tự cung cấp dữ liệu**:
+- Args: `data` (mảng object có key `xLabel` và `yLabel`), `xLabel`, `yLabel`, `title` — tất cả từ phía LLM/AI.
+- Executor (`src/server/ai/tools.ts`, branch `render_line_chart`): validate qua Zod → gọi `buildLineChartSpec()` (`src/lib/ai/render-line-chart.ts`) → trả về `AiToolExecution` với `rows: []` và `chart: AiChartSpec`. Không sinh `AiSource` (vì `rows.length === 0` → `buildSourcesFromToolExecutions` skip).
+- Orchestrator (`src/server/ai/orchestrator.ts`): sau khi gọi `buildChartForQuestion()`, nếu bất kỳ `execution.chart` tồn tại thì **override** `response.chart` bằng chart do AI cung cấp. Reuse `ChartSpecRenderer` (recharts) để vẽ.
+- Không nằm trong `toolsForIntent` của bất kỳ intent nào → không được planner tự động include. Có entry rỗng trong `argumentsByTool` (`src/lib/ai/semantic-layer.ts`) chỉ để vượt type check. LLM planner (`planWithLlm`) hoặc function-calling sau này sẽ quyết định khi nào gọi.
+- Min role: `cashier` (`src/lib/ai/policy.ts`).
+- Test: `src/__tests__/render-line-chart.test.ts` (11 case: valid, empty, malformed, missing labels, non-numeric yLabel, oversize data/title).
 
 ### Forecast
 `src/lib/ai/forecast.ts`:
@@ -178,6 +189,7 @@ Gemini là fallback chính khi NVIDIA hết RPD (lỗi 503 `ResourceExhausted`):
 - `buildAnalyticsContext(executions)` — gom rows tool thành `AiAnalyticsContext`.
 - `buildDeterministicAnswer(plan, analytics, ...)` — switch theo intent, tạo bullets từ dữ liệu (formatVND, citation `[S1]`).
 - `buildChartForQuestion(question, analytics)` — tạo chart spec. **Phải strip dấu keyword trước khi `includes`** ("du bao", "nhom mon", "kenh ban", "top mon").
+- **Override chart từ tool** (`render_line_chart`): nếu `executions` có `execution.chart` (do tool `render_line_chart` trả về), orchestrator sẽ ghi đè `response.chart` bằng chart đó. Ưu tiên này có chủ đích: AI/LLM đã chủ động yêu cầu visualize dữ liệu mà nó cung cấp, nên chart tự sinh từ analytics bị bỏ qua.
 - `buildDashboardSpec(analytics)` — dashboard deterministic khi model không trả được.
 - `buildFallbackAnswer(question, analytics, sources)` — dùng khi model fail; có nhánh greeting/capability/web/document/product/channel. **Cũng strip dấu** cho `q`.
 
@@ -329,4 +341,5 @@ Gemini là fallback chính khi NVIDIA hết RPD (lỗi 503 `ResourceExhausted`):
 10. **Sửa hành vi loop/planner → cập nhật `planner-loop.ts` + budget test.**
 11. **Thêm statistical finding mới → cập nhật `analysis.ts` + `describeStatisticalFindings` + test.**
 12. **Sửa forecast → cập nhật `forecast.ts` (backtest) + cảnh báo WMAPE trong `analytics.ts`.**
-13. Chạy đủ: vitest AI + tsc + eslint.
+13. **Thêm tool visualization mới (kiểu `render_line_chart`)** → cập nhật: `AiToolName` (union), `AiToolExecution.chart?` (optional field), `toolArgumentSchemas` (Zod), `sourceLabels` (label), `executeAiTool` (branch), `TOOL_MIN_ROLE` (policy), `argumentsByTool` (semantic-layer — stub nếu không nằm trong intent nào), orchestrator override `response.chart`, plus test riêng.
+14. Chạy đủ: vitest AI + tsc + eslint.

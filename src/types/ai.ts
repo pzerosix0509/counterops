@@ -317,7 +317,8 @@ export type AiToolName =
   | "forecast_demand"
   | "rfm_summary"
   | "sentiment_summary"
-  | "customer_segments";
+  | "customer_segments"
+  | "render_line_chart";
 
 export interface AiToolCall {
   id: string;
@@ -332,6 +333,8 @@ export interface AiToolExecution {
   durationMs: number;
   cacheHit?: boolean;
   error?: string;
+  /** Một số tool trả về chart thay vì rows (vd render_line_chart). */
+  chart?: AiChartSpec;
 }
 
 export interface AiModelUsage {
