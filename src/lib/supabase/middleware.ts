@@ -29,7 +29,7 @@ export async function updateSession(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser();
   const pathname = request.nextUrl.pathname;
-  const isAuthRoute = pathname.startsWith("/login") || pathname.startsWith("/onboarding") || pathname.startsWith("/access-error") || pathname.startsWith("/auth");
+  const isAuthRoute = pathname.startsWith("/login") || pathname.startsWith("/onboarding") || pathname.startsWith("/access-error") || pathname.startsWith("/auth") || pathname.startsWith("/register");
   const isPublic = pathname === "/" || isAuthRoute;
   const isApiRoute = pathname.startsWith("/api/");
 
@@ -41,7 +41,8 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
   if (user && pathname === "/login") {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
+    const next = request.nextUrl.searchParams.get("next");
+    return NextResponse.redirect(new URL(next || "/dashboard", request.url));
   }
   return response;
 }

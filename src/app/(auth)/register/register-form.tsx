@@ -2,10 +2,13 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { Loader2, Mail, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { AnimatedAuthIcon } from "@/components/common/animated-auth-icon-lazy";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 export function RegisterForm() {
@@ -16,7 +19,23 @@ export function RegisterForm() {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [isResending, startResendTransition] = useTransition();
   const supabase = createSupabaseBrowserClient();
+
+  function onResend() {
+    setError(null);
+    startResendTransition(async () => {
+      const { error: resendError } = await supabase.auth.resend({
+        type: "signup",
+        email,
+      });
+      if (resendError) {
+        setError(resendError.message);
+        return;
+      }
+      setMessage("Đã gửi lại email xác nhận. Vui lòng kiểm tra hộp thư.");
+    });
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -34,7 +53,7 @@ export function RegisterForm() {
       const { data, error: signUpError } = await supabase.auth.signUp({
         email,
         password,
-        options: { emailRedirectTo: `${window.location.origin}/login` },
+        options: { emailRedirectTo: `${window.location.origin}/onboarding` },
       });
       if (signUpError) {
         setError(signUpError.message);
@@ -52,8 +71,9 @@ export function RegisterForm() {
 
   return (
     <Card className="w-full max-w-sm">
-      <CardHeader>
-        <CardTitle>Đăng ký tài khoản</CardTitle>
+      <CardHeader className="items-center text-center">
+        <AnimatedAuthIcon icon={UserPlus} pending={isPending} />
+        <CardTitle className="text-lg">Đăng ký tài khoản</CardTitle>
         <CardDescription>Tạo tài khoản mới để bắt đầu quản lý cửa hàng.</CardDescription>
       </CardHeader>
       <CardContent>
@@ -91,13 +111,27 @@ export function RegisterForm() {
               onChange={(e) => setConfirm(e.target.value)}
             />
           </div>
-          {error ? <p className="text-sm text-destructive">{error}</p> : null}
+          {error ? (
+            <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+              {error}
+            </p>
+          ) : null}
           {message ? <p className="text-sm text-primary">{message}</p> : null}
-          <Button type="submit" className="w-full" disabled={isPending}>
-            {isPending ? "Đang tạo tài khoản..." : "Đăng ký"}
-          </Button>
+          {message ? (
+            <Button type="button" variant="outline" className="w-full" disabled={isResending} onClick={onResend}>
+              {isResending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
+              {isResending ? "Đang gửi lại..." : "Gửi lại email xác nhận"}
+            </Button>
+          ) : null}
+          {!message ? (
+            <Button type="submit" className="w-full" size="lg" disabled={isPending}>
+              {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
+              {isPending ? "Đang tạo tài khoản..." : "Đăng ký"}
+            </Button>
+          ) : null}
         </form>
-        <p className="mt-4 text-center text-sm text-muted-foreground">
+        <Separator className="my-6" />
+        <p className="text-center text-sm text-muted-foreground">
           Đã có tài khoản?{" "}
           <Link href="/login" className="text-primary underline-offset-4 hover:underline">
             Đăng nhập
