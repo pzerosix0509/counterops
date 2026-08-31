@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { CreditCard, Minus, Plus, Receipt, Search, ShoppingCart, X } from "lucide-react";
+import { CreditCard, Minus, Plus, Receipt, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils/format";
 import { useBranchRealtime } from "@/hooks/use-branch-realtime";
 import { notifyError, notifySuccess } from "@/hooks/use-notify";
 import type { OperationalSettings } from "@/lib/settings/operational";
-import type { Area, DiningTable, MenuCategory, Order, OrderItem, Product, SalesChannel } from "@/types/database";
+import type { Area, DiningTable, MenuCategory, Product, SalesChannel } from "@/types/database";
 
 interface CartItem {
   productId: string;
@@ -36,7 +36,6 @@ interface Props {
   categories: MenuCategory[];
   areas: Area[];
   tables: DiningTable[];
-  openByTable: Record<string, Order & { items: OrderItem[]; customer?: { name: string | null; phone: string | null } | null }>;
   channels: SalesChannel[];
   settings: OperationalSettings;
 }
@@ -56,7 +55,7 @@ interface OrderPayload {
 
 export function PosWorkspace(props: Props) {
   const router = useRouter();
-  const { organizationId, branchId, products, categories, areas, tables, openByTable, channels, canPay, canCreate, settings } = props;
+  const { organizationId, branchId, products, categories, areas, tables, channels, canPay, canCreate, settings } = props;
   const normalizeChannelName = (name: string) =>
     name
       .normalize("NFD")
@@ -85,7 +84,6 @@ export function PosWorkspace(props: Props) {
   const [discount, setDiscount] = useState(0);
   const [tax, setTax] = useState(0);
   const [serviceFee, setServiceFee] = useState(0);
-  const [activeOrderId, setActiveOrderId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [payOpen, setPayOpen] = useState(false);
@@ -114,8 +112,6 @@ export function PosWorkspace(props: Props) {
     onChange: () => router.refresh(),
   });
 
-  const productById = useMemo(() => new Map(products.map((product) => [product.id, product])), [products]);
-
   const filteredProducts = useMemo(() => {
     return products.filter((p) => {
       if (!p.available) return false;
@@ -138,36 +134,6 @@ export function PosWorkspace(props: Props) {
     }
     return map;
   }, [tables]);
-
-  useEffect(() => {
-    if (tableId && openByTable[tableId]) {
-      const existing = openByTable[tableId];
-      setActiveOrderId(existing.id);
-      setOrderType("dine_in");
-      setDiscount(existing.discount_amount ?? 0);
-      setTax(existing.tax_amount ?? 0);
-      setServiceFee(existing.service_fee_amount ?? 0);
-      setCustomerName(existing.customer?.name ?? "");
-      setCustomerPhone(existing.customer?.phone ?? "");
-      setCart(
-        (existing.items ?? [])
-          .filter((item) => item.product_id)
-          .map((item) => {
-            const product = productById.get(item.product_id!);
-            return {
-              productId: item.product_id!,
-              productName: item.product_name_snapshot,
-              unitPrice: item.unit_price_snapshot,
-              quantity: Number(item.quantity),
-              note: item.note ?? "",
-              productType: product?.product_type ?? "regular",
-            };
-          })
-      );
-    } else {
-      if (cart.length === 0) setActiveOrderId(null);
-    }
-  }, [tableId, openByTable, productById, cart.length]);
 
   function changeOrderType(value: "dine_in" | "takeaway") {
     setOrderType(value);
@@ -231,7 +197,6 @@ export function PosWorkspace(props: Props) {
     setDiscount(0);
     setTax(0);
     setServiceFee(0);
-    setActiveOrderId(null);
     setTableId(null);
     setCustomerName("");
     setCustomerPhone("");
@@ -274,22 +239,15 @@ export function PosWorkspace(props: Props) {
     if (!payload) return null;
 
     setError(null);
-    const result = await createOrUpdateOrder(organizationId, branchId, payload, activeOrderId);
+    const result = await createOrUpdateOrder(organizationId, branchId, payload, null);
     if (!result.ok) {
       setError(result.error.message);
-      notifyError(activeOrderId ? "Không thể cập nhật đơn" : "Không thể lưu đơn", result.error.message);
+      notifyError("Không thể lưu đơn", result.error.message);
       return null;
     }
-    setActiveOrderId(result.data.orderId);
     router.refresh();
-    if (!options.quiet) notifySuccess(activeOrderId ? "Đã cập nhật đơn" : "Đã lưu đơn");
+    if (!options.quiet) notifySuccess("Đã lưu đơn");
     return result.data.orderId;
-  }
-
-  function saveOrder() {
-    startTransition(async () => {
-      await persistOrder();
-    });
   }
 
   function openPay() {
@@ -336,8 +294,6 @@ export function PosWorkspace(props: Props) {
   const tableGroups = useMemo(() => {
     return areas.map((area) => ({ area, tables: tablesByArea.get(area.id) ?? [] }));
   }, [areas, tablesByArea]);
-  const selectedTableOrder = tableId ? openByTable[tableId] : null;
-  const isSelectedPaidOrder = selectedTableOrder?.status === "paid";
 
   return (
     <div className="grid grid-cols-1 gap-3 lg:grid-cols-[260px_1fr_320px]">
@@ -383,7 +339,6 @@ export function PosWorkspace(props: Props) {
                     <div className="grid grid-cols-3 gap-1">
                       {group.tables.map((table) => {
                         const isActive = tableId === table.id;
-                        const occupied = openByTable[table.id];
                         return (
                           <button
                             key={table.id}
@@ -404,7 +359,6 @@ export function PosWorkspace(props: Props) {
                                     ? "Đã đặt"
                                     : "Khóa"}
                             </div>
-                            {occupied ? <div className="text-[10px] text-amber-600">{occupied.order_number}</div> : null}
                           </button>
                         );
                       })}
@@ -471,7 +425,7 @@ export function PosWorkspace(props: Props) {
 
       <Card className="lg:flex lg:max-h-[calc(100vh-160px)] lg:flex-col lg:overflow-hidden">
         <CardHeader>
-          <CardTitle className="text-sm">Đơn hiện tại {isSelectedPaidOrder ? "- đã thanh toán" : activeOrderId ? "- đã lưu" : "- chưa lưu"}{" "}{realtime.isSubscribed ? <span className="ml-2 text-xs font-normal text-muted-foreground">{realtime.hasPendingChange ? "Đang đồng bộ..." : "Đã đồng bộ"}</span> : null}</CardTitle>
+          <CardTitle className="text-sm">Đơn hiện tại{realtime.isSubscribed ? <span className="ml-2 text-xs font-normal text-muted-foreground">{realtime.hasPendingChange ? "Đang đồng bộ..." : "Đã đồng bộ"}</span> : null}</CardTitle>
         </CardHeader>
         <CardContent className="flex-1 space-y-3 overflow-auto">
           <div className="grid grid-cols-2 gap-2">
@@ -568,12 +522,7 @@ export function PosWorkspace(props: Props) {
           </div>
           {error ? <p className="mt-1 text-xs text-destructive">{error}</p> : null}
           <div className="mt-3 flex flex-col gap-2">
-            {settings.allowUnpaidOrders ? (
-              <Button onClick={saveOrder} disabled={!canCreate || isPending || isSelectedPaidOrder} className="w-full">
-                <ShoppingCart className="h-4 w-4" /> {activeOrderId ? "Cập nhật đơn" : "Lưu đơn"}
-              </Button>
-            ) : null}
-            <Button onClick={openPay} disabled={!canPay || isPending || cart.length === 0 || isSelectedPaidOrder} variant="default" className="w-full">
+            <Button onClick={openPay} disabled={!canPay || isPending || cart.length === 0} variant="default" className="w-full">
               <CreditCard className="h-4 w-4" /> Thanh toán
             </Button>
           </div>

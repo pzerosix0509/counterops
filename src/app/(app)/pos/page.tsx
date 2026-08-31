@@ -1,5 +1,5 @@
 ﻿import { requireActiveContext, canCreateOrder, getActiveMembership } from "@/lib/auth/permissions";
-import { listAreas, listOpenOrdersByTable, listTables } from "@/server/queries/tables";
+import { listAreas, listTables } from "@/server/queries/tables";
 import { listProductsForPos, listSalesChannels } from "@/server/queries/orders";
 import { listCategories } from "@/server/queries/menu";
 import { getOperationalSettings } from "@/server/queries/settings";
@@ -11,12 +11,11 @@ export default async function PosPage() {
   const active = await getActiveMembership();
   if (!active) return null;
   const ctx = await requireActiveContext();
-  const [products, channels, areas, tables, openByTable, categories, settings] = await Promise.all([
+  const [products, channels, areas, tables, categories, settings] = await Promise.all([
     listProductsForPos(ctx.organizationId, ctx.branchId),
     listSalesChannels(ctx.organizationId),
     listAreas(ctx.branchId),
     listTables(ctx.branchId),
-    listOpenOrdersByTable(ctx.branchId),
     listCategories(ctx.organizationId),
     getOperationalSettings(ctx.organizationId),
   ]);
@@ -35,7 +34,6 @@ export default async function PosPage() {
         categories={categories}
         areas={areas}
         tables={tables}
-        openByTable={openByTable}
         channels={channels}
         settings={settings}
       />

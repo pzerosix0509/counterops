@@ -10,10 +10,9 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/common/states";
-import { formatVND } from "@/lib/date/ranges";
 import { createArea, createTable, updateTableStatus } from "@/server/actions/tables";
 import { cn } from "@/lib/utils/format";
-import type { Area, DiningTable, Order, TableStatus } from "@/types/database";
+import type { Area, DiningTable, TableStatus } from "@/types/database";
 
 const STATUS_LABEL: Record<TableStatus, string> = {
   available: "Trống",
@@ -42,14 +41,12 @@ export function TablesManager({
   canManage,
   areas,
   tables,
-  openByTable,
 }: {
   organizationId: string;
   branchId: string;
   canManage: boolean;
   areas: Area[];
   tables: DiningTable[];
-  openByTable: Record<string, Order>;
 }) {
   const router = useRouter();
   const [openTable, setOpenTable] = useState(false);
@@ -251,7 +248,6 @@ export function TablesManager({
               <CardContent>
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
                   {g.tables.map((t) => {
-                    const open = openByTable[t.id];
                     const derivedStatus: TableStatus = statusOverrides[t.id] ?? t.status;
                     return (
                       <div
@@ -268,11 +264,6 @@ export function TablesManager({
                         <p className="mt-1 text-xs text-muted-foreground">
                           <Users className="mr-1 inline h-3 w-3" /> {t.seats} ghế
                         </p>
-                        {open ? (
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            Đơn: {open.order_number} • {formatVND(open.total_amount)}
-                          </p>
-                        ) : null}
                         {canManage ? (
                           <Select
                             value={derivedStatus}
