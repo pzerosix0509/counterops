@@ -5,15 +5,9 @@ import fontkit from "@pdf-lib/fontkit";
 import type { DocumentData } from "../types";
 import { FONTS } from "./fonts";
 
-const ASSET_DIR = path.join(process.cwd(), "src", "assets");
+import { TEMPLATE_FILES } from "./templates";
 
-export const TEMPLATE_FILES: Record<string, string> = {
-  "01-tb-ddkd": "01.TB-DDKD.pdf",
-  "01-tkn-cnkd": "01.TKN-CNKD.pdf",
-  "01-cnkd": "01.CNKD.pdf",
-  "02-cnkd-tncn-qtt": "02.CNKD-TNCN-QTT.pdf",
-  "01-bk-stk": "01.BK-STK.pdf",
-};
+const ASSET_DIR = path.join(process.cwd(), "src", "assets");
 
 export interface TextField {
   page: number;
@@ -155,6 +149,14 @@ function buildSpecs(documentId: string): FillSpec {
 
 let serifBytes: Buffer | null = null;
 
+/** Path to the embedded serif font. Read once and cached. */
+const SERIF_FONT_PATH = FONTS.serif;
+
+function getSerifBytes(): Buffer {
+  if (!serifBytes) serifBytes = fs.readFileSync(SERIF_FONT_PATH);
+  return serifBytes;
+}
+
 export function templatePdfExists(documentId: string): boolean {
   const file = TEMPLATE_FILES[documentId];
   if (!file) return false;
@@ -168,11 +170,9 @@ export async function fillTemplatePdf(documentId: string, data: DocumentData): P
   const templatePath = path.join(ASSET_DIR, file);
   if (!fs.existsSync(templatePath)) throw new Error(`Không tìm thấy file mẫu: ${file}`);
 
-  if (!serifBytes) serifBytes = fs.readFileSync(FONTS.serif);
-
   const pdf = await PDFDocument.load(fs.readFileSync(templatePath), { ignoreEncryption: true });
   pdf.registerFontkit(fontkit);
-  const font = await pdf.embedFont(serifBytes);
+  const font = await pdf.embedFont(getSerifBytes());
 
   const spec = buildSpecs(documentId);
 
