@@ -31,8 +31,11 @@ export async function updateSession(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   const isAuthRoute = pathname.startsWith("/login") || pathname.startsWith("/onboarding") || pathname.startsWith("/access-error") || pathname.startsWith("/auth");
   const isPublic = pathname === "/" || isAuthRoute;
+  const isApiRoute = pathname.startsWith("/api/");
 
-  if (!user && !isPublic) {
+  // API routes: để route handler tự kiểm tra quyền và trả JSON 401/403.
+  // Không redirect — browser sẽ nhận HTML trang login và JSON.parse nổ tung.
+  if (!user && !isApiRoute && !isPublic) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("next", pathname);
     return NextResponse.redirect(loginUrl);

@@ -433,6 +433,11 @@ export function AiAssistant({
       }),
     })
       .then(async (res) => {
+        // Bắt redirect sang /login (khi session hết hạn) trước khi cố parse JSON/stream
+        const contentType = res.headers.get("Content-Type") ?? "";
+        if (res.redirected || (!contentType.includes("application/x-ndjson") && !contentType.includes("application/json"))) {
+          throw new Error("Phiên đăng nhập đã hết hạn. Vui lòng tải lại trang và đăng nhập lại.");
+        }
         if (!res.ok) {
           const payload = await res.json().catch(() => null);
           throw new Error(payload?.error ?? "Không thể hỏi AI.");
