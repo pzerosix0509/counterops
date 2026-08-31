@@ -26,6 +26,7 @@ export default async function KitchenPage() {
         canUpdate={canUpdateKitchen.includes(active.role)}
         soundEnabled={settings.kitchenSoundEnabled}
         autoMarkServedOnReady={settings.autoMarkServedOnReady}
+        showRegularItems={settings.showRegularItemsInKitchen}
       />
     </div>
   );

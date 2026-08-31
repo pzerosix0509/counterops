@@ -4,6 +4,7 @@ import {
   computeRecipeCost,
   computeBomCost,
   expectedNetProfit,
+  buildInventoryDeleteConflictMessage,
 } from "@/lib/calculations/inventory";
 
 describe("inventory calculations", () => {
@@ -35,5 +36,12 @@ describe("inventory calculations", () => {
   it("computes expected net profit", () => {
     expect(expectedNetProfit(30000, 12000)).toBe(18000);
     expect(expectedNetProfit(0, 5000)).toBe(-5000);
+  });
+
+  it("builds delete conflict message with affected prepared products", () => {
+    expect(buildInventoryDeleteConflictMessage([])).toContain("Gỡ khỏi công thức");
+    expect(buildInventoryDeleteConflictMessage(["Cà phê sữa", "Trà đào"])).toContain("• Cà phê sữa");
+    expect(buildInventoryDeleteConflictMessage(["Cà phê sữa", "Trà đào"])).toContain("• Trà đào");
+    expect(buildInventoryDeleteConflictMessage(Array.from({ length: 8 }, (_, i) => `Món ${i + 1}`))).toContain("2 món khác");
   });
 });
