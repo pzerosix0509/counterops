@@ -19,6 +19,7 @@ Store operations platform for cafes and restaurants. Covers sales, kitchen, tabl
 - End-of-day reports and dashboard with channel/category breakdowns
 - Excel import/export for menu and inventory
 - AI assistant with hybrid RAG, intent planner, streaming, circuit breaker, dashboard builder, and telemetry
+- **Grab Integration (Mock Mode)** — Demo mode for capstone project; simulates GrabFood order flow without real API calls
 
 ## Setup
 

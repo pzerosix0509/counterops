@@ -267,6 +267,8 @@ export interface Order {
   closed_at: string | null;
   cancelled_by: string | null;
   cancellation_reason: string | null;
+  grab_external_id: string | null;
+  grab_sync_status: "none" | "pending" | "accepted" | "rejected" | "synced" | "cancelled";
 }
 export interface OrderItem {
   id: string;
@@ -295,6 +297,26 @@ export interface Payment {
   paid_at: string;
   received_by: string | null;
   transaction_ref: string | null;
+}
+export interface GrabStoreConfig {
+  id: string;
+  organization_id: string;
+  branch_id: string;
+  is_online: boolean;
+  merchant_id: string | null;
+  last_menu_sync_at: string | null;
+  last_order_sync_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+export interface GrabSyncEvent {
+  id: string;
+  organization_id: string;
+  branch_id: string;
+  order_id: string | null;
+  event_type: "order_received" | "order_accepted" | "order_rejected" | "order_cancelled" | "status_updated" | "menu_synced" | "error";
+  payload: Json;
+  created_at: string;
 }
 export interface EndOfDayReport {
   id: string;

@@ -5,6 +5,7 @@ import { listSalesChannels } from "@/server/queries/orders";
 import { getOperationalSettings } from "@/server/queries/settings";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { OperationalSettingsForm } from "@/components/settings/operational-settings-form";
+import { GrabMockPanel } from "@/components/integrations/grab/grab-mock-panel";
 
 export const metadata = { title: "Cài đặt" };
 
@@ -21,6 +22,11 @@ export default async function SettingsPage() {
     listSalesChannels(ctx.organizationId, { includeInactive: true }),
     getOperationalSettings(ctx.organizationId),
   ]);
+
+  // Get Grab sales channel ID
+  const grabChannel = channels.find((c) => c.name === "Grab (Mock)");
+  const grabSalesChannelId = grabChannel?.id || "";
+
   return (
     <div className="space-y-4">
       <div>
@@ -57,6 +63,11 @@ export default async function SettingsPage() {
         allowNegativeInventory={active.organization.allow_negative_inventory ?? false}
         settings={settings}
         channels={channels}
+      />
+      <GrabMockPanel
+        organizationId={ctx.organizationId}
+        branchId={ctx.branchId}
+        salesChannelId={grabSalesChannelId}
       />
     </div>
   );
