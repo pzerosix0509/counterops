@@ -497,7 +497,16 @@ export function MenuManager({
           {filtered.length === 0 ? (
             <EmptyState title="Chưa có món nào" description="Tạo món hoặc đổi filter nhóm." />
           ) : (
-            <Table className="table-fixed">
+            <Table className="table-fixed min-w-[960px]">
+              <colgroup>
+                <col style={{ width: "22%" }} />
+                <col style={{ width: "13%" }} />
+                <col style={{ width: "13%" }} />
+                <col style={{ width: "13%" }} />
+                <col style={{ width: "13%" }} />
+                <col style={{ width: "13%" }} />
+                <col style={{ width: "13%" }} />
+              </colgroup>
               <TableHeader>
                 <TableRow>
                   <TableHead>Tên món</TableHead>
@@ -506,6 +515,7 @@ export function MenuManager({
                   <TableHead className="text-right">Giá vốn</TableHead>
                   <TableHead className="text-right">Giá bán</TableHead>
                   <TableHead className="text-center">Trạng thái</TableHead>
+                  <TableHead>Thao tác</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -536,32 +546,35 @@ export function MenuManager({
                       <TableCell className="text-right">{formatVND(p.cost_price)}</TableCell>
                       <TableCell className="text-right font-medium">{formatVND(p.sale_price)}</TableCell>
                       <TableCell className="text-center">
-                        <div className="flex items-center justify-center gap-1">
-                          {canManage ? (
-                            <>
-                              <Button size="sm" variant="ghost" onClick={() => openEdit(p)} aria-label="Sửa món">
-                                <Pencil className="h-3.5 w-3.5" />
-                              </Button>
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                onClick={() => setRecipeProduct(p)}
-                              >
-                                <ChefHat className="h-3.5 w-3.5" /> Công thức
-                              </Button>
-                              <button
-                                type="button"
-                                title={p.is_active ? "Bấm để ngừng bán" : "Bấm để bật bán"}
-                                onClick={() => onToggleActive(p.id, p.is_active)}
-                              >
-                                <Badge variant={p.is_active ? "success" : "outline"}>{p.is_active ? "Đang bán" : "Ngừng bán"}</Badge>
-                              </button>
-                            </>
-                          ) : (
+                        {canManage ? (
+                          <button
+                            type="button"
+                            title={p.is_active ? "Bấm để ngừng bán" : "Bấm để bật bán"}
+                            onClick={() => onToggleActive(p.id, p.is_active)}
+                            className="inline-flex"
+                          >
                             <Badge variant={p.is_active ? "success" : "outline"}>{p.is_active ? "Đang bán" : "Ngừng bán"}</Badge>
-                          )}
-                        </div>
+                          </button>
+                        ) : (
+                          <Badge variant={p.is_active ? "success" : "outline"}>{p.is_active ? "Đang bán" : "Ngừng bán"}</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {canManage ? (
+                          <div className="flex w-full items-center justify-between gap-1">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setRecipeProduct(p)}
+                            >
+                              <ChefHat className="h-3.5 w-3.5" /> Công thức
+                            </Button>
+                            <Button size="sm" variant="ghost" onClick={() => openEdit(p)} aria-label="Sửa món">
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        ) : null}
                       </TableCell>
                     </TableRow>
                   );
