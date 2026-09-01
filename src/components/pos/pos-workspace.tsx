@@ -64,16 +64,11 @@ export function PosWorkspace(props: Props) {
       .replace(/Đ/g, "d")
       .toLowerCase()
       .trim();
-  const isSystemChannel = (channel: SalesChannel) =>
-    ["tai quan", "mang di", "online"].includes(normalizeChannelName(channel.name));
   const isDineInChannel = (channel: SalesChannel) => normalizeChannelName(channel.name) === "tai quan";
-  const takeawayChannels = channels.filter((channel) => !isSystemChannel(channel));
+  const isTakeawayChannel = (channel: SalesChannel) => normalizeChannelName(channel.name) === "mang di";
   const findChannelForOrderType = (type: "dine_in" | "takeaway") => {
     if (type === "dine_in") return channels.find(isDineInChannel)?.id ?? null;
-    if (settings.defaultTakeawayChannelId && takeawayChannels.some((channel) => channel.id === settings.defaultTakeawayChannelId)) {
-      return settings.defaultTakeawayChannelId;
-    }
-    return takeawayChannels[0]?.id ?? null;
+    return channels.find(isTakeawayChannel)?.id ?? null;
   };
   const [orderType, setOrderType] = useState<"dine_in" | "takeaway">(settings.defaultOrderType);
   const [tableId, setTableId] = useState<string | null>(null);
@@ -309,27 +304,6 @@ export function PosWorkspace(props: Props) {
               <TabsTrigger value="takeaway">Mang đi</TabsTrigger>
             </TabsList>
           </Tabs>
-
-          {orderType === "takeaway" ? (
-            <div className="space-y-1">
-              <label className="text-xs font-medium">Kênh bán</label>
-              <Select value={channelId ?? ""} onValueChange={setChannelId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="GrabFood, ShopeeFood..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {takeawayChannels.map((channel) => (
-                    <SelectItem key={channel.id} value={channel.id}>
-                      {channel.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {takeawayChannels.length === 0 ? (
-                <p className="text-xs text-muted-foreground">Chưa có kênh mang đi. Hãy thêm GrabFood, ShopeeFood... trong dữ liệu kênh bán.</p>
-              ) : null}
-            </div>
-          ) : null}
 
           {orderType === "dine_in" ? (
             <div className="space-y-2">
