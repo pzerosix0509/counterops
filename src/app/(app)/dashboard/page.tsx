@@ -8,6 +8,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { DashboardCharts } from "@/components/dashboard/dashboard-charts-lazy";
+import { AutoStartTutorial } from "@/components/tutorial/auto-start-tutorial";
 
 interface PageProps {
   searchParams: { range?: string; from?: string; to?: string };
@@ -56,6 +57,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
 
   return (
     <div className="space-y-6">
+      <AutoStartTutorial />
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Tổng quan</h1>
@@ -77,7 +79,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
         </TabsList>
       </Tabs>
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-8">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-8" data-tutorial-id="tutorial-dashboard-kpis">
         {cards.map((c) => {
           const Icon = c.icon;
           return (

@@ -5,6 +5,7 @@ import { listSalesChannels } from "@/server/queries/orders";
 import { getOperationalSettings } from "@/server/queries/settings";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { OperationalSettingsForm } from "@/components/settings/operational-settings-form";
+import { ReplayTutorialCard } from "@/components/tutorial/replay-tutorial-card";
 
 export const metadata = { title: "Cài đặt" };
 
@@ -58,6 +59,7 @@ export default async function SettingsPage() {
         settings={settings}
         channels={channels}
       />
+      <ReplayTutorialCard />
     </div>
   );
 }

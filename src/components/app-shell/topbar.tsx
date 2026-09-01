@@ -52,16 +52,18 @@ export function Topbar({ userEmail, userName, organizationName, branches, curren
         <Store className="h-4 w-4 text-muted-foreground" />
         <span className="font-semibold">{organizationName}</span>
         {branches.length > 0 ? (
-          <Select value={currentBranchId ?? branches[0].id} onValueChange={onBranchChange}>
-            <SelectTrigger className="ml-2 h-8 w-48 text-xs">
-              <SelectValue placeholder="Chọn chi nhánh" />
-            </SelectTrigger>
-            <SelectContent>
-              {branches.map((b) => (
-                <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div data-tutorial-id="tutorial-branch-selector">
+            <Select value={currentBranchId ?? branches[0].id} onValueChange={onBranchChange}>
+              <SelectTrigger className="ml-2 h-8 w-48 text-xs">
+                <SelectValue placeholder="Chọn chi nhánh" />
+              </SelectTrigger>
+              <SelectContent>
+                {branches.map((b) => (
+                  <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         ) : null}
         <span className="ml-2 hidden rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground md:inline">
           {ROLE_LABEL[role]}

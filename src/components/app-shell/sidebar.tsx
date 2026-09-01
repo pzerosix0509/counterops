@@ -41,7 +41,7 @@ export function Sidebar({ role, organizationName }: { role: MembershipRole; orga
   const items = ITEMS.filter((it) => it.allowed.includes(role));
   return (
     <aside className="fixed inset-y-0 left-0 z-40 hidden w-[240px] border-r bg-background md:flex md:flex-col">
-      <div className="flex h-14 items-center border-b px-4">
+      <div className="flex h-14 items-center border-b px-4" data-tutorial-id="tutorial-sidebar">
         <Link href="/dashboard" className="flex items-center gap-2 text-sm font-semibold">
           <Sparkles className="h-4 w-4 text-primary" />
           <span>Quản lý cửa hàng</span>
