@@ -169,7 +169,10 @@ export async function requireRole(organizationId: string, allowed: MembershipRol
 
 export const canManageMenu: MembershipRole[] = ["owner", "admin", "manager"];
 export const canManageInventory: MembershipRole[] = ["owner", "admin", "manager"];
-export const canManageTables: MembershipRole[] = ["owner", "admin", "manager", "cashier", "reception"];
+// Roles allowed to add/edit/delete rooms, areas and tables (structure).
+export const canManageTablesStructure: MembershipRole[] = ["owner", "admin", "manager"];
+// Roles allowed to change a table's status only (not structure).
+export const canUpdateTableStatus: MembershipRole[] = ["owner", "admin", "manager", "cashier", "reception", "staff"];
 export const canCreateOrder: MembershipRole[] = ["owner", "admin", "manager", "cashier", "reception"];
 export const canPayOrder: MembershipRole[] = ["owner", "admin", "manager", "cashier"];
 export const canUpdateKitchen: MembershipRole[] = ["owner", "admin", "manager", "kitchen"];

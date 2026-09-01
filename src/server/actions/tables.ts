@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { actionFail, actionOk, type ActionResult } from "@/lib/utils/action-result";
-import { canManageTables, requireRole } from "@/lib/auth/permissions";
+import { canManageTablesStructure, canUpdateTableStatus, requireRole } from "@/lib/auth/permissions";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { canFreeTable } from "@/lib/calculations/tables";
 
@@ -21,7 +21,7 @@ const tableStatusSchema = z.object({
 });
 
 export async function createArea(organizationId: string, branchId: string, input: z.infer<typeof areaSchema>): Promise<ActionResult<{ id: string }>> {
-  const m = await requireRole(organizationId, canManageTables);
+  const m = await requireRole(organizationId, canManageTablesStructure);
   const parsed = areaSchema.safeParse(input);
   if (!parsed.success) return actionFail("VALIDATION_ERROR", "Tên khu vực không hợp lệ");
   const admin = createSupabaseAdminClient();
@@ -36,7 +36,7 @@ export async function createArea(organizationId: string, branchId: string, input
 }
 
 export async function createTable(organizationId: string, input: unknown): Promise<ActionResult<{ id: string }>> {
-  const m = await requireRole(organizationId, canManageTables);
+  const m = await requireRole(organizationId, canManageTablesStructure);
   const parsed = tableSchema.safeParse(input);
   if (!parsed.success) return actionFail("VALIDATION_ERROR", "Thiếu thông tin bàn");
   const admin = createSupabaseAdminClient();
@@ -65,7 +65,7 @@ export async function createTable(organizationId: string, input: unknown): Promi
 }
 
 export async function updateTableStatus(organizationId: string, input: z.infer<typeof tableStatusSchema>): Promise<ActionResult<{ id: string; status: string }>> {
-  const m = await requireRole(organizationId, canManageTables);
+  const m = await requireRole(organizationId, canUpdateTableStatus);
   const parsed = tableStatusSchema.safeParse(input);
   if (!parsed.success) return actionFail("VALIDATION_ERROR", "Trạng thái không hợp lệ");
   const admin = createSupabaseAdminClient();

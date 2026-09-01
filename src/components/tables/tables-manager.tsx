@@ -38,13 +38,15 @@ const STATUS_TONE: Record<TableStatus, string> = {
 export function TablesManager({
   organizationId,
   branchId,
-  canManage,
+  canManageStructure,
+  canUpdateStatus,
   areas,
   tables,
 }: {
   organizationId: string;
   branchId: string;
-  canManage: boolean;
+  canManageStructure: boolean;
+  canUpdateStatus: boolean;
   areas: Area[];
   tables: DiningTable[];
 }) {
@@ -169,7 +171,7 @@ export function TablesManager({
             </Button>
           ))}
         </div>
-        {canManage ? (
+        {canManageStructure ? (
           <div className="flex items-center gap-2">
             <Dialog open={openArea} onOpenChange={setOpenArea}>
               <DialogTrigger asChild>
@@ -264,7 +266,7 @@ export function TablesManager({
                         <p className="mt-1 text-xs text-muted-foreground">
                           <Users className="mr-1 inline h-3 w-3" /> {t.seats} ghế
                         </p>
-                        {canManage ? (
+                        {canUpdateStatus ? (
                           <Select
                             value={derivedStatus}
                             onValueChange={(v) => onStatusChange(t.id, v as TableStatus)}
