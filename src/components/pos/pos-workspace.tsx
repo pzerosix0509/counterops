@@ -267,6 +267,11 @@ export function PosWorkspace(props: Props) {
         notifyError("Bàn đã có người", "Chọn đơn đang mở trên bàn hoặc chọn bàn trống.");
         return;
       }
+      if (targetTable?.status === "disabled") {
+        setError("Bàn đã bị khóa, không thể tạo đơn mới trên bàn này.");
+        notifyError("Bàn đã bị khóa", "Chọn đơn đang mở trên bàn hoặc chọn bàn trống.");
+        return;
+      }
 
       const orderId = await persistOrder({ quiet: true });
       if (!orderId) return;
