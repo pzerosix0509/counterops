@@ -80,9 +80,6 @@ export async function createOrganizationWithFirstBranch(
   const defaultChannels = [
     { organization_id: org.id, name: "Tại quán", type: "direct" },
     { organization_id: org.id, name: "Mang đi", type: "direct" },
-    { organization_id: org.id, name: "GrabFood", type: "delivery" },
-    { organization_id: org.id, name: "ShopeeFood", type: "delivery" },
-    { organization_id: org.id, name: "BeFood", type: "delivery" },
     { organization_id: org.id, name: "Online", type: "online" },
   ];
   await supabase.from("sales_channels").insert(defaultChannels);
