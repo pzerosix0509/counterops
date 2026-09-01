@@ -27,7 +27,7 @@ const ITEMS: NavItem[] = [
   { href: "/dashboard", label: "Tổng quan", icon: LayoutDashboard, allowed: ["owner", "admin", "manager", "cashier"] },
   { href: "/pos", label: "Bán hàng", icon: ShoppingCart, allowed: ["owner", "admin", "manager", "cashier", "reception"] },
   { href: "/kitchen", label: "Bếp", icon: ChefHat, allowed: ["owner", "admin", "manager", "kitchen"] },
-  { href: "/tables", label: "Bàn / phòng", icon: Table2, allowed: ["owner", "admin", "manager", "cashier", "reception"] },
+  { href: "/tables", label: "Bàn / phòng", icon: Table2, allowed: ["owner", "admin", "manager", "cashier", "reception", "staff"] },
   { href: "/menu", label: "Thực đơn", icon: UtensilsCrossed, allowed: ["owner", "admin", "manager", "cashier", "reception", "kitchen"] },
   { href: "/inventory", label: "Kho hàng", icon: Boxes, allowed: ["owner", "admin", "manager", "cashier"] },
   { href: "/analytics", label: "Phân tích", icon: Sparkles, allowed: ["owner", "admin", "manager", "cashier"] },
