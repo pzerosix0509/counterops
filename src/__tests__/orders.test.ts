@@ -1,6 +1,8 @@
 ﻿import { describe, it, expect } from "vitest";
 import {
   calculateSubtotal,
+  calculateDiscountAmount,
+  calculatePercentageAmount,
   calculateCostOfGoods,
   calculateProfitTotals,
   calculateTotals,
@@ -31,6 +33,15 @@ describe("order calculations", () => {
     );
     expect(totals.subtotal).toBe(70000);
     expect(totals.totalAmount).toBe(70000 - 5000 + 3000 + 2000);
+  });
+
+  it("calculates discount as a percentage of the subtotal", () => {
+    expect(calculateDiscountAmount(70000, 10)).toBe(7000);
+    expect(calculateDiscountAmount(70000, 150)).toBe(70000);
+  });
+
+  it("calculates tax as a percentage of the subtotal", () => {
+    expect(calculatePercentageAmount(70000, 8)).toBe(5600);
   });
 
   it("calculates cost of goods from line cost snapshots", () => {

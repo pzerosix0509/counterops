@@ -11,6 +11,7 @@ import { Input, Textarea } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { createOrUpdateOrder, payOrder } from "@/server/actions/orders";
+import { calculateDiscountAmount, calculatePercentageAmount } from "@/lib/calculations/orders";
 import { formatVND } from "@/lib/date/ranges";
 import { cn } from "@/lib/utils/format";
 import { useBranchRealtime } from "@/hooks/use-branch-realtime";
@@ -53,6 +54,14 @@ interface OrderPayload {
   serviceFeeAmount: number;
 }
 
+function normalizeNumberInput(value: string): string {
+  return value.replace(/^0+(?=\d)/, "");
+}
+
+function numberInputValue(value: string): number {
+  return Number(value) || 0;
+}
+
 export function PosWorkspace(props: Props) {
   const router = useRouter();
   const { organizationId, branchId, products, categories, areas, tables, channels, canPay, canCreate, settings } = props;
@@ -81,9 +90,9 @@ export function PosWorkspace(props: Props) {
   const [activeCategory, setActiveCategory] = useState<string>("all");
   const [search, setSearch] = useState("");
   const [cart, setCart] = useState<CartItem[]>([]);
-  const [discount, setDiscount] = useState(0);
-  const [tax, setTax] = useState(0);
-  const [serviceFee, setServiceFee] = useState(0);
+  const [discount, setDiscount] = useState("0");
+  const [tax, setTax] = useState("0");
+  const [serviceFee, setServiceFee] = useState("0");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [payOpen, setPayOpen] = useState(false);
@@ -123,7 +132,12 @@ export function PosWorkspace(props: Props) {
   }, [products, activeCategory, search]);
 
   const subtotal = cart.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
-  const total = Math.max(0, subtotal - discount + tax + serviceFee);
+  const discountPercent = numberInputValue(discount);
+  const discountAmount = calculateDiscountAmount(subtotal, discountPercent);
+  const taxPercent = numberInputValue(tax);
+  const taxAmount = calculatePercentageAmount(subtotal, taxPercent);
+  const serviceFeeAmount = numberInputValue(serviceFee);
+  const total = Math.max(0, subtotal - discountAmount + taxAmount + serviceFeeAmount);
 
   const tablesByArea = useMemo(() => {
     const map = new Map<string | null, DiningTable[]>();
@@ -194,9 +208,9 @@ export function PosWorkspace(props: Props) {
 
   function openNewOrder() {
     setCart([]);
-    setDiscount(0);
-    setTax(0);
-    setServiceFee(0);
+    setDiscount("0");
+    setTax("0");
+    setServiceFee("0");
     setTableId(null);
     setCustomerName("");
     setCustomerPhone("");
@@ -223,9 +237,9 @@ export function PosWorkspace(props: Props) {
       customerName: customerName.trim() || null,
       customerPhone: customerPhone.trim() || null,
       items: cart.map((item) => ({ productId: item.productId, quantity: item.quantity, note: item.note || null })),
-      discountAmount: discount,
-      taxAmount: tax,
-      serviceFeeAmount: serviceFee,
+      discountAmount,
+      taxAmount,
+      serviceFeeAmount,
     };
   }
 
@@ -489,26 +503,44 @@ export function PosWorkspace(props: Props) {
         <div className="border-t p-3 text-sm">
           <div className="grid grid-cols-3 gap-2">
             <div>
-              <label className="text-xs text-muted-foreground">Giảm giá</label>
+              <label className="text-xs text-muted-foreground">Giảm giá (%)</label>
               <Input
                 type="number"
                 min="0"
                 value={discount}
+                max={settings.maxDiscountPercent}
                 disabled={!settings.discountsEnabled}
                 onChange={(event) => {
-                  const raw = Math.max(0, Number(event.target.value) || 0);
-                  const maxDiscount = Math.round(subtotal * (settings.maxDiscountPercent / 100));
-                  setDiscount(Math.min(raw, maxDiscount));
+                  const normalized = normalizeNumberInput(event.target.value);
+                  if (!normalized) {
+                    setDiscount("");
+                    return;
+                  }
+                  const raw = numberInputValue(normalized);
+                  setDiscount(String(Math.min(Math.max(0, raw), settings.maxDiscountPercent)));
                 }}
               />
             </div>
             <div>
-              <label className="text-xs text-muted-foreground">Thuế</label>
-              <Input type="number" min="0" value={tax} onChange={(event) => setTax(Math.max(0, Number(event.target.value) || 0))} />
+              <label className="text-xs text-muted-foreground">Thuế (%)</label>
+              <Input
+                type="number"
+                min="0"
+                max="100"
+                value={tax}
+                onChange={(event) => {
+                  const normalized = normalizeNumberInput(event.target.value);
+                  if (!normalized) {
+                    setTax("");
+                    return;
+                  }
+                  setTax(String(Math.min(100, numberInputValue(normalized))));
+                }}
+              />
             </div>
             <div>
               <label className="text-xs text-muted-foreground">Phí DV</label>
-              <Input type="number" min="0" value={serviceFee} onChange={(event) => setServiceFee(Math.max(0, Number(event.target.value) || 0))} />
+              <Input type="number" min="0" value={serviceFee} onChange={(event) => setServiceFee(normalizeNumberInput(event.target.value))} />
             </div>
           </div>
           <div className="mt-2 space-y-1">

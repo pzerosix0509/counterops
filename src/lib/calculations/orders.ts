@@ -33,6 +33,15 @@ export function calculateSubtotal(items: OrderItemInput[]): number {
   return items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
 }
 
+export function calculatePercentageAmount(subtotal: number, percentValue: number): number {
+  const percent = Math.min(100, Math.max(0, percentValue));
+  return Math.round(Math.max(0, subtotal) * (percent / 100));
+}
+
+export function calculateDiscountAmount(subtotal: number, discountPercent: number): number {
+  return calculatePercentageAmount(subtotal, discountPercent);
+}
+
 export function calculateCostOfGoods(items: Pick<OrderItemInput, "costPrice" | "quantity">[]): number {
   return Math.round(items.reduce((sum, item) => sum + item.costPrice * item.quantity, 0));
 }
