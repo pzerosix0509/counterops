@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Hourglass } from "lucide-react";
+import { Check, CheckCheck, Hourglass } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -41,6 +41,7 @@ export function KitchenBoard({
   const [tab, setTab] = useState<KitchenTab>("pending");
   const [error, setError] = useState<string | null>(null);
   const [optimisticIds, setOptimisticIds] = useState<Record<string, "ready" | "served">>({});
+  const [isBulkUpdating, setIsBulkUpdating] = useState(false);
   const seenItemIdsRef = useRef<Set<string> | null>(null);
 
   useEffect(() => {
@@ -151,18 +152,44 @@ export function KitchenBoard({
     });
   }
 
+  async function markAllItems(items: KitchenItemType[], status: "ready" | "served") {
+    if (!canUpdate || isBulkUpdating || items.length === 0) return;
+    const itemIds = items.map((it) => it.item.id);
+    setError(null);
+    setIsBulkUpdating(true);
+    setOptimisticIds((prev) => itemIds.reduce((next, id) => ({ ...next, [id]: status }), { ...prev }));
+    if (status === "ready") setTab("ready");
+
+    const results = await Promise.all(itemIds.map((itemId) => updateKitchenStatus(organizationId, itemId, { status })));
+    const failedIds = itemIds.filter((_, index) => !results[index]?.ok);
+    if (failedIds.length > 0) {
+      setOptimisticIds((prev) => {
+        const next = { ...prev };
+        for (const id of failedIds) delete next[id];
+        return next;
+      });
+      const message = `${failedIds.length}/${itemIds.length} món chưa thể cập nhật trạng thái.`;
+      setError(message);
+      notifyError("Không thể cập nhật tất cả món", message);
+    }
+    setIsBulkUpdating(false);
+    router.refresh();
+  }
+
   return (
     <div className="space-y-3">
-      <Tabs value={tab} onValueChange={(v) => setTab(v as KitchenTab)}>
-        <TabsList>
-          <TabsTrigger value="pending">
-            <Hourglass className="h-3.5 w-3.5" /> Chờ chế biến
-          </TabsTrigger>
-          <TabsTrigger value="ready">
-            <Check className="h-3.5 w-3.5" /> Sẵn sàng
-          </TabsTrigger>
-        </TabsList>
-      </Tabs>
+      <div className="flex flex-wrap items-center gap-2">
+        <Tabs value={tab} onValueChange={(v) => setTab(v as KitchenTab)}>
+          <TabsList>
+            <TabsTrigger value="pending">
+              <Hourglass className="h-3.5 w-3.5" /> Chờ chế biến
+            </TabsTrigger>
+            <TabsTrigger value="ready">
+              <Check className="h-3.5 w-3.5" /> Sẵn sàng
+            </TabsTrigger>
+            </TabsList>
+        </Tabs>
+      </div>
 
       {error ? <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p> : null}
       {realtime.isSubscribed && realtime.hasPendingChange ? <p className="text-xs text-muted-foreground">Đang đồng bộ...</p> : null}
@@ -218,6 +245,29 @@ export function KitchenBoard({
                   </div>
                 );
                 })}
+                {canUpdate ? (() => {
+                  const bulkItems = g.items.filter((it) =>
+                    tab === "pending"
+                      ? it.item.kitchen_status === "pending" || it.item.kitchen_status === "cooking"
+                      : it.item.kitchen_status === "ready"
+                  );
+                  if (bulkItems.length === 0) return null;
+                  const targetStatus = tab === "pending"
+                    ? (autoMarkServedOnReady ? "served" : "ready")
+                    : "served";
+                  return (
+                    <div className="flex justify-end pt-1">
+                      <Button size="sm" disabled={isBulkUpdating} onClick={() => markAllItems(bulkItems, targetStatus)}>
+                        <CheckCheck className="h-3.5 w-3.5" />
+                        {isBulkUpdating
+                          ? "Đang cập nhật..."
+                          : tab === "pending"
+                            ? `Sẵn sàng tất cả (${bulkItems.length})`
+                            : `Đã phục vụ tất cả (${bulkItems.length})`}
+                      </Button>
+                    </div>
+                  );
+                })() : null}
               </CardContent>
             </Card>
           ))}
