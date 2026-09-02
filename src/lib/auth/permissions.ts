@@ -169,10 +169,10 @@ export async function requireRole(organizationId: string, allowed: MembershipRol
 
 export const canManageMenu: MembershipRole[] = ["owner", "admin", "manager"];
 export const canManageInventory: MembershipRole[] = ["owner", "admin", "manager"];
-export const canManageTables: MembershipRole[] = ["owner", "admin", "manager", "cashier", "reception"];
-export const canCreateOrder: MembershipRole[] = ["owner", "admin", "manager", "cashier", "reception"];
-export const canPayOrder: MembershipRole[] = ["owner", "admin", "manager", "cashier"];
+export const canManageTables: MembershipRole[] = ["owner", "admin", "manager", "cashier", "reception", "staff"];
+export const canCreateOrder: MembershipRole[] = ["owner", "admin", "manager", "cashier", "reception", "staff"];
+export const canPayOrder: MembershipRole[] = ["owner", "admin", "manager", "cashier", "staff"];
 export const canUpdateKitchen: MembershipRole[] = ["owner", "admin", "manager", "kitchen"];
-export const canViewReports: MembershipRole[] = ["owner", "admin", "manager", "cashier"];
+export const canViewReports: MembershipRole[] = ["owner", "admin", "manager"];
 export const canGenerateEod: MembershipRole[] = ["owner", "admin", "manager"];
 export const canRefreshAnalytics: MembershipRole[] = ["owner", "admin", "manager"];

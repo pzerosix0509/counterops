@@ -1,8 +1,6 @@
-import Link from "next/link";
 import { Users } from "lucide-react";
 import { requireActiveContext } from "@/lib/auth/permissions";
 import { listEmployees } from "@/server/actions/employees";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmployeeManagement } from "@/components/employees/employee-management";
 import { createSupabaseServerClient } from "@/lib/supabase/server";

@@ -37,3 +37,4 @@ dev.log
 next-env.d.ts
 
 .env.local.tuananh
+/eval-results

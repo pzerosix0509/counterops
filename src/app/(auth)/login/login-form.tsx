@@ -1,6 +1,5 @@
-﻿"use client";
+"use client";
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Loader2, LogIn, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -12,7 +11,6 @@ import { AnimatedAuthIcon } from "@/components/common/animated-auth-icon-lazy";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 export function LoginForm({ nextPath }: { nextPath: string }) {
-  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -23,13 +21,23 @@ export function LoginForm({ nextPath }: { nextPath: string }) {
     e.preventDefault();
     setError(null);
     startTransition(async () => {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) {
-        setError(error.message);
+      // Step 1: Authenticate with Supabase (sets session cookie in browser)
+      const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
+      if (authError) {
+        setError(authError.message);
         return;
       }
-      router.replace(nextPath);
-      router.refresh();
+
+      // Step 2: Full navigation to /auth/callback-redirect so the SERVER can
+      // read the fresh session cookie and perform the correct RBAC redirect.
+      // We use window.location.replace to avoid a stale React router state
+      // that would trigger the "fetch failed" undici error when the server
+      // action tries to read cookies before the Next.js router has refreshed.
+      const destination = nextPath && nextPath !== "/" && nextPath !== "/dashboard"
+        ? nextPath
+        : "/auth/session-redirect";
+
+      window.location.replace(destination);
     });
   }
 

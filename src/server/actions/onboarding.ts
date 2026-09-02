@@ -1,9 +1,10 @@
-﻿"use server";
+"use server";
 
 import { onboardingSchema } from "@/lib/validation/schemas";
 import { actionFail, actionOk, type ActionResult } from "@/lib/utils/action-result";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { ensureStandardRolesAndPermissions } from "@/server/actions/roles";
 
 export async function createOrganizationWithFirstBranch(
   input: unknown
@@ -76,6 +77,7 @@ export async function createOrganizationWithFirstBranch(
   if (memberErr) return actionFail("INTERNAL_ERROR", "Không gán được quyền chủ sở hữu: " + memberErr.message);
 
   await supabase.from("profiles").update({ default_organization_id: org.id }).eq("id", user.id);
+  await ensureStandardRolesAndPermissions(org.id);
 
   const defaultChannels = [
     { organization_id: org.id, name: "Tại quán", type: "direct" },

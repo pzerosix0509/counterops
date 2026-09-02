@@ -172,6 +172,17 @@ export const employeeSchema = z.object({
 });
 export type EmployeeInput = z.infer<typeof employeeSchema>;
 
+export const employeeWithAuthSchema = z.object({
+  fullName: z.string().trim().min(1, "Họ tên không được trống").max(120),
+  phoneNumber: z.string().trim().max(40).nullable().optional(),
+  email: z.string().trim().email("Email không hợp lệ"),
+  roleId: z.string().uuid(),
+  branchId: z.string().uuid(),
+  createAuthAccount: z.boolean().default(false),
+  startDate: z.string().date(),
+});
+export type EmployeeWithAuthInput = z.infer<typeof employeeWithAuthSchema>;
+
 export const operationalSettingsSchema = z.object({
   allowNegativeInventory: z.boolean(),
   inventoryDeductionTiming: z.enum(["payment", "kitchen_start"]),

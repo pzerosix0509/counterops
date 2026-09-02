@@ -83,6 +83,7 @@ returns uuid language plpgsql security definer set search_path = public as $$
 declare
   created public.employees;
   v_employee_code text;
+  v_is_admin boolean;
 begin
   if not public.has_employee_permission(p_org_id, 'EMPLOYEE_EDIT') then
     raise exception 'forbidden';
@@ -90,9 +91,22 @@ begin
   if not exists (select 1 from public.branches where id = p_branch_id and organization_id = p_org_id and is_active) then
     raise exception 'invalid branch';
   end if;
-  if not public.has_branch_access(p_org_id, p_branch_id) then
-    raise exception 'branch access denied';
+  -- Check if user is membership admin/owner (can manage all branches)
+  -- Otherwise, verify they have access to this specific branch
+  select exists (
+    select 1 from public.memberships
+    where organization_id = p_org_id
+      and user_id = auth.uid()
+      and status = 'active'
+      and role in ('owner', 'admin')
+  ) into v_is_admin;
+  
+  if not v_is_admin then
+    if not public.has_branch_access(p_org_id, p_branch_id) then
+      raise exception 'branch access denied';
+    end if;
   end if;
+  
   if p_role_id is not null and not exists (select 1 from public.roles where id = p_role_id and organization_id = p_org_id) then
     raise exception 'invalid role';
   end if;

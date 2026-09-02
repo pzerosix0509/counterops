@@ -2,18 +2,36 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Pencil, UserPlus } from "lucide-react";
+import { Pencil, UserPlus, Mail, Eye, KeyRound, Trash2, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { changeEmployeeStatus, saveEmployee } from "@/server/actions/employees";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  changeEmployeeStatus,
+  saveEmployee,
+  createEmployeeWithAuth,
+  provisionAccountForEmployee,
+  deleteEmployee,
+  resetPasswordForEmployee,
+} from "@/server/actions/employees";
+import { CredentialsModal } from "./credentials-modal";
 import type { Employee, EmployeeRole } from "@/types/database";
 
 type Branch = { id: string; name: string };
 type EmployeeRow = Employee & { branch?: Branch | null; role?: EmployeeRole | null };
+
 const emptyForm = {
   fullName: "",
   phoneNumber: "",
@@ -23,7 +41,9 @@ const emptyForm = {
   status: "ACTIVE" as Employee["status"],
   startDate: new Date().toISOString().slice(0, 10),
   endDate: "",
+  createAuthAccount: false,
 };
+
 const statusLabels = { ACTIVE: "Đang làm", INACTIVE: "Tạm nghỉ", RESIGNED: "Đã nghỉ việc" };
 
 export function EmployeeManagement({
@@ -46,7 +66,34 @@ export function EmployeeManagement({
   const [message, setMessage] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
+  // Credentials modal (shared between create-with-auth & retroactive provision)
+  const [credsModal, setCredsModal] = useState<{ open: boolean; email: string; password: string; name: string }>({
+    open: false,
+    email: "",
+    password: "",
+    name: "",
+  });
+
+  // Provision account modal state
+  const [provisionModal, setProvisionModal] = useState<{
+    open: boolean;
+    employee: EmployeeRow | null;
+    email: string;
+    error: string | null;
+  }>({ open: false, employee: null, email: "", error: null });
+
+  // Delete confirmation modal state
+  const [deleteModal, setDeleteModal] = useState<{
+    open: boolean;
+    employee: EmployeeRow | null;
+    error: string | null;
+  }>({ open: false, employee: null, error: null });
+
   const isMultiBranchAdmin = branches.length > 1;
+
+  // Separate employees by status
+  const activeEmployees = employees.filter((e) => e.status !== "RESIGNED");
+  const resignedEmployees = employees.filter((e) => e.status === "RESIGNED");
 
   const openCreate = () => {
     setEditing(null);
@@ -66,30 +113,64 @@ export function EmployeeManagement({
       status: employee.status,
       startDate: employee.start_date,
       endDate: employee.end_date ?? "",
+      createAuthAccount: false,
     });
     setMessage(null);
     setOpen(true);
   };
 
-  const set = (key: keyof typeof form, value: string) => setForm((current) => ({ ...current, [key]: value }));
+  const set = (key: keyof typeof form, value: string | boolean) =>
+    setForm((current) => ({ ...current, [key]: value }));
 
   const submit = () =>
     startTransition(async () => {
       setMessage(null);
-      const result = await saveEmployee(organizationId, {
-        ...form,
-        id: editing?.id,
-        roleId: form.roleId || null,
-        email: form.email || null,
+
+      // If editing or not creating with auth, use regular saveEmployee
+      if (editing || !form.createAuthAccount) {
+        const result = await saveEmployee(organizationId, {
+          ...form,
+          id: editing?.id,
+          roleId: form.roleId || null,
+          email: form.email || null,
+          phoneNumber: form.phoneNumber || null,
+          endDate: form.endDate || null,
+        });
+        if (!result.ok) {
+          setMessage(result.error.message);
+          return;
+        }
+        setOpen(false);
+        setMessage("Đã lưu hồ sơ nhân viên.");
+        router.refresh();
+        return;
+      }
+
+      // Create with auth account
+      const result = await createEmployeeWithAuth(organizationId, {
+        fullName: form.fullName,
         phoneNumber: form.phoneNumber || null,
-        endDate: form.endDate || null,
+        email: form.email,
+        roleId: form.roleId,
+        branchId: form.branchId,
+        createAuthAccount: true,
+        startDate: form.startDate,
       });
+
       if (!result.ok) {
         setMessage(result.error.message);
         return;
       }
+
+      // Show credentials modal
+      setCredsModal({
+        open: true,
+        email: result.data.email,
+        password: result.data.tempPassword,
+        name: form.fullName,
+      });
+
       setOpen(false);
-      setMessage("Đã lưu hồ sơ nhân viên.");
       router.refresh();
     });
 
@@ -103,6 +184,236 @@ export function EmployeeManagement({
     });
   };
 
+  // ─── Provision account modal handlers ────────────────────────────────────
+
+  const openProvision = (employee: EmployeeRow) => {
+    setProvisionModal({
+      open: true,
+      employee,
+      email: employee.email ?? "",
+      error: null,
+    });
+  };
+
+  const submitProvision = () =>
+    startTransition(async () => {
+      const { employee, email } = provisionModal;
+      if (!employee) return;
+      setProvisionModal((s) => ({ ...s, error: null }));
+
+      const result = await provisionAccountForEmployee(organizationId, employee.id, email);
+      if (!result.ok) {
+        setProvisionModal((s) => ({ ...s, error: result.error.message }));
+        return;
+      }
+
+      setProvisionModal({ open: false, employee: null, email: "", error: null });
+      setCredsModal({
+        open: true,
+        email: result.data.email,
+        password: result.data.tempPassword,
+        name: employee.full_name,
+      });
+      router.refresh();
+    });
+
+  // ─── Delete modal handlers ────────────────────────────────────────────────
+
+  const openDelete = (employee: EmployeeRow) => {
+    setDeleteModal({ open: true, employee, error: null });
+  };
+
+  const submitDelete = () =>
+    startTransition(async () => {
+      const { employee } = deleteModal;
+      if (!employee) return;
+      setDeleteModal((s) => ({ ...s, error: null }));
+
+      const result = await deleteEmployee(organizationId, employee.id);
+      if (!result.ok) {
+        setDeleteModal((s) => ({ ...s, error: result.error.message }));
+        return;
+      }
+
+      setDeleteModal({ open: false, employee: null, error: null });
+      router.refresh();
+    });
+
+  // ─── Reset password handlers ──────────────────────────────────────────────
+
+  const submitResetPassword = (employee: EmployeeRow) =>
+    startTransition(async () => {
+      const result = await resetPasswordForEmployee(organizationId, employee.id);
+      if (!result.ok) {
+        setMessage(result.error.message);
+        return;
+      }
+      setCredsModal({
+        open: true,
+        email: result.data.email,
+        password: result.data.tempPassword,
+        name: employee.full_name,
+      });
+    });
+
+  // ─── Row-level action helpers ─────────────────────────────────────────────
+
+  /** An employee can only be hard-deleted when they have no linked auth account.
+   *  Additional FK constraints in Postgres act as the final safety net. */
+  const canHardDelete = (employee: EmployeeRow) => !employee.user_id;
+
+  // ─── Table rows sub-component ─────────────────────────────────────────────
+
+  const EmployeeTableRows = ({ employees: rows, isResigned }: { employees: EmployeeRow[]; isResigned: boolean }) => (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Mã NV</TableHead>
+          <TableHead>Nhân viên</TableHead>
+          {isMultiBranchAdmin && <TableHead>Chi nhánh</TableHead>}
+          <TableHead>Vai trò</TableHead>
+          <TableHead>Tài khoản</TableHead>
+          {!isResigned && <TableHead>Trạng thái</TableHead>}
+          <TableHead className="text-right">Thao tác</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {rows.length === 0 ? (
+          <TableRow>
+            <TableCell
+              colSpan={isMultiBranchAdmin ? (isResigned ? 6 : 7) : isResigned ? 5 : 6}
+              className="py-8 text-center text-muted-foreground"
+            >
+              {isResigned ? "Chưa có nhân viên đã nghỉ việc." : "Chưa có nhân viên tại chi nhánh này."}
+            </TableCell>
+          </TableRow>
+        ) : (
+          rows.map((employee) => (
+            <TableRow key={employee.id} className={isResigned ? "opacity-60" : ""}>
+              <TableCell className="font-mono text-xs">{employee.employee_code}</TableCell>
+              <TableCell>
+                <div className="font-medium">{employee.full_name}</div>
+                <div className="text-xs text-muted-foreground">
+                  {employee.email || employee.phone_number || "Chưa có thông tin liên hệ"}
+                </div>
+              </TableCell>
+              {isMultiBranchAdmin && <TableCell className="text-sm">{employee.branch?.name || "—"}</TableCell>}
+              <TableCell>{employee.role?.name || "Chưa gán vai trò"}</TableCell>
+              <TableCell>
+                {employee.user_id ? (
+                  <Badge variant="outline" className="gap-1">
+                    <Mail className="h-3 w-3" /> Đã liên kết
+                  </Badge>
+                ) : (
+                  <Badge variant="secondary">Chưa liên kết</Badge>
+                )}
+              </TableCell>
+              {!isResigned && (
+                <TableCell>
+                  <Badge variant={employee.status === "ACTIVE" ? "default" : "secondary"}>
+                    {statusLabels[employee.status]}
+                  </Badge>
+                </TableCell>
+              )}
+              <TableCell>
+                <div className="flex flex-wrap justify-end gap-1">
+                  {/* ── View / Edit ── */}
+                  <Button variant="ghost" size="sm" onClick={() => openEdit(employee)}>
+                    {isResigned ? (
+                      <>
+                        <Eye className="mr-1 h-3.5 w-3.5" /> Xem
+                      </>
+                    ) : (
+                      <>
+                        <Pencil className="mr-1 h-3.5 w-3.5" /> Sửa
+                      </>
+                    )}
+                  </Button>
+
+                  {!isResigned && (
+                    <>
+                      {/* ── Cấp tài khoản (retroactive) ── */}
+                      {!employee.user_id && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-blue-600 hover:text-blue-700"
+                          onClick={() => openProvision(employee)}
+                        >
+                          <KeyRound className="mr-1 h-3.5 w-3.5" /> Cấp TK
+                        </Button>
+                      )}
+
+                      {/* ── Cấp lại mật khẩu (reset for linked account) ── */}
+                      {employee.user_id && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-blue-600 hover:text-blue-700"
+                          disabled={pending}
+                          onClick={() => submitResetPassword(employee)}
+                        >
+                          <RotateCcw className="mr-1 h-3.5 w-3.5" /> Cấp lại MK
+                        </Button>
+                      )}
+
+                      {/* ── Tạm nghỉ ── */}
+                      {employee.status === "ACTIVE" && (
+                        <Button variant="ghost" size="sm" onClick={() => changeStatus(employee, "INACTIVE")}>
+                          Tạm nghỉ
+                        </Button>
+                      )}
+
+                      {/* ── Cho nghỉ việc ── */}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-destructive"
+                        onClick={() => changeStatus(employee, "RESIGNED")}
+                      >
+                        Cho nghỉ
+                      </Button>
+                    </>
+                  )}
+
+                  {/* ── Xóa hồ sơ (hard delete, only when safe) ── */}
+                  {canHardDelete(employee) ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-destructive hover:text-destructive"
+                      onClick={() => openDelete(employee)}
+                    >
+                      <Trash2 className="mr-1 h-3.5 w-3.5" /> Xóa
+                    </Button>
+                  ) : (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="inline-flex cursor-not-allowed">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="pointer-events-none text-muted-foreground"
+                            disabled
+                          >
+                            <Trash2 className="mr-1 h-3.5 w-3.5" /> Xóa
+                          </Button>
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent side="left" className="max-w-[220px] text-center text-xs">
+                        Nhân viên đã có tài khoản hoặc dữ liệu lịch sử. Hãy dùng &quot;Cho nghỉ việc&quot;.
+                      </TooltipContent>
+                    </Tooltip>
+                  )}
+                </div>
+              </TableCell>
+            </TableRow>
+          ))
+        )}
+      </TableBody>
+    </Table>
+  );
+
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
@@ -111,59 +422,21 @@ export function EmployeeManagement({
         </Button>
       </div>
       {message ? <p className="text-sm text-destructive">{message}</p> : null}
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Mã NV</TableHead>
-            <TableHead>Nhân viên</TableHead>
-            {isMultiBranchAdmin && <TableHead>Chi nhánh</TableHead>}
-            <TableHead>Vai trò</TableHead>
-            <TableHead>Trạng thái</TableHead>
-            <TableHead className="text-right">Thao tác</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {employees.length === 0 ? (
-            <TableRow>
-              <TableCell colSpan={isMultiBranchAdmin ? 6 : 5} className="py-8 text-center text-muted-foreground">
-                Chưa có nhân viên tại chi nhánh này.
-              </TableCell>
-            </TableRow>
-          ) : (
-            employees.map((employee) => (
-              <TableRow key={employee.id}>
-                <TableCell className="font-mono text-xs">{employee.employee_code}</TableCell>
-                <TableCell>
-                  <div className="font-medium">{employee.full_name}</div>
-                  <div className="text-xs text-muted-foreground">{employee.email || employee.phone_number || "Chưa có thông tin liên hệ"}</div>
-                </TableCell>
-                {isMultiBranchAdmin && <TableCell className="text-sm">{employee.branch?.name || "—"}</TableCell>}
-                <TableCell>{employee.role?.name || "Chưa gán vai trò"}</TableCell>
-                <TableCell>
-                  <Badge variant={employee.status === "ACTIVE" ? "default" : "secondary"}>{statusLabels[employee.status]}</Badge>
-                </TableCell>
-                <TableCell>
-                  <div className="flex justify-end gap-1">
-                    <Button variant="ghost" size="sm" onClick={() => openEdit(employee)}>
-                      <Pencil className="mr-1 h-3.5 w-3.5" /> Sửa
-                    </Button>
-                    {employee.status === "ACTIVE" ? (
-                      <Button variant="ghost" size="sm" onClick={() => changeStatus(employee, "INACTIVE")}>
-                        Tạm nghỉ
-                      </Button>
-                    ) : null}
-                    {employee.status !== "RESIGNED" ? (
-                      <Button variant="ghost" size="sm" className="text-destructive" onClick={() => changeStatus(employee, "RESIGNED")}>
-                        Cho nghỉ
-                      </Button>
-                    ) : null}
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))
-          )}
-        </TableBody>
-      </Table>
+
+      <Tabs defaultValue="active" className="w-full">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="active">Đang làm việc ({activeEmployees.length})</TabsTrigger>
+          <TabsTrigger value="resigned">Đã nghỉ việc ({resignedEmployees.length})</TabsTrigger>
+        </TabsList>
+        <TabsContent value="active">
+          <EmployeeTableRows employees={activeEmployees} isResigned={false} />
+        </TabsContent>
+        <TabsContent value="resigned">
+          <EmployeeTableRows employees={resignedEmployees} isResigned={true} />
+        </TabsContent>
+      </Tabs>
+
+      {/* ── Create / Edit employee dialog ─────────────────────────────────── */}
       <Dialog
         open={open}
         onOpenChange={(nextOpen) => {
@@ -190,7 +463,12 @@ export function EmployeeManagement({
             </div>
             <div className="space-y-1">
               <Label htmlFor="employee-email">Email</Label>
-              <Input id="employee-email" type="email" value={form.email} onChange={(e) => set("email", e.target.value)} />
+              <Input
+                id="employee-email"
+                type="email"
+                value={form.email}
+                onChange={(e) => set("email", e.target.value)}
+              />
             </div>
             {isMultiBranchAdmin && (
               <div className="space-y-1">
@@ -229,8 +507,29 @@ export function EmployeeManagement({
             </div>
             <div className="space-y-1">
               <Label htmlFor="employee-start">Ngày bắt đầu</Label>
-              <Input id="employee-start" type="date" value={form.startDate} onChange={(e) => set("startDate", e.target.value)} />
+              <Input
+                id="employee-start"
+                type="date"
+                value={form.startDate}
+                onChange={(e) => set("startDate", e.target.value)}
+              />
             </div>
+            {!editing && (
+              <div className="space-y-2 sm:col-span-2 rounded-lg border border-blue-200 bg-blue-50 p-3">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={form.createAuthAccount}
+                    onChange={(e) => set("createAuthAccount", e.target.checked)}
+                    className="h-4 w-4 rounded border-gray-300"
+                  />
+                  <span className="text-sm font-medium text-blue-900">Tạo tài khoản đăng nhập</span>
+                </label>
+                <p className="text-xs text-blue-800">
+                  Hệ thống sẽ sinh mật khẩu tạm thời để nhân viên có thể đăng nhập và sử dụng ứng dụng.
+                </p>
+              </div>
+            )}
             {editing ? (
               <div className="space-y-1">
                 <Label htmlFor="employee-status">Trạng thái</Label>
@@ -258,12 +557,130 @@ export function EmployeeManagement({
             >
               Hủy
             </Button>
-            <Button onClick={submit} disabled={pending || !form.fullName || !form.branchId}>
+            <Button
+              onClick={submit}
+              disabled={
+                pending || !form.fullName || !form.branchId || !form.roleId || (form.createAuthAccount && !form.email)
+              }
+            >
               {pending ? "Đang lưu..." : "Lưu hồ sơ"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ── Retroactive provision account dialog ──────────────────────────── */}
+      <Dialog
+        open={provisionModal.open}
+        onOpenChange={(open) => {
+          if (!open) setProvisionModal({ open: false, employee: null, email: "", error: null });
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <KeyRound className="h-4 w-4 text-blue-600" />
+              Cấp tài khoản đăng nhập
+            </DialogTitle>
+            <DialogDescription>
+              Tạo tài khoản đăng nhập cho{" "}
+              <span className="font-semibold">{provisionModal.employee?.full_name}</span>. Hệ thống sẽ sinh mật khẩu
+              tạm thời để chia sẻ với nhân viên.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <Label htmlFor="provision-email">Địa chỉ Email</Label>
+              <Input
+                id="provision-email"
+                type="email"
+                placeholder="nhanvien@example.com"
+                value={provisionModal.email}
+                onChange={(e) => setProvisionModal((s) => ({ ...s, email: e.target.value, error: null }))}
+              />
+              <p className="text-xs text-muted-foreground">
+                Dùng email thật của nhân viên hoặc email dùng chung cho thiết bị POS (vd: pos1@branch.com).
+              </p>
+            </div>
+            {provisionModal.error && (
+              <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+                {provisionModal.error}
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setProvisionModal({ open: false, employee: null, email: "", error: null })}
+            >
+              Hủy
+            </Button>
+            <Button
+              onClick={submitProvision}
+              disabled={pending || !provisionModal.email.trim()}
+            >
+              {pending ? "Đang tạo..." : "Tạo tài khoản"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Delete confirmation dialog ─────────────────────────────────────── */}
+      <Dialog
+        open={deleteModal.open}
+        onOpenChange={(open) => {
+          if (!open) setDeleteModal({ open: false, employee: null, error: null });
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <Trash2 className="h-4 w-4" />
+              Xóa hồ sơ nhân viên
+            </DialogTitle>
+            <DialogDescription asChild>
+              <div className="space-y-2">
+                <p>
+                  Bạn sắp xóa vĩnh viễn hồ sơ của{" "}
+                  <span className="font-semibold">{deleteModal.employee?.full_name}</span> ({deleteModal.employee?.employee_code}).
+                </p>
+                <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                  ⚠️ Hành động này không thể hoàn tác. Chỉ xóa khi hồ sơ được tạo nhầm và chưa có dữ liệu lịch sử.
+                </div>
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+          {deleteModal.error && (
+            <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+              {deleteModal.error}
+            </p>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setDeleteModal({ open: false, employee: null, error: null })}
+            >
+              Hủy
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={submitDelete}
+              disabled={pending}
+            >
+              {pending ? "Đang xóa..." : "Xóa vĩnh viễn"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Shared credentials modal ──────────────────────────────────────── */}
+      <CredentialsModal
+        open={credsModal.open}
+        onOpenChange={(open) => setCredsModal({ ...credsModal, open })}
+        email={credsModal.email}
+        tempPassword={credsModal.password}
+        employeeName={credsModal.name}
+      />
     </div>
   );
 }
