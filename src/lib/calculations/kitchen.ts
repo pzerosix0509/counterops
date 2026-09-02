@@ -25,6 +25,7 @@ export interface KitchenBoardRow {
     status: string;
     order_type: OrderType;
     dining_tables?: { name: string | null } | null;
+    sales_channels?: { name: string | null } | null;
   } | null;
 }
 
@@ -35,6 +36,7 @@ export interface KitchenBoardItem {
   orderNumber: string;
   openedAt: string;
   paidAt: string | null;
+  salesChannelName: string | null;
 }
 
 export type KitchenItem = KitchenBoardItem;
@@ -65,6 +67,7 @@ export function transformKitchenItems(rows: KitchenBoardRow[]): KitchenBoardItem
       orderNumber: row.orders?.order_number ?? "-",
       openedAt: row.orders?.opened_at ?? row.created_at,
       paidAt: row.orders?.closed_at ?? null,
+      salesChannelName: row.orders?.sales_channels?.name ?? null,
     }))
     .sort((a, b) => {
       const aTime = Date.parse(a.paidAt ?? a.openedAt ?? a.item.created_at);

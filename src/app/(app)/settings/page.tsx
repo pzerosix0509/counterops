@@ -1,4 +1,4 @@
-﻿import { requireActiveContext, canManageMenu, getActiveMembership } from "@/lib/auth/permissions";
+import { requireActiveContext, canManageMenu, getActiveMembership } from "@/lib/auth/permissions";
 import { listCategories } from "@/server/queries/menu";
 import { listInventoryItems } from "@/server/queries/inventory";
 import { listSalesChannels } from "@/server/queries/orders";
@@ -6,6 +6,8 @@ import { getOperationalSettings } from "@/server/queries/settings";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { OperationalSettingsForm } from "@/components/settings/operational-settings-form";
 import { GrabMockPanel } from "@/components/integrations/grab/grab-mock-panel";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Settings, Store } from "lucide-react";
 
 export const metadata = { title: "Cài đặt" };
 
@@ -58,17 +60,27 @@ export default async function SettingsPage() {
           </CardContent>
         </Card>
       </div>
-      <OperationalSettingsForm
-        organizationId={ctx.organizationId}
-        allowNegativeInventory={active.organization.allow_negative_inventory ?? false}
-        settings={settings}
-        channels={channels}
-      />
-      <GrabMockPanel
-        organizationId={ctx.organizationId}
-        branchId={ctx.branchId}
-        salesChannelId={grabSalesChannelId}
-      />
+      <Tabs defaultValue="operational" className="w-full mt-6">
+        <TabsList className="grid w-full grid-cols-2 lg:w-[400px]">
+          <TabsTrigger value="operational"><Settings className="w-4 h-4 mr-2"/> Cài đặt vận hành</TabsTrigger>
+          <TabsTrigger value="grab"><Store className="w-4 h-4 mr-2"/> Tích hợp Grab</TabsTrigger>
+        </TabsList>
+        <TabsContent value="operational" className="space-y-4 pt-2">
+          <OperationalSettingsForm
+            organizationId={ctx.organizationId}
+            allowNegativeInventory={active.organization.allow_negative_inventory ?? false}
+            settings={settings}
+            channels={channels}
+          />
+        </TabsContent>
+        <TabsContent value="grab" className="space-y-4 pt-2">
+          <GrabMockPanel
+            organizationId={ctx.organizationId}
+            branchId={ctx.branchId}
+            salesChannelId={grabSalesChannelId}
+          />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

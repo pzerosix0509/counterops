@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Hourglass } from "lucide-react";
+import { Check, Hourglass, ShoppingBag } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -70,6 +70,7 @@ export function KitchenBoard({
         orderType: KitchenItemType["orderType"];
         openedAt: string;
         paidAt: string | null;
+        salesChannelName: string | null;
         items: KitchenItemType[];
       }
     >();
@@ -81,6 +82,7 @@ export function KitchenBoard({
         orderType: it.orderType,
         openedAt: it.openedAt,
         paidAt: it.paidAt,
+        salesChannelName: it.salesChannelName,
         items: [],
       };
       cur.items.push(it);
@@ -150,9 +152,16 @@ export function KitchenBoard({
             <Card key={g.orderId}>
               <CardHeader className="space-y-2 pb-2">
                 <div className="flex items-start justify-between gap-2">
-                  <CardTitle className="text-sm">
-                    {g.tableName ? `Bàn ${g.tableName}` : "Mang đi"} • {g.orderNumber}
-                  </CardTitle>
+                  <div className="flex flex-col gap-1">
+                    <CardTitle className="text-sm">
+                      {g.tableName ? `Bàn ${g.tableName}` : "Mang đi"} • {g.orderNumber}
+                    </CardTitle>
+                    {g.salesChannelName?.toLowerCase().includes("grab") && (
+                      <Badge className="w-fit bg-green-600 hover:bg-green-700 text-white flex items-center gap-1">
+                        <ShoppingBag className="w-3 h-3" /> {g.salesChannelName}
+                      </Badge>
+                    )}
+                  </div>
                   <Badge variant="success" className="shrink-0">Đã thanh toán</Badge>
                 </div>
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">

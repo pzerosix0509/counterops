@@ -15,7 +15,7 @@ export async function listKitchenItems(
   const statusList = opts.includeRegular ? Array.from(new Set([...statuses, "not_required" as KitchenStatus])) : statuses;
   const { data, error } = await supabase
     .from("order_items")
-    .select("*, orders!inner(order_number, opened_at, closed_at, status, table_id, order_type, dining_tables(name))")
+    .select("*, orders!inner(order_number, opened_at, closed_at, status, table_id, order_type, dining_tables(name), sales_channels(name))")
     .eq("branch_id", branchId)
     .in("kitchen_status", statusList)
     .order("created_at");
