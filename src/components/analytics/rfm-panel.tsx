@@ -6,31 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatVND } from "@/lib/date/ranges";
+import { RFM_SEGMENTS, SEGMENT_LABELS, SEGMENT_VARIANT } from "@/lib/customers/labels";
 import type { RfmCustomerRow, RfmSegment, RfmSummaryRow } from "@/types/analytics";
-
-const RFM_SEGMENTS: RfmSegment[] = [
-  "Champions",
-  "Loyal Customers",
-  "Potential Loyalists",
-  "At Risk",
-  "Lost",
-];
-
-const SEGMENT_LABELS: Record<RfmSegment, string> = {
-  Champions: "Champion",
-  "Loyal Customers": "Khách thân thiết",
-  "Potential Loyalists": "Tiềm năng trung thành",
-  "At Risk": "Sắp mất",
-  Lost: "Đã mất",
-};
-
-const SEGMENT_VARIANT: Record<RfmSegment, "success" | "info" | "secondary" | "warning" | "danger"> = {
-  Champions: "success",
-  "Loyal Customers": "info",
-  "Potential Loyalists": "secondary",
-  "At Risk": "warning",
-  Lost: "danger",
-};
 
 function shortCustomerId(customerId: string) {
   return customerId.replace(/-/g, "").slice(0, 8);

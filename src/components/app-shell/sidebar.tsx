@@ -12,6 +12,7 @@ import {
   Settings,
   Sparkles,
   Bot,
+  Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils/format";
 import type { MembershipRole } from "@/types/database";
@@ -30,6 +31,7 @@ const ITEMS: NavItem[] = [
   { href: "/tables", label: "Bàn / phòng", icon: Table2, allowed: ["owner", "admin", "manager", "cashier", "reception", "staff"] },
   { href: "/menu", label: "Thực đơn", icon: UtensilsCrossed, allowed: ["owner", "admin", "manager", "cashier", "reception", "kitchen"] },
   { href: "/inventory", label: "Kho hàng", icon: Boxes, allowed: ["owner", "admin", "manager", "cashier"] },
+  { href: "/customers", label: "Khách hàng", icon: Users, allowed: ["owner", "admin", "manager", "cashier"] },
   { href: "/analytics", label: "Phân tích", icon: Sparkles, allowed: ["owner", "admin", "manager", "cashier"] },
   { href: "/reports", label: "Báo cáo", icon: FileBarChart, allowed: ["owner", "admin", "manager", "cashier"] },
   { href: "/ai", label: "AI trợ lý", icon: Bot, allowed: ["owner", "admin", "manager", "cashier"] },

@@ -179,3 +179,5 @@ export const canUpdateKitchen: MembershipRole[] = ["owner", "admin", "manager", 
 export const canViewReports: MembershipRole[] = ["owner", "admin", "manager", "cashier"];
 export const canGenerateEod: MembershipRole[] = ["owner", "admin", "manager"];
 export const canRefreshAnalytics: MembershipRole[] = ["owner", "admin", "manager"];
+export const canViewCustomers: MembershipRole[] = canViewReports;
+export const canManageCustomers: MembershipRole[] = canManageMenu;

@@ -135,6 +135,22 @@ export const orderInputSchema = z.object({
 });
 export type OrderInput = z.infer<typeof orderInputSchema>;
 
+export const updateCustomerSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string().trim().max(120).optional().nullable(),
+  phone: z.string().trim().max(20).optional().nullable(),
+  email: z.preprocess(
+    (value) => (typeof value === "string" && value.trim() === "" ? null : value),
+    z.string().trim().max(160).email("Email không hợp lệ").nullable().optional(),
+  ),
+  birthday: z.preprocess(
+    (value) => (typeof value === "string" && value.trim() === "" ? null : value),
+    z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Ngày sinh không hợp lệ").nullable().optional(),
+  ),
+  notes: z.string().trim().max(2000).optional().nullable(),
+});
+export type UpdateCustomerInput = z.infer<typeof updateCustomerSchema>;
+
 export const paymentInputSchema = z.object({
   orderId: z.string().uuid(),
   payments: z
