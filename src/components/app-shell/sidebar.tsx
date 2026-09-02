@@ -14,6 +14,8 @@ import {
   Sparkles,
   Bot,
   CalendarDays,
+  ClipboardList,
+  UserCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils/format";
 import type { MembershipRole } from "@/types/database";
@@ -33,6 +35,8 @@ const ITEMS: NavItem[] = [
   { href: "/menu", label: "Thực đơn", icon: UtensilsCrossed, allowed: ["owner", "admin", "manager", "cashier", "reception", "kitchen"] },
   { href: "/employees", label: "Nhân viên", icon: Users, allowed: ["owner", "admin", "manager"] },
   { href: "/schedules", label: "Ca làm việc", icon: CalendarDays, allowed: ["owner", "admin", "manager"] },
+  { href: "/attendance", label: "Chấm công", icon: ClipboardList, allowed: ["owner", "admin", "manager"] },
+  { href: "/my-attendance", label: "Chấm công của tôi", icon: UserCheck, allowed: ["owner", "admin", "manager", "cashier", "reception", "kitchen", "staff"] },
   { href: "/inventory", label: "Kho hàng", icon: Boxes, allowed: ["owner", "admin", "manager"] },
   { href: "/analytics", label: "Phân tích", icon: Sparkles, allowed: ["owner", "admin", "manager"] },
   { href: "/reports", label: "Báo cáo", icon: FileBarChart, allowed: ["owner", "admin", "manager"] },
