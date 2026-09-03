@@ -496,18 +496,13 @@ export async function updateKitchenStatus(
 
   if (rpcErr) return actionFail("INTERNAL_ERROR", "Không cập nhật được trạng thái bếp: " + rpcErr.message);
 
-  const r = result as { ok: boolean; code?: string; message?: string; table_freed?: boolean; status: string };
+  const r = result as { ok: boolean; code?: string; message?: string; status: string };
   if (!r.ok) {
     const code = r.code ?? "INTERNAL_ERROR";
     return actionFail(code as any, r.message ?? "Lỗi không xác định");
   }
 
   revalidatePath("/kitchen");
-  if (r.table_freed) {
-    revalidatePath("/pos");
-    revalidatePath("/tables");
-  }
-
   return actionOk({ id: orderItemId, status: r.status });
 }
 
