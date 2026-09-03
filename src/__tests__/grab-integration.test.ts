@@ -15,16 +15,26 @@ import { syncGrabMenu } from "@/server/integrations/grab/menu-sync";
 import type { GrabOrderPayload } from "@/lib/validation/grab-schemas";
 
 // Mock Supabase clients
-vi.mock("@/lib/supabase/admin", () => ({
-  createSupabaseAdminClient: vi.fn(() => ({
+vi.mock("@/lib/supabase/admin", () => {
+  const chainable = {
     from: vi.fn().mockReturnThis(),
     select: vi.fn().mockReturnThis(),
-    insert: vi.fn().mockResolvedValue({ data: [], error: null }),
+    insert: vi.fn().mockReturnThis(),
     update: vi.fn().mockReturnThis(),
     eq: vi.fn().mockReturnThis(),
-    maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
-  })),
-}));
+    in: vi.fn().mockReturnThis(),
+    maybeSingle: vi.fn().mockImplementation(async () => {
+      return { data: { is_online: true, id: "test-order-id" }, error: null };
+    }),
+    then: vi.fn((resolve) => {
+      // simulate returning products array matching the product_id length
+      resolve({ data: [{ id: "11111111-1111-4111-8111-111111111111" }], error: null });
+    }),
+  };
+  return {
+    createSupabaseAdminClient: vi.fn(() => chainable),
+  };
+});
 
 vi.mock("@/lib/integrations/grab/mock-client", () => ({
   getGrabMockClient: vi.fn(() => ({
@@ -53,7 +63,7 @@ describe("Grab Integration", () => {
       delivery_address: "123 Đường Demo, TP HCM",
       items: [
         {
-          product_id: "prod-1",
+          product_id: "11111111-1111-4111-8111-111111111111",
           product_name: "Cà phê sữa",
           quantity: 2,
           unit_price: 30000,
