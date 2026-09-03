@@ -184,6 +184,31 @@ export const inventorySettingsSchema = z.object({
   allowNegativeInventory: z.boolean(),
 });
 
+export const employeeSchema = z.object({
+  id: z.string().uuid().optional(),
+  fullName: z.string().trim().min(1, "Họ tên không được trống").max(120),
+  phoneNumber: z.string().trim().max(40).nullable().optional(),
+  email: z.string().trim().email("Email không hợp lệ").nullable().optional().or(z.literal("")),
+  userId: z.string().uuid().nullable().optional(),
+  roleId: z.string().uuid().nullable().optional(),
+  branchId: z.string().uuid(),
+  status: z.enum(["ACTIVE", "INACTIVE", "RESIGNED"]).default("ACTIVE"),
+  startDate: z.string().date(),
+  endDate: z.string().date().nullable().optional(),
+});
+export type EmployeeInput = z.infer<typeof employeeSchema>;
+
+export const employeeWithAuthSchema = z.object({
+  fullName: z.string().trim().min(1, "Họ tên không được trống").max(120),
+  phoneNumber: z.string().trim().max(40).nullable().optional(),
+  email: z.string().trim().email("Email không hợp lệ"),
+  roleId: z.string().uuid(),
+  branchId: z.string().uuid(),
+  createAuthAccount: z.boolean().default(false),
+  startDate: z.string().date(),
+});
+export type EmployeeWithAuthInput = z.infer<typeof employeeWithAuthSchema>;
+
 export const operationalSettingsSchema = z.object({
   allowNegativeInventory: z.boolean(),
   inventoryDeductionTiming: z.enum(["payment", "kitchen_start"]),

@@ -32,6 +32,76 @@ begin
   values (v_organization_id, null, v_owner_user_id, 'owner', 'active', v_owner_user_id, now())
   on conflict (organization_id, branch_id, user_id, role) do nothing;
 
+  -- 4. Standard Permissions & Roles
+  insert into public.permissions (permission_key, module, description) values
+    ('EMPLOYEE_VIEW', 'EMPLOYEE', 'Xem hồ sơ nhân viên'),
+    ('EMPLOYEE_EDIT', 'EMPLOYEE', 'Thêm và sửa hồ sơ nhân viên'),
+    ('EMPLOYEE_STATUS_EDIT', 'EMPLOYEE', 'Đổi trạng thái nhân viên'),
+    ('RBAC_VIEW', 'RBAC', 'Xem vai trò và quyền'),
+    ('RBAC_EDIT', 'RBAC', 'Cấu hình vai trò và quyền'),
+    ('POS_ACCESS', 'POS', 'Truy cập màn hình bán hàng'),
+    ('ORDER_CREATE', 'POS', 'Tạo đơn hàng'),
+    ('ORDER_PAY', 'POS', 'Thanh toán đơn hàng'),
+    ('TABLE_MANAGE', 'TABLE', 'Quản lý bàn / phòng'),
+    ('KITCHEN_ACCESS', 'KITCHEN', 'Truy cập màn hình bếp'),
+    ('KITCHEN_UPDATE', 'KITCHEN', 'Cập nhật trạng thái món bếp'),
+    ('MENU_VIEW', 'MENU', 'Xem thực đơn'),
+    ('MENU_MANAGE', 'MENU', 'Thêm, sửa thực đơn và món'),
+    ('INVENTORY_VIEW', 'INVENTORY', 'Xem tồn kho'),
+    ('INVENTORY_MANAGE', 'INVENTORY', 'Quản lý xuất nhập tồn kho'),
+    ('REPORT_VIEW', 'REPORT', 'Xem báo cáo doanh thu')
+  on conflict (permission_key) do update
+  set module = excluded.module,
+      description = excluded.description;
+
+  insert into public.roles (organization_id, name, is_system_admin)
+  values
+    (v_organization_id, 'Admin', true),
+    (v_organization_id, 'Quản lý', false),
+    (v_organization_id, 'Thu ngân', false),
+    (v_organization_id, 'Bếp', false),
+    (v_organization_id, 'Nhân viên', false)
+  on conflict (organization_id, name) do nothing;
+
+  -- Admin & Quản lý: all permissions
+  insert into public.role_permissions (role_id, permission_id)
+  select r.id, p.id
+  from public.roles r
+  cross join public.permissions p
+  where r.organization_id = v_organization_id
+    and (r.is_system_admin or r.name = 'Quản lý')
+  on conflict do nothing;
+
+  -- Thu ngân: POS, orders, tables, menu view
+  insert into public.role_permissions (role_id, permission_id)
+  select r.id, p.id
+  from public.roles r
+  cross join public.permissions p
+  where r.organization_id = v_organization_id
+    and r.name = 'Thu ngân'
+    and p.permission_key in ('POS_ACCESS', 'ORDER_CREATE', 'ORDER_PAY', 'TABLE_MANAGE', 'MENU_VIEW')
+  on conflict do nothing;
+
+  -- Bếp: Kitchen & menu view
+  insert into public.role_permissions (role_id, permission_id)
+  select r.id, p.id
+  from public.roles r
+  cross join public.permissions p
+  where r.organization_id = v_organization_id
+    and r.name = 'Bếp'
+    and p.permission_key in ('KITCHEN_ACCESS', 'KITCHEN_UPDATE', 'MENU_VIEW')
+  on conflict do nothing;
+
+  -- Nhân viên: POS, orders, tables, menu view
+  insert into public.role_permissions (role_id, permission_id)
+  select r.id, p.id
+  from public.roles r
+  cross join public.permissions p
+  where r.organization_id = v_organization_id
+    and r.name = 'Nhân viên'
+    and p.permission_key in ('POS_ACCESS', 'ORDER_CREATE', 'ORDER_PAY', 'TABLE_MANAGE', 'MENU_VIEW')
+  on conflict do nothing;
+
   -- 5. Sales channels
   insert into public.sales_channels (organization_id, name, type, is_active)
   select v_organization_id, c.name, c.type, true

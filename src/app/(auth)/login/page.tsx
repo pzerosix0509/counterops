@@ -1,6 +1,6 @@
-﻿import { redirect } from "next/navigation";
+import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { getActiveMemberships } from "@/lib/auth/permissions";
+import { getRedirectPathForUser } from "@/server/actions/login";
 import { LoginForm } from "./login-form";
 
 export const metadata = { title: "Đăng nhập" };
@@ -12,10 +12,17 @@ interface PageProps {
 export default async function LoginPage({ searchParams }: PageProps) {
   const supabase = createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
+
   if (user) {
-    const memberships = await getActiveMemberships();
-    if (memberships.length === 0) redirect("/onboarding");
-    redirect(searchParams.next || "/dashboard");
+    if (searchParams.next) {
+      redirect(searchParams.next);
+    }
+    const redirectResult = await getRedirectPathForUser();
+    if (redirectResult.ok) {
+      redirect(redirectResult.data.redirectTo);
+    }
+    redirect("/onboarding");
   }
-  return <LoginForm nextPath={searchParams.next || "/dashboard"} />;
+
+  return <LoginForm nextPath={searchParams.next || ""} />;
 }
