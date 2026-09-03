@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { notifyError, notifySuccess } from "@/hooks/use-notify";
+import { getCustomerPhoneError } from "@/lib/customers/phone";
 import { ratingIsNotSentiment } from "@/lib/analytics/sentiment";
 import { createCustomerFeedback } from "@/server/actions/feedback";
 import type { FeedbackListRow, SentimentSummary } from "@/types/analytics";
@@ -73,6 +74,11 @@ export function SentimentPanel({
 
   function onSubmit(event: React.FormEvent) {
     event.preventDefault();
+    const phoneError = getCustomerPhoneError(customerPhone);
+    if (phoneError) {
+      notifyError("Số điện thoại không hợp lệ", phoneError);
+      return;
+    }
     startTransition(async () => {
       const res = await createCustomerFeedback({
         rating,
@@ -162,6 +168,7 @@ export function SentimentPanel({
                 onChange={(event) => setCustomerPhone(event.target.value)}
                 placeholder="0901234567"
                 inputMode="tel"
+                maxLength={20}
               />
             </div>
             <div className="space-y-1.5">

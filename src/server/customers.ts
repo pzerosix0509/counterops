@@ -1,6 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { fallbackCustomerName, normalizeCustomerPhone } from "@/lib/customers/phone";
+import { CUSTOMER_PHONE_ERROR, fallbackCustomerName, normalizeCustomerPhone } from "@/lib/customers/phone";
 
 export async function upsertCustomerByPhone(
   supabase: SupabaseClient,
@@ -8,8 +8,12 @@ export async function upsertCustomerByPhone(
   phoneRaw: string | null | undefined,
   nameRaw: string | null | undefined,
 ): Promise<string | null> {
-  const phone = normalizeCustomerPhone(phoneRaw);
-  if (!phone) return null;
+  const trimmed = phoneRaw?.trim() || "";
+  const phone = normalizeCustomerPhone(trimmed);
+  if (!phone) {
+    if (trimmed) throw new Error(CUSTOMER_PHONE_ERROR);
+    return null;
+  }
   const name = fallbackCustomerName(nameRaw, phone);
 
   const { data: existing, error: findError } = await supabase

@@ -1,6 +1,7 @@
 "use client";
 
 import { Input } from "@/components/ui/input";
+import { getCustomerPhoneError } from "@/lib/customers/phone";
 import type { OperationalSettings } from "@/lib/settings/operational";
 
 function normalizeNumberInput(value: string): string {
@@ -36,12 +37,22 @@ export function PosCheckoutStep({
   onTaxChange: (value: string) => void;
   onServiceFeeChange: (value: string) => void;
 }) {
+  const phoneError = getCustomerPhoneError(customerPhone);
+
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div>
           <label className="text-xs text-muted-foreground">SĐT khách (RFM)</label>
-          <Input value={customerPhone} onChange={(e) => onCustomerPhoneChange(e.target.value)} placeholder="0901234567" inputMode="tel" />
+          <Input
+            value={customerPhone}
+            onChange={(e) => onCustomerPhoneChange(e.target.value)}
+            placeholder="0901234567"
+            inputMode="tel"
+            maxLength={20}
+            aria-invalid={phoneError ? true : undefined}
+          />
+          {phoneError ? <p className="mt-1 text-xs text-destructive">{phoneError}</p> : null}
         </div>
         <div>
           <label className="text-xs text-muted-foreground">Tên khách</label>

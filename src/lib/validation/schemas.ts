@@ -1,4 +1,17 @@
 import { z } from "zod";
+import { CUSTOMER_PHONE_ERROR, normalizeCustomerPhone } from "@/lib/customers/phone";
+
+export const optionalCustomerPhoneSchema = z
+  .string()
+  .trim()
+  .max(20)
+  .optional()
+  .nullable()
+  .refine((value) => !value || normalizeCustomerPhone(value) !== null, CUSTOMER_PHONE_ERROR)
+  .transform((value) => {
+    const trimmed = value?.trim() || "";
+    return trimmed ? normalizeCustomerPhone(trimmed) : null;
+  });
 
 export const loginSchema = z.object({
   email: z.string().min(1, "Email không được trống").email("Email không hợp lệ"),
@@ -127,7 +140,7 @@ export const orderInputSchema = z.object({
   salesChannelId: z.string().uuid().nullable().optional(),
   orderType: z.enum(["dine_in", "takeaway", "delivery", "online"]).default("dine_in"),
   customerName: z.string().nullable().optional(),
-  customerPhone: z.string().nullable().optional(),
+  customerPhone: optionalCustomerPhoneSchema,
   items: z.array(orderItemInputSchema).min(1, "Đơn hàng phải có ít nhất 1 món"),
   discountAmount: z.number().int().min(0).default(0),
   taxAmount: z.number().int().min(0).default(0),
@@ -138,7 +151,7 @@ export type OrderInput = z.infer<typeof orderInputSchema>;
 export const updateCustomerSchema = z.object({
   id: z.string().uuid(),
   name: z.string().trim().max(120).optional().nullable(),
-  phone: z.string().trim().max(20).optional().nullable(),
+  phone: optionalCustomerPhoneSchema,
   email: z.preprocess(
     (value) => (typeof value === "string" && value.trim() === "" ? null : value),
     z.string().trim().max(160).email("Email không hợp lệ").nullable().optional(),

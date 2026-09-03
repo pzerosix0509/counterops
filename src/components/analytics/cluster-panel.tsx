@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { formatVND } from "@/lib/date/ranges";
 import { notifyError, notifySuccess } from "@/hooks/use-notify";
 import { fitCustomerClusters } from "@/server/actions/analytics";
+import { formatAnalyticsCustomerLabel } from "@/lib/customers/phone";
 import type { ClusterCustomerRow, ClusterProfileRow, RfmSegment } from "@/types/analytics";
 
 const SEGMENT_LABELS: Record<RfmSegment, string> = {
@@ -19,10 +20,6 @@ const SEGMENT_LABELS: Record<RfmSegment, string> = {
   "At Risk": "Sắp mất",
   Lost: "Đã mất",
 };
-
-function shortCustomerId(customerId: string) {
-  return customerId.replace(/-/g, "").slice(0, 8);
-}
 
 function formatRatio(value: number) {
   return `${Math.round(value * 100)}%`;
@@ -133,7 +130,9 @@ export function ClusterPanel({
               <TableBody>
                 {customers.map((row) => (
                   <TableRow key={row.customerId}>
-                    <TableCell className="font-medium">Khách {shortCustomerId(row.customerId)}</TableCell>
+                    <TableCell className="font-medium">
+                      {formatAnalyticsCustomerLabel(row.customerPhone, row.customerName)}
+                    </TableCell>
                     <TableCell>
                       {row.clusterId == null ? (
                         <span className="text-muted-foreground">—</span>

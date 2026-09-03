@@ -14,6 +14,7 @@ import { PosCheckoutStep } from "@/components/pos/pos-checkout-step";
 import { PosMenuDialog, addProductToCart } from "@/components/pos/pos-menu-dialog";
 import { createOrUpdateOrder, payOrder } from "@/server/actions/orders";
 import { calculateDiscountAmount, calculatePercentageAmount } from "@/lib/calculations/orders";
+import { getCustomerPhoneError } from "@/lib/customers/phone";
 import { formatVND } from "@/lib/date/ranges";
 import { STEP_LABELS } from "@/lib/pos/table-status";
 import { stepIndex, type PosSessionData, type PosStep } from "@/lib/pos/session";
@@ -203,6 +204,12 @@ export function PosOrderWizard(props: Props) {
       notifyError("Giỏ hàng trống", "Vui lòng thêm ít nhất 1 món.");
       return null;
     }
+    const phoneError = getCustomerPhoneError(session.customerPhone);
+    if (phoneError) {
+      setError(phoneError);
+      notifyError("Số điện thoại không hợp lệ", phoneError);
+      return null;
+    }
     if (session.orderType === "dine_in" && !session.tableId) {
       notifyError("Chưa chọn bàn", "Vui lòng chọn bàn cho đơn tại quán.");
       return null;
@@ -250,6 +257,13 @@ export function PosOrderWizard(props: Props) {
     if (step === "items" && session.cart.length === 0) {
       setError("Vui lòng thêm ít nhất 1 món.");
       return false;
+    }
+    if (step === "checkout") {
+      const phoneError = getCustomerPhoneError(session.customerPhone);
+      if (phoneError) {
+        setError(phoneError);
+        return false;
+      }
     }
     setError(null);
     return true;
