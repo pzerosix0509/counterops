@@ -75,10 +75,11 @@ export async function listPreparedProductsUsingIngredient(
   const supabase = createSupabaseServerClient();
   const { data, error } = await supabase
     .from("recipe_items")
-    .select("recipes!inner(is_active, organization_id, products!inner(name))")
+    .select("recipes!inner(is_active, organization_id, products!inner(name, deleted_at))")
     .eq("inventory_item_id", inventoryItemId)
     .eq("recipes.is_active", true)
-    .eq("recipes.organization_id", organizationId);
+    .eq("recipes.organization_id", organizationId)
+    .is("recipes.products.deleted_at", null);
   if (error) throw new Error(error.message);
 
   const names = new Set<string>();

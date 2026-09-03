@@ -2,7 +2,7 @@
 import { useEffect, useState, useTransition, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Plus, Search, Pencil, FileUp, Trash2 } from "lucide-react";
+import { Plus, Search, Pencil, FileUp, Trash2, ChefHat } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NumberInput } from "@/components/ui/number-input";
@@ -14,6 +14,8 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EmptyState } from "@/components/common/states";
+import { RowContextMenu } from "@/components/common/row-context-menu";
+import { ConfirmDialog } from "@/components/common/confirm-dialog";
 import { notifyError, notifySuccess } from "@/hooks/use-notify";
 import { ExcelDownloadButton, ExcelImportDialog } from "@/components/common/excel-import";
 import { formatVND } from "@/lib/date/ranges";
@@ -91,6 +93,32 @@ export function InventoryManager({
   const [editCanBeIngredient, setEditCanBeIngredient] = useState(true);
   const [editCanBeSold, setEditCanBeSold] = useState(false);
   const [deleteBlockedProducts, setDeleteBlockedProducts] = useState<string[]>([]);
+  const [usageItem, setUsageItem] = useState<InventoryItemView | null>(null);
+  const [usageProducts, setUsageProducts] = useState<string[]>([]);
+  const [usageLoading, setUsageLoading] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<InventoryItemView | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  function confirmDeleteItem(item: InventoryItemView) {
+    setDeleting(true);
+    startTransition(async () => {
+      const res = await deleteInventoryItem(organizationId, item.id);
+      setDeleting(false);
+      setPendingDelete(null);
+      if (!res.ok) {
+        if (editItem?.id === item.id) {
+          const blocked = res.error.fieldErrors?.affectedProducts ?? deleteBlockedProducts;
+          setDeleteBlockedProducts(blocked);
+          setError(res.error.message);
+        }
+        notifyError("Không thể xóa hàng hóa", res.error.message);
+        return;
+      }
+      if (editItem?.id === item.id) setEditItem(null);
+      router.refresh();
+      notifySuccess("Đã xóa hàng hóa");
+    });
+  }
 
   function onFilter(e: React.FormEvent) {
     e.preventDefault();
@@ -159,6 +187,20 @@ export function InventoryManager({
     setEditItem(item);
   }
 
+  function openUsage(item: InventoryItemView) {
+    setUsageItem(item);
+    setUsageProducts([]);
+    setUsageLoading(true);
+    getInventoryDeleteBlockers(organizationId, item.id).then((res) => {
+      if (res.ok) setUsageProducts(res.data.productNames);
+      setUsageLoading(false);
+    });
+  }
+
+  function onDeleteFromContext(item: InventoryItemView) {
+    setPendingDelete(item);
+  }
+
   useEffect(() => {
     if (!editItem) {
       setDeleteBlockedProducts([]);
@@ -225,21 +267,7 @@ export function InventoryManager({
       setError(buildInventoryDeleteConflictMessage(deleteBlockedProducts));
       return;
     }
-    if (!window.confirm(`Xóa hàng "${editItem.name}"? Hàng sẽ ẩn khỏi kho và thực đơn.`)) return;
-    setError(null);
-    startTransition(async () => {
-      const res = await deleteInventoryItem(organizationId, editItem.id);
-      if (!res.ok) {
-        const blocked = res.error.fieldErrors?.affectedProducts ?? deleteBlockedProducts;
-        setDeleteBlockedProducts(blocked);
-        setError(res.error.message);
-        notifyError("Không thể xóa hàng hóa", res.error.message);
-        return;
-      }
-      setEditItem(null);
-      router.refresh();
-      notifySuccess("Đã xóa hàng hóa");
-    });
+    setPendingDelete(editItem);
   }
 
   function onCreateMovement(itemId: string, e: React.FormEvent<HTMLFormElement>) {
@@ -447,8 +475,7 @@ export function InventoryManager({
                 <col className="w-[140px]" />
                 <col className="w-[120px]" />
                 <col className="w-[130px]" />
-                <col className="w-[100px]" />
-                <col className="w-[110px]" />
+                <col className="w-[220px]" />
               </colgroup>
               <TableHeader>
                 <TableRow>
@@ -458,7 +485,6 @@ export function InventoryManager({
                   <TableHead className="px-3 text-right">Tồn</TableHead>
                   <TableHead className="px-3 text-center">Trạng thái</TableHead>
                   <TableHead className="px-3 text-center">Thao tác</TableHead>
-                  <TableHead className="px-3" aria-label="Chỉnh sửa" />
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -469,8 +495,31 @@ export function InventoryManager({
                   const isNegative = qty < 0;
                   const isOut = qty === 0;
                   const isLow = lowStockAlertEnabled && !isNegative && !isOut && low > 0 && qty <= low;
+                  const contextItems = canManage
+                    ? [
+                        {
+                          key: "recipe",
+                          label: "Công thức",
+                          icon: ChefHat,
+                          onClick: () => openUsage(it),
+                        },
+                        {
+                          key: "edit",
+                          label: "Chỉnh sửa",
+                          icon: Pencil,
+                          onClick: () => openEdit(it),
+                        },
+                        {
+                          key: "delete",
+                          label: "Xóa",
+                          icon: Trash2,
+                          destructive: true,
+                          onClick: () => onDeleteFromContext(it),
+                        },
+                      ]
+                    : [];
                   return (
-                    <TableRow key={it.id}>
+                    <RowContextMenu key={it.id} as="tr" items={contextItems}>
                       <TableCell className="px-3">
                         <div className="min-w-0">
                           <p className="truncate font-medium" title={it.name}>{it.name}</p>
@@ -498,26 +547,22 @@ export function InventoryManager({
                       </TableCell>
                       <TableCell className="px-3 text-center">
                         {canManage ? (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="shrink-0"
-                            onClick={() => openMovement({ itemId: it.id, defaultKind: "purchase" })}
-                          >
-                            <Plus className="h-3.5 w-3.5" /> Nhập / xuất
-                          </Button>
+                          <div className="flex w-full items-center justify-end gap-1">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="shrink-0"
+                              onClick={() => openMovement({ itemId: it.id, defaultKind: "purchase" })}
+                            >
+                              <Plus className="h-3.5 w-3.5" /> Nhập / xuất
+                            </Button>
+                            <Button size="sm" variant="ghost" className="shrink-0" onClick={() => openEdit(it)} aria-label="Chỉnh sửa" title="Chỉnh sửa">
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
                         ) : null}
                       </TableCell>
-                      <TableCell className="px-3">
-                        <div className="flex justify-end">
-                          {canManage ? (
-                            <Button size="sm" variant="ghost" className="shrink-0" onClick={() => openEdit(it)}>
-                              <Pencil className="h-3.5 w-3.5" /> Chỉnh sửa
-                            </Button>
-                          ) : null}
-                        </div>
-                      </TableCell>
-                    </TableRow>
+                    </RowContextMenu>
                   );
                 })}
               </TableBody>
@@ -704,6 +749,41 @@ export function InventoryManager({
           ) : null}
         </DialogContent>
       </Dialog>
+
+      <Dialog open={!!usageItem} onOpenChange={(open) => !open && setUsageItem(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Công thức dùng: {usageItem?.name}</DialogTitle>
+            <DialogDescription>Các món chế biến đang sử dụng mặt hàng này làm nguyên liệu.</DialogDescription>
+          </DialogHeader>
+          {usageLoading ? (
+            <p className="py-4 text-sm text-muted-foreground">Đang tải...</p>
+          ) : usageProducts.length > 0 ? (
+            <ul className="max-h-72 overflow-auto space-y-2">
+              {usageProducts.map((name) => (
+                <li key={name} className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
+                  <ChefHat className="h-4 w-4 text-muted-foreground" />
+                  {name}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="py-4 text-sm text-muted-foreground">Chưa có món chế biến nào dùng mặt hàng này.</p>
+          )}
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={() => setUsageItem(null)}>Đóng</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        onOpenChange={(open) => { if (!open && !deleting) setPendingDelete(null); }}
+        title={`Xóa hàng "${pendingDelete?.name ?? ""}"?`}
+        description="Hàng sẽ ẩn khỏi kho và thực đơn."
+        pending={deleting}
+        onConfirm={() => pendingDelete && confirmDeleteItem(pendingDelete)}
+      />
     </div>
   );
 }

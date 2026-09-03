@@ -276,6 +276,56 @@ export async function toggleProductActive(organizationId: string, productId: str
   return actionOk({ id: productId });
 }
 
+export async function deleteProduct(organizationId: string, productId: string): Promise<ActionResult<{ id: string }>> {
+  const m = await requireRole(organizationId, canManageMenu);
+  const supabase = createSupabaseServerClient();
+
+  const { data: product } = await supabase
+    .from("products")
+    .select("id, name, inventory_item_id")
+    .eq("id", productId)
+    .eq("organization_id", m.organization.id)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (!product) return actionFail("NOT_FOUND", "Không tìm thấy món");
+
+  const { data: openOrderItems } = await supabase
+    .from("order_items")
+    .select("id")
+    .eq("product_id", productId)
+    .in("orders.status", ["draft", "open", "sent_to_kitchen", "partially_paid"])
+    .limit(1);
+  if (openOrderItems && openOrderItems.length > 0) {
+    return actionFail("CONFLICT", "Món đang có trong đơn chưa hoàn tất, không thể xóa.");
+  }
+
+  // Vô hiệu món bán liền liên kết trong kho và gỡ liên kết.
+  if (product.inventory_item_id) {
+    await deactivateSellableProduct(supabase, product.inventory_item_id);
+  }
+
+  const { error } = await supabase
+    .from("products")
+    .update({ deleted_at: new Date().toISOString(), is_active: false })
+    .eq("id", productId)
+    .eq("organization_id", m.organization.id);
+  if (error) return actionFail("INTERNAL_ERROR", "Không xóa được món: " + error.message);
+
+  await supabase.from("audit_logs").insert({
+    organization_id: m.organization.id,
+    actor_user_id: m.membership.user_id,
+    action: "product.delete",
+    entity_type: "products",
+    entity_id: productId,
+    after: { name: product.name },
+  });
+
+  revalidatePath("/menu");
+  revalidatePath("/inventory");
+  revalidatePath("/pos");
+  return actionOk({ id: productId });
+}
+
 /**
  * Lưu công thức (recipe) cho một món: tạo version mới, vô hiệu bản cũ,
  * tính giá vốn từng nguyên liệu theo cost_price (giá nhập) hiện tại và
