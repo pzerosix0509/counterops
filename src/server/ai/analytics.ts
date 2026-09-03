@@ -1,7 +1,7 @@
 import "server-only";
 import { formatVND } from "@/lib/date/ranges";
 import { extractChartType } from "@/lib/ai/render-line-chart";
-import { isGenericImageQuestion } from "@/lib/ai/semantic-layer";
+import { isGenericImageQuestion, isWebSearchQuestion } from "@/lib/ai/semantic-layer";
 import { decomposeRevenueDelta } from "@/lib/ai/decomposition";
 import type {
   AiAnalyticsContext,
@@ -615,6 +615,11 @@ export function buildFallbackAnswer(
     bullets = [
       best?.label ? `Kết quả từ ${best.label}${best.detail ? ` (${best.detail})` : ""}:` : "Kết quả tìm kiếm web:",
       best?.excerpt ? best.excerpt.slice(0, 600) : "Không lấy được nội dung chi tiết.",
+    ];
+  } else if (isWebSearchQuestion(question)) {
+    bullets = [
+      "Hiện tại không thể tra cứu thông tin trực tuyến cho câu hỏi này (kết nối tìm kiếm web quá thời gian hoặc chưa tìm thấy trang phù hợp).",
+      "Vui lòng thử lại sau giây lát hoặc thử lại với từ khóa tìm kiếm cụ thể hơn.",
     ];
   } else if (/^(hi|hello|chao|xin chao)\b/.test(q) || q.includes("chao ban") || q.includes("chao em") || q.includes("xin chao")) {
     bullets = [
