@@ -44,6 +44,7 @@ describe("isWebSearchQuestion", () => {
     expect(isWebSearchQuestion("Giá vốn món cà phê sữa tuần rồi")).toBe(false);
     expect(isWebSearchQuestion("Món nào bán chạy nhất tháng này?")).toBe(false);
     expect(isWebSearchQuestion("Có mặt hàng tồn kho nào sắp hết không?")).toBe(false);
+    expect(isWebSearchQuestion("Giá hôm nay thế nào?")).toBe(false); // VQ-008: Ambiguous question, must trigger clarification instead of web_search
   });
 });
 
