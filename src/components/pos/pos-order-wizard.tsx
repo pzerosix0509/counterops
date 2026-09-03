@@ -9,7 +9,6 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { EmptyState } from "@/components/common/states";
 import { Input, Textarea } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PosCheckoutStep } from "@/components/pos/pos-checkout-step";
 import { PosMenuDialog, addProductToCart } from "@/components/pos/pos-menu-dialog";
 import { createOrUpdateOrder, payOrder } from "@/server/actions/orders";
@@ -146,14 +145,10 @@ export function PosOrderWizard(props: Props) {
 
   const tableGroups = useMemo(() => areas.map((area) => ({ area, tables: tablesByArea.get(area.id) ?? [] })), [areas, tablesByArea]);
 
-  function changeOrderType(value: "dine_in" | "takeaway") {
-    onSessionChange({
-      orderType: value,
-      tableId: value === "takeaway" ? null : session.tableId,
-      step: "service",
-      maxStep: "service",
-    });
-  }
+  const takeawayChannels = useMemo(
+    () => channels.filter((c) => c.type === "takeaway" || c.name.toLowerCase().includes("grab")),
+    [channels]
+  );
 
   function changeQty(idx: number, delta: number) {
     const next = [...session.cart];
@@ -184,10 +179,14 @@ export function PosOrderWizard(props: Props) {
   }
 
   function buildOrderPayload() {
+    const salesChannelId =
+      session.orderType === "takeaway" && session.channelId
+        ? session.channelId
+        : findChannelForOrderType(session.orderType);
     return {
       branchId,
       tableId: session.orderType === "dine_in" ? session.tableId : null,
-      salesChannelId: findChannelForOrderType(session.orderType),
+      salesChannelId,
       orderType: session.orderType,
       customerName: session.customerName.trim() || null,
       customerPhone: session.customerPhone.trim() || null,
@@ -247,6 +246,10 @@ export function PosOrderWizard(props: Props) {
   }
 
   function validateStep(step: PosStep): boolean {
+    if (step === "service" && session.orderType === "takeaway" && !session.channelId) {
+      setError("Vui lòng chọn kênh bán mang đi.");
+      return false;
+    }
     if (step === "table" && session.orderType === "dine_in" && !session.tableId) {
       setError("Vui lòng chọn bàn.");
       return false;
@@ -328,6 +331,10 @@ export function PosOrderWizard(props: Props) {
   }
 
   const currentIdx = stepIndex(steps, session.step);
+  const stepTitle =
+    session.step === "service" && session.orderType === "takeaway"
+      ? "Kênh bán mang đi"
+      : STEP_LABELS[session.step];
 
   return (
     <div className="mx-auto max-w-3xl space-y-4">
@@ -351,23 +358,39 @@ export function PosOrderWizard(props: Props) {
               idx === currentIdx ? "bg-primary text-primary-foreground" : idx < currentIdx ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"
             )}
           >
-            {idx + 1}. {STEP_LABELS[step]}
+            {idx + 1}. {step === "service" && session.orderType === "takeaway" ? "Kênh bán mang đi" : STEP_LABELS[step]}
           </div>
         ))}
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm">{STEP_LABELS[session.step]}</CardTitle>
+          <CardTitle className="text-sm">{stepTitle}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {session.step === "service" ? (
-            <Tabs value={session.orderType} onValueChange={(v) => changeOrderType(v as "dine_in" | "takeaway")}>
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="dine_in">Tại quán</TabsTrigger>
-                <TabsTrigger value="takeaway">Mang đi</TabsTrigger>
-              </TabsList>
-            </Tabs>
+          {session.step === "service" && session.orderType === "takeaway" ? (
+            <div className="space-y-1">
+              <Select
+                value={session.channelId ?? ""}
+                onValueChange={(val) => onSessionChange({ channelId: val })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Chọn kênh (Grab, ShopeeFood...)" />
+                </SelectTrigger>
+                <SelectContent>
+                  {takeawayChannels.map((channel) => (
+                    <SelectItem key={channel.id} value={channel.id}>
+                      {channel.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {takeawayChannels.length === 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  Chưa có kênh mang đi. Hãy cấu hình Grab (Mock) trong cài đặt kênh bán.
+                </p>
+              ) : null}
+            </div>
           ) : null}
 
           {session.step === "table" ? (
