@@ -311,6 +311,32 @@ export function isDashboardIntent(question: string): boolean {
   return /(^|\s)(dashboard|bang dieu khien|kpi)\b/.test(q);
 }
 
+export function isGenericImageQuestion(question?: string | null): boolean {
+  if (!question || !question.trim()) return true;
+  const q = normalizeIntentText(question);
+  const genericTokens = new Set([
+    "xem anh dinh kem",
+    "xem anh",
+    "doc anh",
+    "doc hinh",
+    "anh da gui",
+    "hinh da gui",
+    "anh nay la gi",
+    "anh nay noi gi",
+    "hinh nay la gi",
+    "hinh nay noi gi",
+    "noi dung anh",
+    "noi dung hinh",
+    "tom tat anh",
+    "tom tat hinh",
+    "tom tat tai lieu",
+    "tom tat",
+    "doc giup",
+    "xem giup",
+  ]);
+  return genericTokens.has(q) || q.length === 0;
+}
+
 function hasPhrase(question: string, phrases: string[]) {
   return phrases.some((phrase) => question.includes(phrase));
 }

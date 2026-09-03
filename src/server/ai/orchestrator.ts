@@ -5,7 +5,7 @@ import { redactPii } from "@/lib/ai/redact";
 import { extractChartType, analyticsTimeseriesToChartArgs } from "@/lib/ai/render-line-chart";
 import { filterViolatingTools, validateToolPlan } from "@/lib/ai/policy";
 import { aiDashboardSpecSchema } from "@/lib/ai/schemas";
-import { buildAiPlanAsync, isDashboardIntent } from "@/lib/ai/semantic-layer";
+import { buildAiPlanAsync, isDashboardIntent, isGenericImageQuestion } from "@/lib/ai/semantic-layer";
 import {
   buildAnalyticsContext,
   buildChartForQuestion,
@@ -102,19 +102,23 @@ export async function runAiAnalysis(input: RunAiAnalysisInput): Promise<AiChatRe
   );
   const plannerMs = Date.now() - plannerStartedAt;
 
-  // Structured memory: lưu range/metric/dimensions của lần hỏi này
-  void updateConversationState(session.id, {
-    lastRange: plan.range,
-    lastMetric: plan.semanticQuery
-      ? { key: plan.semanticQuery.metric, version: plan.semanticQuery.metricVersion }
-      : undefined,
-    lastDimensions: plan.semanticQuery?.dimensions,
-    lastGrain: plan.semanticQuery?.grain,
-    lastComparison: plan.semanticQuery?.comparison,
-  }).catch(() => {});
+  const isImageGeneric = Boolean(input.imageText && isGenericImageQuestion(input.question));
+
+  // Structured memory: lưu range/metric/dimensions của lần hỏi này (bỏ qua khi người dùng gửi ảnh chung chung)
+  if (!isImageGeneric) {
+    void updateConversationState(session.id, {
+      lastRange: plan.range,
+      lastMetric: plan.semanticQuery
+        ? { key: plan.semanticQuery.metric, version: plan.semanticQuery.metricVersion }
+        : undefined,
+      lastDimensions: plan.semanticQuery?.dimensions,
+      lastGrain: plan.semanticQuery?.grain,
+      lastComparison: plan.semanticQuery?.comparison,
+    }).catch(() => {});
+  }
 
   // If the user attached an image, force the pipeline to use the LLM so the
-  // extracted image text is actually consumed (deterministic intents skip the model).
+  // extracted image text is actually consumed.
   const imageSource: AiSource | null = input.imageText
     ? {
       id: "IMG1",
@@ -125,21 +129,31 @@ export async function runAiAnalysis(input: RunAiAnalysisInput): Promise<AiChatRe
       meta: { tool: "image_to_text", source: "attachment" },
     }
     : null;
-  let effectivePlan = input.imageText && plan.deterministic
-    ? {
-      ...plan,
-      intent: "document_search" as const,
-      intentConfidence: 0.9,
-      modelTier: "fast" as const,
-      deterministic: false,
-      rationale: "Có ảnh đính kèm — cần mô hình để đọc nội dung ảnh.",
-      tools: [{
-        id: "tool-1",
-        name: "search_documents" as const,
-        arguments: { query: input.question, limit: 6 },
-      }],
+
+  let effectivePlan = plan;
+  if (input.imageText) {
+    const isImageOnlyQuery = isImageGeneric || plan.intent === "out_of_scope" || plan.intent === "document_search" || plan.intent === "greeting";
+    if (isImageOnlyQuery) {
+      effectivePlan = {
+        ...plan,
+        intent: "document_search" as const,
+        intentConfidence: 0.95,
+        modelTier: "fast" as const,
+        deterministic: false,
+        rationale: "Có ảnh đính kèm — cần mô hình đọc và tóm tắt nội dung tài liệu/hình ảnh.",
+        tools: [],
+        clarification: undefined,
+      };
+    } else {
+      effectivePlan = {
+        ...plan,
+        modelTier: "fast" as const,
+        deterministic: false,
+        rationale: "Có ảnh đính kèm — cần mô hình kết hợp số liệu và nội dung ảnh.",
+        clarification: undefined,
+      };
     }
-    : plan;
+  }
 
   // Câu hỏi mơ hồ → hỏi lại ngay, không chạy tool/LLM (rẻ và nhanh)
   if (effectivePlan.clarification) {
