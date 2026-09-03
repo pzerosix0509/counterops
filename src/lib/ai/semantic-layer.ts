@@ -337,6 +337,69 @@ export function isGenericImageQuestion(question?: string | null): boolean {
   return genericTokens.has(q) || q.length === 0;
 }
 
+/** Nhận diện câu hỏi cần tìm kiếm thông tin bên ngoài trên web */
+export function isWebSearchQuestion(question: string): boolean {
+  const q = normalizeIntentText(question);
+
+  // 1. Tiền tố / lệnh tìm kiếm rõ ràng
+  const explicitSearch = hasPhrase(q, [
+    "tim kiem web", "tra cuu web", "thong tin tren web", "web search", "search web",
+    "tim tren mang", "tra tren mang", "tim tren google", "tra google", "search google",
+    "tin tuc", "tin moi nhat", "thoi su", "bao chi", "tren mang noi gi",
+  ]);
+  if (explicitSearch) return true;
+
+  // 2. Thời tiết
+  const weather = hasPhrase(q, ["thoi tiet", "du bao thoi tiet", "nhiet do hom nay", "troi co mua khong", "co mua khong"]);
+  if (weather) return true;
+
+  // 3. Thị trường tài chính & vĩ mô (vàng, ngoại tệ, chứng khoán, crypto, xăng dầu, lãi suất)
+  const finance = hasPhrase(q, [
+    "gia vang", "vang mieng", "sjc", "pnj", "vang 9999",
+    "bitcoin", "crypto", "tien ao", "chung khoan", "vnindex", "co phieu",
+    "ty gia", "ngoai te", "usd", "do la", "eur",
+    "xang dau", "gia xang", "gia dau", "ron 95",
+    "lai suat", "lam phat",
+  ]) || /^(gia vang|thoi tiet|bitcoin|crypto|chung khoan|gia xang|gia dau|ty gia)\b/.test(q);
+  if (finance) return true;
+
+  // 4. Giá cả thị trường hàng hóa / nguyên liệu (cà phê nhân, hạt, nông sản...)
+  const hasMarketKeyword = hasPhrase(q, ["thi truong", "the gioi", "trong nuoc", "xuat khau", "san giao dich", "ngoai cho", "hien nay"]);
+  const commodity = hasPhrase(q, [
+    "ca phe", "hat ca phe", "ca phe nhan", "robusta", "arabica", "nong san", "tieu", "dieu", "gao", "lua",
+    "sua dac", "duong cat", "nguyen lieu pha che",
+  ]);
+  const isAskingPrice = q.includes("gia") || q.includes("bao nhieu") || q.includes("tang hay giam");
+
+  if (isAskingPrice && (commodity || hasMarketKeyword)) {
+    // Trừ trường hợp hỏi cụ thể giá vốn/giá bán nội bộ của quán
+    const isInternalPrice = hasPhrase(q, ["gia von", "gia ban tai quan", "gia trong menu", "gia cua quan", "gia nhap vao"]);
+    if (!isInternalPrice) return true;
+  }
+
+  // 5. Xu hướng thị trường F&B & Đối thủ cạnh tranh
+  const isTrendOrCompetitor = hasPhrase(q, [
+    "xu huong f&b", "xu huong do uong", "trend do uong", "hot trend do uong", "do uong hot trend",
+    "thi hieu khach hang", "xu huong quan cafe", "mo hinh cafe",
+    "highlands", "phuc long", "starbucks", "the coffee house", "katinat", "trung nguyen",
+  ]);
+  if (isTrendOrCompetitor && !hasPhrase(q, ["cua quan", "tai quan"])) return true;
+
+  // 6. Kiến thức bên ngoài / người nổi tiếng / thể thao
+  const generalKnowledge = hasPhrase(q, [
+    "ronaldo", "messi", "bong da", "world cup", "ngoai hang anh",
+    "ca si", "dien vien", "tong thong", "thu tuong",
+  ]);
+  if (generalKnowledge) return true;
+
+  // 7. Câu hỏi giá có mốc thị trường/hôm nay bên ngoài
+  if (/^gia\b/.test(q) && (q.includes("hom nay") || q.includes("hien nay") || q.includes("thi truong")) && !q.includes("gia von") && !q.includes("gia ban")) {
+    return true;
+  }
+
+  return false;
+}
+
 function hasPhrase(question: string, phrases: string[]) {
   return phrases.some((phrase) => question.includes(phrase));
 }
@@ -407,9 +470,7 @@ function scoreIntents(question: string, mode: "chat" | "dashboard"): Array<{ int
   const isCapability = /^(m|ban|bạn|em)\s*(la ai|là ai|lam duoc gi|làm được gì|co the giup gi|có thể giúp gì|giup duoc gi)\b/.test(q)
     || hasPhrase(q, ["lam duoc gi", "lam duoc nhung gi", "co the lam gi", "giup duoc gi", "giup duoc nhung gi", "giup minh nhung gi", "giup toi nhung gi", "tinh nang gi", "ban la ai", "ban lam duoc gi", "m giup", "m la ai", "em la ai", "em lam duoc gi"]);
   const documentIntent = hasPhrase(q, ["tai lieu", "da upload", "quy dinh", "huong dan", "document"]);
-  const webIntent = hasPhrase(q, ["tim kiem web", "tra cuu web", "thong tin tren web", "tin tuc", "gia vang", "thoi tiet", "bitcoin", "crypto", "chung khoan", "thi truong", "web search", "ronaldo", "messi", "ca si", "cau thu", "nguoi noi tieng"])
-    || /^(gia vang|thoi tiet|bitcoin|crypto|chung khoan)\b/.test(q)
-    || (/^gia\b/.test(q) && !q.includes("gia von") && !q.includes("gia ban"));
+  const webIntent = isWebSearchQuestion(question);
   const forecastIntent = hasPhrase(q, ["du bao", "du doan", "tháng tới", "thang toi", "tuan toi", "ky toi", "forecast", "predict", "tuong lai"]);
   const diagnosisIntent = hasPhrase(q, ["tai sao", "nguyen nhan", "de xuat", "khuyen nghi", "can lam gi", "nen lam gi", "bat thuong"]);
   const inventoryIntent = hasToken(q, ["ton", "inventory"]) || hasPhrase(q, ["ton kho", "am kho", "het kho", "kho hang", "nguyen lieu", "het hang", "sap het"]);
@@ -421,8 +482,9 @@ function scoreIntents(question: string, mode: "chat" | "dashboard"): Array<{ int
     || hasToken(q, ["trend", "chart"]);
   const metricIntent = hasToken(q, ["doanh", "thu", "loi", "nhuan", "don", "cogs", "margin", "tien", "giavon"])
     || hasPhrase(q, ["gia von", "gia ban", "so tien", "nhieu tien"]);
-  // "Giá X thế nào" không rõ là giá vốn (metric) hay giá thị trường (web) → mơ hồ
+  // "Giá X thế nào" chỉ mơ hồ khi KHÔNG xác định được là web và cũng không nói rõ là giá vốn hay menu của quán
   const priceAmbiguity = /^gia\b/.test(q)
+    && !webIntent
     && !q.includes("gia vang")
     && !q.includes("gia ca")
     && !q.includes("gia ban")
@@ -438,7 +500,7 @@ function scoreIntents(question: string, mode: "chat" | "dashboard"): Array<{ int
   if (hasPhrase(q, ["tom tat cuoc tro chuyen", "tom tat hoi thoai", "ket luan chinh"])) {
     scores.push({ intent: "conversation_summary", confidence: 0.94 });
   }
-  if (webIntent && !priceAmbiguity) scores.push({ intent: "web_search", confidence: 0.9 });
+  if (webIntent) scores.push({ intent: "web_search", confidence: 0.95 });
   if (priceAmbiguity) {
     scores.push({ intent: "web_search", confidence: 0.62 });
     scores.push({ intent: "metric_lookup", confidence: 0.6 });

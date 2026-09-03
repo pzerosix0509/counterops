@@ -117,6 +117,15 @@ Khác với tool analytics (lấy số từ RPC) hay tool retrieval (lấy từ 
 - Min role: `cashier` (`src/lib/ai/policy.ts`).
 - Test: `src/__tests__/render-line-chart.test.ts` (11 case: valid, empty, malformed, missing labels, non-numeric yLabel, oversize data/title).
 
+### Tool `search_web` (Tìm kiếm web & Thông tin bên ngoài)
+- Nguồn: Tavily API (`src/lib/ai/web-search.ts`).
+- Timeout: `AI_WEB_SEARCH_TIMEOUT_MS` (mặc định 12_000ms, tránh timeout sớm khi mạng quốc tế chậm).
+- Làm sạch truy vấn: `cleanWebSearchQuery()` tự động loại bỏ các tiền tố như `web search`, `tìm kiếm web`, `tra cứu`, `tìm trên mạng`... trước khi gửi tới API.
+- Tiêu chuẩn kích hoạt `web_search`: `isWebSearchQuestion()` (`src/lib/ai/semantic-layer.ts`) phân biệt rõ ràng:
+  - Thông tin bên ngoài: giá hàng hóa/nguyên liệu thị trường (giá cà phê nhân, nông sản, robusta, arabica, giá vàng, tỷ giá, giá xăng dầu), xu hướng đồ uống/thị trường F&B, đối thủ cạnh tranh (Highlands, Phúc Long, The Coffee House...), thời tiết, tin tức, kiến thức chung ngoài quán.
+  - Thông tin nội bộ quán: doanh thu, giá vốn (COGS), giá bán trong menu, tồn kho quán → giữ nguyên các tool analytics/metric_lookup nội bộ.
+- Fallback an toàn: nếu tìm kiếm web rỗng/timeout, không đưa ra số liệu doanh thu quán mà giải thích rõ không kết nối được dữ liệu trực tuyến.
+
 ### Forecast
 `src/lib/ai/forecast.ts`:
 - `computeForecast()` — weighted moving average (ngày gần trọng số cao hơn), confidence interval 1.5σ.
