@@ -13,13 +13,13 @@ export function PosFloorPlan({
   areas,
   tables,
   activeOrders,
-  onNewOrder,
+  onNewTakeawayOrder,
   onTableClick,
 }: {
   areas: Area[];
   tables: DiningTable[];
   activeOrders: PosTableOrderSummary[];
-  onNewOrder: () => void;
+  onNewTakeawayOrder: () => void;
   onTableClick: (table: DiningTable, order?: PosTableOrderSummary) => void;
 }) {
   const [activeArea, setActiveArea] = useState<string>("all");
@@ -67,9 +67,9 @@ export function PosFloorPlan({
             </Button>
           ))}
         </div>
-        <Button onClick={onNewOrder}>
+        <Button onClick={onNewTakeawayOrder}>
           <Plus className="h-4 w-4" />
-          Tạo đơn mới
+          Tạo đơn mang đi
         </Button>
       </div>
 

@@ -10,7 +10,6 @@ import { useBranchRealtime } from "@/hooks/use-branch-realtime";
 import { notifyError } from "@/hooks/use-notify";
 import { createFreshSession, sessionFromOrder } from "@/lib/pos/session";
 import { loadPosOrder } from "@/server/actions/orders";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { PosProduct } from "@/lib/pos/product";
 import type { OperationalSettings } from "@/lib/settings/operational";
 import type { PosTableOrderSummary } from "@/server/queries/orders";
@@ -71,14 +70,15 @@ export function PosWorkspace(props: Props) {
     onChange: () => router.refresh(),
   });
 
-  const takeawayChannels = useMemo(
-    () => channels.filter((c) => c.type === "takeaway" || c.name.toLowerCase().includes("grab")),
-    [channels]
-  );
-
-  function openNewOrder() {
-    const empty = resetSession();
-    replaceSession(empty);
+  function openTakeawayOrder() {
+    replaceSession(
+      createFreshSession(settings.defaultOrderType, branchId, {
+        orderType: "takeaway",
+        tableId: null,
+        step: "service",
+        maxStep: "service",
+      })
+    );
     setView("wizard");
   }
 
@@ -180,39 +180,12 @@ export function PosWorkspace(props: Props) {
         </p>
       ) : null}
 
-      {/* Tích hợp bộ chọn kênh Grab / Mang đi khi đang ở Wizard mang đi */}
-      {view === "wizard" && session.orderType === "takeaway" ? (
-        <div className="rounded-lg border bg-muted/30 p-3 space-y-1 max-w-sm">
-          <label className="text-xs font-medium">Kênh bán mang đi</label>
-          <Select
-            value={session.channelId ?? ""}
-            onValueChange={(val) => patchSession({ channelId: val })}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Chọn kênh (Grab, ShopeeFood...)" />
-            </SelectTrigger>
-            <SelectContent>
-              {takeawayChannels.map((channel) => (
-                <SelectItem key={channel.id} value={channel.id}>
-                  {channel.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {takeawayChannels.length === 0 ? (
-            <p className="text-xs text-muted-foreground">
-              Chưa có kênh mang đi. Hãy cấu hình Grab (Mock) trong cài đặt kênh bán.
-            </p>
-          ) : null}
-        </div>
-      ) : null}
-
       {view === "floor" ? (
         <PosFloorPlan
           areas={areas}
           tables={tables}
           activeOrders={activeOrders}
-          onNewOrder={openNewOrder}
+          onNewTakeawayOrder={openTakeawayOrder}
           onTableClick={handleTableClick}
         />
       ) : null}
