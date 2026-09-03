@@ -29,9 +29,10 @@ describe("updateCustomerSchema", () => {
     }
   });
 
-  it("rejects invalid email, birthday, and id", () => {
+  it("rejects invalid email, birthday, id, and phone", () => {
     expect(updateCustomerSchema.safeParse({ id, email: "not-an-email" }).success).toBe(false);
     expect(updateCustomerSchema.safeParse({ id, birthday: "01-05-1990" }).success).toBe(false);
     expect(updateCustomerSchema.safeParse({ id: "nope", name: "A" }).success).toBe(false);
+    expect(updateCustomerSchema.safeParse({ id, phone: "123" }).success).toBe(false);
   });
 });

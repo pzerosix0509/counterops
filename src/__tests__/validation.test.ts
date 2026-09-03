@@ -47,6 +47,33 @@ describe("validation schemas", () => {
     expect(r.success).toBe(false);
   });
 
+  it("rejects invalid customer phone on orders", () => {
+    const r = orderInputSchema.safeParse({
+      branchId: "00000000-0000-0000-0000-000000000000",
+      orderType: "dine_in",
+      customerPhone: "123",
+      items: [{ productId: "11111111-1111-4111-8111-111111111111", quantity: 1 }],
+      discountAmount: 0,
+      taxAmount: 0,
+      serviceFeeAmount: 0,
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it("normalizes valid customer phone on orders", () => {
+    const r = orderInputSchema.safeParse({
+      branchId: "00000000-0000-0000-0000-000000000000",
+      orderType: "dine_in",
+      customerPhone: "+84 901 234 567",
+      items: [{ productId: "11111111-1111-4111-8111-111111111111", quantity: 1 }],
+      discountAmount: 0,
+      taxAmount: 0,
+      serviceFeeAmount: 0,
+    });
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.customerPhone).toBe("0901234567");
+  });
+
   it("requires at least one payment", () => {
     const r = paymentInputSchema.safeParse({
       orderId: "00000000-0000-0000-0000-000000000000",

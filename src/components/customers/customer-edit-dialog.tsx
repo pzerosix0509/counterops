@@ -6,6 +6,7 @@ import { Input, Textarea } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { notifyError, notifySuccess } from "@/hooks/use-notify";
+import { getCustomerPhoneError } from "@/lib/customers/phone";
 import { updateCustomer } from "@/server/actions/customers";
 import type { CustomerDetail } from "@/types/customers";
 
@@ -33,6 +34,12 @@ export function CustomerEditDialog({
     if (!customer) return;
     setError(null);
     const form = new FormData(event.currentTarget);
+    const phone = String(form.get("phone") || "");
+    const phoneError = getCustomerPhoneError(phone);
+    if (phoneError) {
+      setError(phoneError);
+      return;
+    }
     startTransition(async () => {
       const res = await updateCustomer({
         id: customer.id,

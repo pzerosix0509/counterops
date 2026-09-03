@@ -7,11 +7,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatVND } from "@/lib/date/ranges";
 import { RFM_SEGMENTS, SEGMENT_LABELS, SEGMENT_VARIANT } from "@/lib/customers/labels";
+import { formatAnalyticsCustomerLabel } from "@/lib/customers/phone";
 import type { RfmCustomerRow, RfmSegment, RfmSummaryRow } from "@/types/analytics";
-
-function shortCustomerId(customerId: string) {
-  return customerId.replace(/-/g, "").slice(0, 8);
-}
 
 function formatScore(value: number | null) {
   return value == null ? "—" : String(value);
@@ -100,7 +97,9 @@ export function RfmPanel({
               <TableBody>
                 {customers.map((row) => (
                   <TableRow key={row.customerId}>
-                    <TableCell className="font-medium">Khách {shortCustomerId(row.customerId)}</TableCell>
+                    <TableCell className="font-medium">
+                      {formatAnalyticsCustomerLabel(row.customerPhone, row.customerName)}
+                    </TableCell>
                     <TableCell>
                       {row.segment ? (
                         <Badge variant={SEGMENT_VARIANT[row.segment]}>{SEGMENT_LABELS[row.segment]}</Badge>

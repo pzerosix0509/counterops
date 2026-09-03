@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { canRefreshAnalytics, canViewReports, requireActiveContext, requireRole } from "@/lib/auth/permissions";
+import { optionalCustomerPhoneSchema } from "@/lib/validation/schemas";
 import { actionFail, actionOk, type ActionResult } from "@/lib/utils/action-result";
 import { clearAiToolCache } from "@/server/ai/cache";
 import { scoreFeedbackText, SENTIMENT_CONCURRENCY } from "@/server/ai/sentiment";
@@ -13,7 +14,7 @@ import { upsertCustomerByPhone } from "@/server/customers";
 const createFeedbackSchema = z.object({
   orderId: z.string().uuid().optional().nullable(),
   customerId: z.string().uuid().optional().nullable(),
-  customerPhone: z.string().trim().max(20).optional().nullable(),
+  customerPhone: optionalCustomerPhoneSchema,
   customerName: z.string().trim().max(120).optional().nullable(),
   rating: z.number().int().min(1).max(5),
   feedbackText: z.string().trim().max(4000).optional().nullable(),

@@ -78,7 +78,7 @@ export async function getRfmCustomers(
   let query = supabase
     .from("customer_features")
     .select(
-      "customer_id, recency_days, frequency, monetary, r_score, f_score, m_score, rfm_segment",
+      "customer_id, recency_days, frequency, monetary, r_score, f_score, m_score, rfm_segment, customers(phone, name)",
     )
     .eq("organization_id", organizationId)
     .eq("branch_id", branchId)
@@ -89,16 +89,21 @@ export async function getRfmCustomers(
   const { data, error } = await query;
   if (error || !data) return [];
 
-  return data.map((row) => ({
-    customerId: row.customer_id,
-    recencyDays: Number(row.recency_days),
-    frequency: Number(row.frequency),
-    monetary: Number(row.monetary),
-    rScore: row.r_score,
-    fScore: row.f_score,
-    mScore: row.m_score,
-    segment: asSegment(row.rfm_segment),
-  }));
+  return data.map((row) => {
+    const customer = Array.isArray(row.customers) ? row.customers[0] : row.customers;
+    return {
+      customerId: row.customer_id,
+      customerPhone: (customer as { phone?: string | null } | null)?.phone ?? null,
+      customerName: (customer as { name?: string | null } | null)?.name ?? null,
+      recencyDays: Number(row.recency_days),
+      frequency: Number(row.frequency),
+      monetary: Number(row.monetary),
+      rScore: row.r_score,
+      fScore: row.f_score,
+      mScore: row.m_score,
+      segment: asSegment(row.rfm_segment),
+    };
+  });
 }
 
 const SENTIMENT_SUMMARY_DAYS = 90;
@@ -211,7 +216,7 @@ export async function getCustomerClusters(
       .maybeSingle(),
     supabase
       .from("customer_features")
-      .select("customer_id, cluster_id, rfm_segment, recency_days, frequency, monetary")
+      .select("customer_id, cluster_id, rfm_segment, recency_days, frequency, monetary, customers(phone, name)")
       .eq("organization_id", organizationId)
       .eq("branch_id", branchId)
       .not("cluster_id", "is", null)
@@ -219,14 +224,19 @@ export async function getCustomerClusters(
       .limit(100),
   ]);
 
-  const mappedCustomers: ClusterCustomerRow[] = (customers ?? []).map((row) => ({
-    customerId: row.customer_id,
-    clusterId: row.cluster_id,
-    rfmSegment: asSegment(row.rfm_segment),
-    recencyDays: Number(row.recency_days),
-    frequency: Number(row.frequency),
-    monetary: Number(row.monetary),
-  }));
+  const mappedCustomers: ClusterCustomerRow[] = (customers ?? []).map((row) => {
+    const customer = Array.isArray(row.customers) ? row.customers[0] : row.customers;
+    return {
+      customerId: row.customer_id,
+      customerPhone: (customer as { phone?: string | null } | null)?.phone ?? null,
+      customerName: (customer as { name?: string | null } | null)?.name ?? null,
+      clusterId: row.cluster_id,
+      rfmSegment: asSegment(row.rfm_segment),
+      recencyDays: Number(row.recency_days),
+      frequency: Number(row.frequency),
+      monetary: Number(row.monetary),
+    };
+  });
 
   return {
     k: fit?.k ?? 0,

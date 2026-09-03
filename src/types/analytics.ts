@@ -38,6 +38,8 @@ export interface RfmSummaryRow {
 
 export interface RfmCustomerRow {
   customerId: string;
+  customerPhone: string | null;
+  customerName: string | null;
   recencyDays: number;
   frequency: number;
   monetary: number;
@@ -76,6 +78,8 @@ export interface ClusterProfileRow {
 
 export interface ClusterCustomerRow {
   customerId: string;
+  customerPhone: string | null;
+  customerName: string | null;
   clusterId: number | null;
   rfmSegment: RfmSegment | null;
   recencyDays: number;
