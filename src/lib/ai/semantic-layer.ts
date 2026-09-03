@@ -392,8 +392,8 @@ export function isWebSearchQuestion(question: string): boolean {
   ]);
   if (generalKnowledge) return true;
 
-  // 7. Câu hỏi giá có mốc thị trường/hôm nay bên ngoài
-  if (/^gia\b/.test(q) && (q.includes("hom nay") || q.includes("hien nay") || q.includes("thi truong")) && !q.includes("gia von") && !q.includes("gia ban")) {
+  // 7. Câu hỏi giá cả thị trường bên ngoài rõ ràng
+  if (q.includes("gia thi truong") || (q.includes("thi truong") && q.includes("gia"))) {
     return true;
   }
 
