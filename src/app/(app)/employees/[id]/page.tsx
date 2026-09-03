@@ -24,6 +24,7 @@ export default async function EmployeeDetailsPage({ params }: { params: { id: st
   let { data: employeeRaw, error } = await supabase
     .from("employees")
     .select("*, branch:branches(name), role:roles(name)")
+    .eq("id", employeeId)
     .maybeSingle();
 
   if (error) {
@@ -37,6 +38,7 @@ export default async function EmployeeDetailsPage({ params }: { params: { id: st
       .from("employees")
       .select("*, branch:branches(name), role:roles(name)")
       .eq("id", employeeId)
+      .maybeSingle();
 
     if (adminError) {
       console.error("Employee fetch error with admin client:", adminError);
@@ -50,6 +52,8 @@ export default async function EmployeeDetailsPage({ params }: { params: { id: st
     console.error("Employee not found or organization mismatch for ID:", employeeId);
     notFound();
   }
+
+  // Handle Supabase join types safely
   const employee = employeeRaw as any;
   const branchName = Array.isArray(employee.branch) ? employee.branch[0]?.name : employee.branch?.name;
   const roleName = Array.isArray(employee.role) ? employee.role[0]?.name : employee.role?.name;

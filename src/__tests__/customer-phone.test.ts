@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fallbackCustomerName, normalizeCustomerPhone } from "@/lib/customers/phone";
+import { fallbackCustomerName, normalizeCustomerPhone, resolveUpdatedPhone } from "@/lib/customers/phone";
 
 describe("normalizeCustomerPhone", () => {
   it("keeps digits and drops spaces", () => {
@@ -20,5 +20,12 @@ describe("fallbackCustomerName", () => {
 
   it("falls back to last 4 digits", () => {
     expect(fallbackCustomerName("", "0901234567")).toBe("Khách 4567");
+  });
+});
+
+describe("resolveUpdatedPhone uniqueness helper", () => {
+  it("allows clearing a phone", () => {
+    const cleared = resolveUpdatedPhone(null);
+    expect(cleared).toEqual({ ok: true, phone: null });
   });
 });

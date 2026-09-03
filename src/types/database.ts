@@ -15,6 +15,7 @@ export type OrderStatus = "draft" | "open" | "sent_to_kitchen" | "partially_paid
 export type KitchenStatus = "not_required" | "pending" | "cooking" | "ready" | "served" | "cancelled";
 export type PaymentMethod = "cash" | "bank_transfer" | "card" | "ewallet" | "debt" | "other";
 export type MovementType = "purchase" | "sale_deduction" | "adjustment" | "transfer_in" | "transfer_out" | "waste" | "return";
+export type EmployeeStatus = "ACTIVE" | "INACTIVE" | "RESIGNED";
 
 export interface Organization {
   id: string;
@@ -72,6 +73,29 @@ export interface Branch {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+}
+export interface Employee {
+  id: string;
+  organization_id: string;
+  employee_code: string;
+  full_name: string;
+  phone_number: string | null;
+  email: string | null;
+  user_id: string | null;
+  role_id: string | null;
+  branch_id: string;
+  status: EmployeeStatus;
+  start_date: string;
+  end_date: string | null;
+  created_at: string;
+  updated_at: string;
+}
+export interface EmployeeRole {
+  id: string;
+  organization_id: string;
+  name: string;
+  is_system_admin: boolean;
+  created_at: string;
 }
 export interface Profile {
   id: string;

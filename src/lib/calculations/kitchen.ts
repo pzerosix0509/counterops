@@ -41,6 +41,45 @@ export interface KitchenBoardItem {
 
 export type KitchenItem = KitchenBoardItem;
 
+export const KITCHEN_TRACKED_STATUSES = ["pending", "cooking", "ready"] as const satisfies readonly KitchenStatus[];
+
+export function isKitchenActionableStatus(status: KitchenStatus): boolean {
+  return status === "pending" || status === "cooking" || status === "ready";
+}
+
+/** Dedupe order item rows after merging tracked items with same-order companions. */
+export function mergeKitchenCompanionRows(rows: KitchenBoardRow[]): KitchenBoardRow[] {
+  const seen = new Set<string>();
+  const merged: KitchenBoardRow[] = [];
+  for (const row of rows) {
+    if (seen.has(row.id)) continue;
+    seen.add(row.id);
+    merged.push(row);
+  }
+  return merged;
+}
+
+export function filterKitchenItemsForTab(
+  items: KitchenBoardItem[],
+  tab: "pending" | "ready",
+  opts: { includeRegular?: boolean } = {}
+): KitchenBoardItem[] {
+  const matchesTab = (status: KitchenStatus) =>
+    tab === "pending" ? status === "pending" || status === "cooking" : status === "ready";
+
+  const activeOrderIds = new Set(items.filter((it) => matchesTab(it.item.kitchen_status)).map((it) => it.item.order_id));
+  if (activeOrderIds.size === 0) {
+    if (!opts.includeRegular || tab !== "pending") return [];
+    return items.filter((it) => it.item.kitchen_status === "not_required");
+  }
+
+  return items.filter(
+    (it) =>
+      activeOrderIds.has(it.item.order_id) &&
+      (matchesTab(it.item.kitchen_status) || it.item.kitchen_status === "not_required")
+  );
+}
+
 export function transformKitchenItems(rows: KitchenBoardRow[]): KitchenBoardItem[] {
   return (rows ?? [])
     .filter((row) => row.orders?.status === "paid")

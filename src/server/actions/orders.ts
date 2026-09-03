@@ -8,6 +8,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { calculateTotals, newOrderNumber, classifyPaymentStatus } from "@/lib/calculations/orders";
 import { clearAiToolCache } from "@/server/ai/cache";
 import { upsertCustomerByPhone } from "@/server/customers";
+import { getOrderWithItems } from "@/server/queries/orders";
 
 const OPEN_ORDER_STATUSES = ["draft", "open", "sent_to_kitchen", "partially_paid"] as const;
 
@@ -558,4 +559,14 @@ export async function cancelOrderItem(organizationId: string, input: unknown): P
   revalidatePath("/kitchen");
   revalidatePath("/dashboard");
   return actionOk({ id: parsed.data.orderItemId });
+}
+
+export async function loadPosOrder(
+  organizationId: string,
+  orderId: string
+): Promise<ActionResult<{ order: NonNullable<Awaited<ReturnType<typeof getOrderWithItems>>> }>> {
+  await requireRole(organizationId, canCreateOrder);
+  const order = await getOrderWithItems(organizationId, orderId);
+  if (!order) return actionFail("NOT_FOUND", "Không tìm thấy đơn");
+  return actionOk({ order });
 }

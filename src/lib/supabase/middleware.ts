@@ -1,4 +1,4 @@
-﻿import { createServerClient, type CookieOptions } from "@supabase/ssr";
+import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "@/types/database";
 
@@ -29,7 +29,7 @@ export async function updateSession(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser();
   const pathname = request.nextUrl.pathname;
-  const isAuthRoute = pathname.startsWith("/login") || pathname.startsWith("/onboarding") || pathname.startsWith("/access-error") || pathname.startsWith("/auth") || pathname.startsWith("/register");
+  const isAuthRoute = pathname.startsWith("/login") || pathname.startsWith("/onboarding") || pathname.startsWith("/access-error") || pathname.startsWith("/auth") || pathname.startsWith("/register") || pathname.startsWith("/change-password");
   const isPublic = pathname === "/" || isAuthRoute;
   const isApiRoute = pathname.startsWith("/api/");
 

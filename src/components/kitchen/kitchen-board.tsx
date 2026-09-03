@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Hourglass, ShoppingBag } from "lucide-react";
+import { Check, CheckCheck, Hourglass, ShoppingBag } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,6 +12,10 @@ import { formatTime } from "@/lib/utils/format";
 import { updateKitchenStatus } from "@/server/actions/orders";
 import { useBranchRealtime } from "@/hooks/use-branch-realtime";
 import { notifyError, notifyInfo } from "@/hooks/use-notify";
+import {
+  filterKitchenItemsForTab,
+  isKitchenActionableStatus,
+} from "@/lib/calculations/kitchen";
 import type { KitchenItem as KitchenItemType } from "@/server/queries/kitchen";
 
 type KitchenTab = "pending" | "ready";
@@ -23,6 +27,7 @@ export function KitchenBoard({
   canUpdate,
   soundEnabled,
   autoMarkServedOnReady,
+  showRegularItems,
 }: {
   organizationId: string;
   branchId: string;
@@ -30,12 +35,38 @@ export function KitchenBoard({
   canUpdate: boolean;
   soundEnabled: boolean;
   autoMarkServedOnReady: boolean;
+  showRegularItems: boolean;
 }) {
   const router = useRouter();
   const [tab, setTab] = useState<KitchenTab>("pending");
   const [error, setError] = useState<string | null>(null);
   const [optimisticIds, setOptimisticIds] = useState<Record<string, "ready" | "served">>({});
+  const [isBulkUpdating, setIsBulkUpdating] = useState(false);
   const seenItemIdsRef = useRef<Set<string> | null>(null);
+
+  useEffect(() => {
+    setOptimisticIds((prev) => {
+      if (Object.keys(prev).length === 0) return prev;
+      const next = { ...prev };
+      let changed = false;
+      for (const [id, status] of Object.entries(prev)) {
+        const row = items.find((item) => item.item.id === id);
+        if (row?.item.kitchen_status === status) {
+          delete next[id];
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [items]);
+
+  const displayItems = useMemo(() => {
+    return items.map((it) => {
+      const optimistic = optimisticIds[it.item.id];
+      if (!optimistic) return it;
+      return { ...it, item: { ...it.item, kitchen_status: optimistic } };
+    });
+  }, [items, optimisticIds]);
 
   const realtime = useBranchRealtime({
     branchId,
@@ -45,7 +76,7 @@ export function KitchenBoard({
 
   useEffect(() => {
     const activeIds = new Set(
-      items
+      displayItems
         .filter((item) => item.item.kitchen_status === "pending" || item.item.kitchen_status === "cooking")
         .map((item) => item.item.id)
     );
@@ -59,7 +90,7 @@ export function KitchenBoard({
       notifyInfo("Có món mới vào bếp", `${addedCount} món vừa được thanh toán.`);
       if (soundEnabled) playKitchenTone();
     }
-  }, [items, soundEnabled]);
+  }, [displayItems, soundEnabled]);
 
   const groups = useMemo(() => {
     const m = new Map<
@@ -74,7 +105,7 @@ export function KitchenBoard({
         items: KitchenItemType[];
       }
     >();
-    for (const it of items) {
+    for (const it of displayItems) {
       const key = it.item.order_id;
       const cur = m.get(key) ?? {
         orderNumber: it.orderNumber,
@@ -89,26 +120,25 @@ export function KitchenBoard({
       m.set(key, cur);
     }
     return Array.from(m.entries()).map(([orderId, v]) => ({ orderId, ...v }));
-  }, [items]);
+  }, [displayItems]);
 
   const filtered = useMemo(() => {
     return groups
       .map((g) => ({
         ...g,
-        items: g.items.filter((it) =>
-          tab === "pending"
-            ? it.item.kitchen_status === "pending" || it.item.kitchen_status === "cooking"
-            : it.item.kitchen_status === "ready"
-        ),
+        items: filterKitchenItemsForTab(g.items, tab, { includeRegular: showRegularItems }),
       }))
       .filter((g) => g.items.length > 0);
-  }, [groups, tab]);
+  }, [groups, tab, showRegularItems]);
 
   function changeStatus(itemId: string, status: "ready" | "served") {
     if (!canUpdate) return;
     const nextStatus = status === "ready" && autoMarkServedOnReady ? "served" : status;
     setError(null);
     setOptimisticIds((prev) => ({ ...prev, [itemId]: nextStatus }));
+    if (status === "ready" && !autoMarkServedOnReady) {
+      setTab("ready");
+    }
     updateKitchenStatus(organizationId, itemId, { status: nextStatus }).then((result) => {
       if (!result.ok) {
         setOptimisticIds((prev) => {
@@ -124,18 +154,44 @@ export function KitchenBoard({
     });
   }
 
+  async function markAllItems(items: KitchenItemType[], status: "ready" | "served") {
+    if (!canUpdate || isBulkUpdating || items.length === 0) return;
+    const itemIds = items.map((it) => it.item.id);
+    setError(null);
+    setIsBulkUpdating(true);
+    setOptimisticIds((prev) => itemIds.reduce((next, id) => ({ ...next, [id]: status }), { ...prev }));
+    if (status === "ready") setTab("ready");
+
+    const results = await Promise.all(itemIds.map((itemId) => updateKitchenStatus(organizationId, itemId, { status })));
+    const failedIds = itemIds.filter((_, index) => !results[index]?.ok);
+    if (failedIds.length > 0) {
+      setOptimisticIds((prev) => {
+        const next = { ...prev };
+        for (const id of failedIds) delete next[id];
+        return next;
+      });
+      const message = `${failedIds.length}/${itemIds.length} món chưa thể cập nhật trạng thái.`;
+      setError(message);
+      notifyError("Không thể cập nhật tất cả món", message);
+    }
+    setIsBulkUpdating(false);
+    router.refresh();
+  }
+
   return (
     <div className="space-y-3">
-      <Tabs value={tab} onValueChange={(v) => setTab(v as KitchenTab)}>
-        <TabsList>
-          <TabsTrigger value="pending">
-            <Hourglass className="h-3.5 w-3.5" /> Chờ chế biến
-          </TabsTrigger>
-          <TabsTrigger value="ready">
-            <Check className="h-3.5 w-3.5" /> Sẵn sàng
-          </TabsTrigger>
-        </TabsList>
-      </Tabs>
+      <div className="flex flex-wrap items-center gap-2">
+        <Tabs value={tab} onValueChange={(v) => setTab(v as KitchenTab)}>
+          <TabsList>
+            <TabsTrigger value="pending">
+              <Hourglass className="h-3.5 w-3.5" /> Chờ chế biến
+            </TabsTrigger>
+            <TabsTrigger value="ready">
+              <Check className="h-3.5 w-3.5" /> Sẵn sàng
+            </TabsTrigger>
+            </TabsList>
+        </Tabs>
+      </div>
 
       {error ? <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p> : null}
       {realtime.isSubscribed && realtime.hasPendingChange ? <p className="text-xs text-muted-foreground">Đang đồng bộ...</p> : null}
@@ -170,16 +226,19 @@ export function KitchenBoard({
                 </div>
               </CardHeader>
               <CardContent className="space-y-2">
-                {g.items.map((it) => (
+                {g.items.map((it) => {
+                  const actionable = isKitchenActionableStatus(it.item.kitchen_status);
+                  return (
                   <div key={it.item.id} className="rounded-md border p-2 text-sm">
                     <div className="flex items-start justify-between gap-2">
                       <div>
                         <p className="font-medium">{it.item.product_name_snapshot} x {Number(it.item.quantity)}</p>
                         {it.item.note ? <p className="text-xs italic text-muted-foreground">{it.item.note}</p> : null}
+                        {!actionable ? <p className="text-xs text-muted-foreground">Không cần chế biến</p> : null}
                       </div>
                       <span className="text-xs text-muted-foreground">{formatTime(it.item.created_at)}</span>
                     </div>
-                    {canUpdate ? (
+                    {canUpdate && actionable ? (
                       <div className="mt-2 flex flex-wrap gap-1">
                         {tab === "pending" ? (
                           <Button size="sm" disabled={!!optimisticIds[it.item.id]} onClick={() => changeStatus(it.item.id, "ready")}>
@@ -193,7 +252,31 @@ export function KitchenBoard({
                       </div>
                     ) : null}
                   </div>
-                ))}
+                );
+                })}
+                {canUpdate ? (() => {
+                  const bulkItems = g.items.filter((it) =>
+                    tab === "pending"
+                      ? it.item.kitchen_status === "pending" || it.item.kitchen_status === "cooking"
+                      : it.item.kitchen_status === "ready"
+                  );
+                  if (bulkItems.length === 0) return null;
+                  const targetStatus = tab === "pending"
+                    ? (autoMarkServedOnReady ? "served" : "ready")
+                    : "served";
+                  return (
+                    <div className="flex justify-end pt-1">
+                      <Button size="sm" disabled={isBulkUpdating} onClick={() => markAllItems(bulkItems, targetStatus)}>
+                        <CheckCheck className="h-3.5 w-3.5" />
+                        {isBulkUpdating
+                          ? "Đang cập nhật..."
+                          : tab === "pending"
+                            ? `Sẵn sàng tất cả (${bulkItems.length})`
+                            : `Đã phục vụ tất cả (${bulkItems.length})`}
+                      </Button>
+                    </div>
+                  );
+                })() : null}
               </CardContent>
             </Card>
           ))}

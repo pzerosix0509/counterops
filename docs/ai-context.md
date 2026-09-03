@@ -212,7 +212,7 @@ Gemini là fallback chính khi NVIDIA hết RPD (lỗi 503 `ResourceExhausted`):
 
 - Frontend: `src/components/ai-assistant.tsx` — luôn gửi `mode: "chat"`; dashboard được detect server-side qua `isDashboardIntent`.
 - Stream: NDJSON, mỗi dòng 1 `AiStreamEvent` JSON.
-- Ảnh: `imageToText()` (NVIDIA vision) → trích văn bản/mô tả → đưa vào `sources` dạng document, ép pipeline gọi model (`effectivePlan` override thành `document_search` nếu deterministic).
+- Ảnh: `imageToText()` (NVIDIA vision) → trích văn bản/mô tả → đưa vào `sources` dạng document [IMG1], ép pipeline gọi model: nếu câu hỏi ảnh chung chung hoặc ngoài nghiệp vụ, override thành `document_search` với `tools: []` và prompt chỉ dẫn model tóm tắt rõ nội dung ảnh (tránh ảo giác số liệu bán hàng từ lịch sử); nếu có hỏi kèm nghiệp vụ bán hàng, giữ tool analytics và gọi model kết hợp.
 - Upload ảnh: validate client-side mime (`image/jpeg|png|webp|gif`) và kích thước (≤4MB base64); PDF chưa được validate size phía client.
 
 ---

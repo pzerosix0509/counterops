@@ -1,6 +1,7 @@
 import "server-only";
 import { formatVND } from "@/lib/date/ranges";
 import { extractChartType } from "@/lib/ai/render-line-chart";
+import { isGenericImageQuestion } from "@/lib/ai/semantic-layer";
 import { decomposeRevenueDelta } from "@/lib/ai/decomposition";
 import type {
   AiAnalyticsContext,
@@ -585,10 +586,16 @@ export function buildFallbackAnswer(
   const topProduct = analytics.topProducts[0];
   const topChannel = analytics.channelSummary[0];
   const documentSources = sources.filter((source) => source.type === "document");
+  const imageSource = sources.find((source) => source.id === "IMG1" || source.meta?.tool === "image_to_text");
   const webSources = sources.filter((source) => source.type === "web");
   let bullets: string[];
 
-  if (webSources.length > 0) {
+  if (imageSource && (isGenericImageQuestion(question) || !summary)) {
+    bullets = [
+      "Nội dung tóm tắt từ ảnh đính kèm [IMG1]:",
+      imageSource.excerpt ? imageSource.excerpt.slice(0, 800) : "Không trích xuất được nội dung từ ảnh.",
+    ];
+  } else if (webSources.length > 0) {
     // Web search fallback: summarize the best/most trusted source instead of
     // reporting "no sales data" which is meaningless for a web question.
     const TRUSTED_DOMAINS = [

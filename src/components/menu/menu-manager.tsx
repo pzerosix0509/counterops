@@ -17,6 +17,7 @@ import {
   createIngredientFromMenu,
   createProduct,
   deleteCategory,
+  deleteProduct,
   setProductCategory,
   toggleProductActive,
   updateCategory,
@@ -36,6 +37,8 @@ import { formatVND } from "@/lib/date/ranges";
 import { computeBomCost } from "@/lib/calculations/inventory";
 import type { InventoryItem, MenuCategory, MenuType, Product } from "@/types/database";
 import { EmptyState } from "@/components/common/states";
+import { RowContextMenu } from "@/components/common/row-context-menu";
+import { ConfirmDialog } from "@/components/common/confirm-dialog";
 import { notifyError, notifySuccess } from "@/hooks/use-notify";
 import { PRODUCT_IMPORT_COLUMNS } from "@/lib/validation/excel-schemas";
 
@@ -83,6 +86,8 @@ export function MenuManager({
   const [productType, setProductType] = useState<"regular" | "prepared">("regular");
   const [recipeLines, setRecipeLines] = useState<RecipeLine[]>([]);
   const [activeGroupId, setActiveGroupId] = useState<string>("");
+  const [pendingDelete, setPendingDelete] = useState<Product | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const ingredients = useMemo(
     () => inventoryItems.filter((item) => item.can_be_ingredient),
@@ -93,12 +98,22 @@ export function MenuManager({
 
   const filtered = useMemo(() => {
     return products.filter((p) => {
-      if (query && !p.name.toLowerCase().includes(query.toLowerCase())) return false;
+      if (query) {
+        const q = query.toLowerCase();
+        if (!p.name.toLowerCase().includes(q) && !p.code.toLowerCase().includes(q)) return false;
+      }
       if (categoryFilter === "uncat") return !p.category_id;
       if (categoryFilter !== "all" && p.category_id !== categoryFilter) return false;
       return true;
     });
   }, [products, query, categoryFilter]);
+
+  function onFilter(e: React.FormEvent) {
+    e.preventDefault();
+    const params = new URLSearchParams();
+    if (query.trim()) params.set("q", query.trim());
+    router.replace(params.size > 0 ? `/menu?${params.toString()}` : "/menu");
+  }
 
   const bomCost = useMemo(() => {
     return computeBomCost(
@@ -228,21 +243,39 @@ export function MenuManager({
     });
   }
 
+  function onDeleteProduct(p: Product) {
+    setPendingDelete(p);
+  }
+
+  function confirmDeleteProduct() {
+    if (!pendingDelete) return;
+    setDeleting(true);
+    startTransition(async () => {
+      const res = await deleteProduct(organizationId, pendingDelete.id);
+      setDeleting(false);
+      setPendingDelete(null);
+      if (!res.ok) {
+        notifyError("Không xóa được món", res.error.message);
+        return;
+      }
+      setOpen(false);
+      setEditing(null);
+      router.refresh();
+      notifySuccess("Đã xóa món");
+    });
+  }
+
   const activeGroup = categories.find((c) => c.id === activeGroupId) ?? categories[0] ?? null;
 
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <form
-          className="flex w-full max-w-sm items-center gap-2"
-          onSubmit={(e) => {
-            e.preventDefault();
-          }}
-        >
+        <form className="flex w-full max-w-sm items-center gap-2" onSubmit={onFilter}>
           <div className="relative flex-1">
             <Search className="pointer-events-none absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input className="pl-8" placeholder="Tìm theo tên món" value={query} onChange={(e) => setQuery(e.target.value)} />
+            <Input className="pl-8" placeholder="Tìm theo tên hoặc mã món" value={query} onChange={(e) => setQuery(e.target.value)} />
           </div>
+          <Button type="submit" variant="outline">Lọc</Button>
         </form>
         <div className="flex flex-wrap items-center gap-2">
           {canManage ? (
@@ -409,9 +442,23 @@ export function MenuManager({
               <Textarea id="description" name="description" rows={2} defaultValue={editing?.description ?? ""} />
             </div>
             {error ? <p className="text-sm text-destructive">{error}</p> : null}
-            <DialogFooter>
-              <Button type="button" variant="ghost" onClick={() => setOpen(false)}>Huỷ</Button>
-              <Button type="submit" disabled={isPending}>{isPending ? "Đang lưu..." : "Lưu món"}</Button>
+            <DialogFooter className="gap-2 sm:justify-between">
+              {editing ? (
+                <Button
+                  type="button"
+                  variant="destructive"
+                  disabled={isPending}
+                  onClick={() => onDeleteProduct(editing)}
+                >
+                  <Trash2 className="h-4 w-4" /> Xóa món
+                </Button>
+              ) : (
+                <span />
+              )}
+              <div className="flex gap-2">
+                <Button type="button" variant="ghost" onClick={() => setOpen(false)}>Huỷ</Button>
+                <Button type="submit" disabled={isPending}>{isPending ? "Đang lưu..." : "Lưu món"}</Button>
+              </div>
             </DialogFooter>
           </form>
         </DialogContent>
@@ -491,7 +538,16 @@ export function MenuManager({
           {filtered.length === 0 ? (
             <EmptyState title="Chưa có món nào" description="Tạo món hoặc đổi filter nhóm." />
           ) : (
-            <Table className="table-fixed">
+            <Table className="table-fixed min-w-[960px]">
+              <colgroup>
+                <col style={{ width: "22%" }} />
+                <col style={{ width: "13%" }} />
+                <col style={{ width: "13%" }} />
+                <col style={{ width: "13%" }} />
+                <col style={{ width: "13%" }} />
+                <col style={{ width: "13%" }} />
+                <col style={{ width: "13%" }} />
+              </colgroup>
               <TableHeader>
                 <TableRow>
                   <TableHead>Tên món</TableHead>
@@ -500,13 +556,37 @@ export function MenuManager({
                   <TableHead className="text-right">Giá vốn</TableHead>
                   <TableHead className="text-right">Giá bán</TableHead>
                   <TableHead className="text-center">Trạng thái</TableHead>
+                  <TableHead>Thao tác</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filtered.map((p) => {
                   const group = p.category_id ? categoryMap.get(p.category_id) : null;
+                  const contextItems = canManage
+                    ? [
+                        {
+                          key: "recipe",
+                          label: "Công thức",
+                          icon: ChefHat,
+                          onClick: () => setRecipeProduct(p),
+                        },
+                        {
+                          key: "edit",
+                          label: "Chỉnh sửa",
+                          icon: Pencil,
+                          onClick: () => openEdit(p),
+                        },
+                        {
+                          key: "delete",
+                          label: "Xóa",
+                          icon: Trash2,
+                          destructive: true,
+                          onClick: () => onDeleteProduct(p),
+                        },
+                      ]
+                    : [];
                   return (
-                    <TableRow key={p.id}>
+                    <RowContextMenu key={p.id} as="tr" items={contextItems}>
                       <TableCell className="font-medium">
                         <button type="button" className="text-left hover:underline" onClick={() => canManage && openEdit(p)}>
                           {p.name}
@@ -530,34 +610,37 @@ export function MenuManager({
                       <TableCell className="text-right">{formatVND(p.cost_price)}</TableCell>
                       <TableCell className="text-right font-medium">{formatVND(p.sale_price)}</TableCell>
                       <TableCell className="text-center">
-                        <div className="flex items-center justify-center gap-1">
-                          {canManage ? (
-                            <>
-                              <Button size="sm" variant="ghost" onClick={() => openEdit(p)} aria-label="Sửa món">
-                                <Pencil className="h-3.5 w-3.5" />
-                              </Button>
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                onClick={() => setRecipeProduct(p)}
-                              >
-                                <ChefHat className="h-3.5 w-3.5" /> Công thức
-                              </Button>
-                              <button
-                                type="button"
-                                title={p.is_active ? "Bấm để ngừng bán" : "Bấm để bật bán"}
-                                onClick={() => onToggleActive(p.id, p.is_active)}
-                              >
-                                <Badge variant={p.is_active ? "success" : "outline"}>{p.is_active ? "Đang bán" : "Ngừng bán"}</Badge>
-                              </button>
-                            </>
-                          ) : (
+                        {canManage ? (
+                          <button
+                            type="button"
+                            title={p.is_active ? "Bấm để ngừng bán" : "Bấm để bật bán"}
+                            onClick={() => onToggleActive(p.id, p.is_active)}
+                            className="inline-flex"
+                          >
                             <Badge variant={p.is_active ? "success" : "outline"}>{p.is_active ? "Đang bán" : "Ngừng bán"}</Badge>
-                          )}
-                        </div>
+                          </button>
+                        ) : (
+                          <Badge variant={p.is_active ? "success" : "outline"}>{p.is_active ? "Đang bán" : "Ngừng bán"}</Badge>
+                        )}
                       </TableCell>
-                    </TableRow>
+                      <TableCell className="text-right">
+                        {canManage ? (
+                          <div className="flex w-full items-center justify-end gap-1">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setRecipeProduct(p)}
+                            >
+                              <ChefHat className="h-3.5 w-3.5" /> Công thức
+                            </Button>
+                            <Button size="sm" variant="ghost" onClick={() => openEdit(p)} aria-label="Sửa món">
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        ) : null}
+                      </TableCell>
+                    </RowContextMenu>
                   );
                 })}
               </TableBody>
@@ -574,6 +657,15 @@ export function MenuManager({
           organizationId={organizationId}
         />
       ) : null}
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        onOpenChange={(open) => { if (!open && !deleting) setPendingDelete(null); }}
+        title={`Xóa món "${pendingDelete?.name ?? ""}"?`}
+        description="Món sẽ ẩn khỏi thực đơn, kho và trang bán hàng."
+        pending={deleting}
+        onConfirm={confirmDeleteProduct}
+      />
     </div>
   );
 }

@@ -59,7 +59,7 @@ export const categorySchema = z.object({
   menuType: z.enum(["food", "drink", "service", "other"]),
 });
 
-export const inventoryItemSchema = z.object({
+const inventoryItemBaseSchema = z.object({
   name: z.string().min(1, "Tên hàng không được trống"),
   code: z.string().optional(),
   canBeIngredient: z.boolean().default(true),
@@ -73,10 +73,20 @@ export const inventoryItemSchema = z.object({
   imageUrl: z.string().url().nullable().optional(),
   initialQuantity: z.number().min(0).default(0),
   lowStockThreshold: z.number().min(0).default(0),
-}).refine((v) => v.canBeIngredient || v.canBeSold, {
+});
+
+export const inventoryItemSchema = inventoryItemBaseSchema.refine((v) => v.canBeIngredient || v.canBeSold, {
   message: "Chọn dùng làm nguyên liệu hoặc bán trên thực đơn",
 });
 export type InventoryItemInput = z.infer<typeof inventoryItemSchema>;
+
+export const inventoryItemUpdateSchema = inventoryItemBaseSchema
+  .omit({ initialQuantity: true })
+  .extend({ id: z.string().uuid() })
+  .refine((v) => v.canBeIngredient || v.canBeSold, {
+    message: "Chọn dùng làm nguyên liệu hoặc bán trên thực đơn",
+  });
+export type InventoryItemUpdateInput = z.infer<typeof inventoryItemUpdateSchema>;
 
 export const inventoryMovementSchema = z.object({
   branchId: z.string().uuid(),
@@ -125,6 +135,22 @@ export const orderInputSchema = z.object({
 });
 export type OrderInput = z.infer<typeof orderInputSchema>;
 
+export const updateCustomerSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string().trim().max(120).optional().nullable(),
+  phone: z.string().trim().max(20).optional().nullable(),
+  email: z.preprocess(
+    (value) => (typeof value === "string" && value.trim() === "" ? null : value),
+    z.string().trim().max(160).email("Email không hợp lệ").nullable().optional(),
+  ),
+  birthday: z.preprocess(
+    (value) => (typeof value === "string" && value.trim() === "" ? null : value),
+    z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Ngày sinh không hợp lệ").nullable().optional(),
+  ),
+  notes: z.string().trim().max(2000).optional().nullable(),
+});
+export type UpdateCustomerInput = z.infer<typeof updateCustomerSchema>;
+
 export const paymentInputSchema = z.object({
   orderId: z.string().uuid(),
   payments: z
@@ -157,6 +183,31 @@ export const eodInputSchema = z.object({
 export const inventorySettingsSchema = z.object({
   allowNegativeInventory: z.boolean(),
 });
+
+export const employeeSchema = z.object({
+  id: z.string().uuid().optional(),
+  fullName: z.string().trim().min(1, "Họ tên không được trống").max(120),
+  phoneNumber: z.string().trim().max(40).nullable().optional(),
+  email: z.string().trim().email("Email không hợp lệ").nullable().optional().or(z.literal("")),
+  userId: z.string().uuid().nullable().optional(),
+  roleId: z.string().uuid().nullable().optional(),
+  branchId: z.string().uuid(),
+  status: z.enum(["ACTIVE", "INACTIVE", "RESIGNED"]).default("ACTIVE"),
+  startDate: z.string().date(),
+  endDate: z.string().date().nullable().optional(),
+});
+export type EmployeeInput = z.infer<typeof employeeSchema>;
+
+export const employeeWithAuthSchema = z.object({
+  fullName: z.string().trim().min(1, "Họ tên không được trống").max(120),
+  phoneNumber: z.string().trim().max(40).nullable().optional(),
+  email: z.string().trim().email("Email không hợp lệ"),
+  roleId: z.string().uuid(),
+  branchId: z.string().uuid(),
+  createAuthAccount: z.boolean().default(false),
+  startDate: z.string().date(),
+});
+export type EmployeeWithAuthInput = z.infer<typeof employeeWithAuthSchema>;
 
 export const operationalSettingsSchema = z.object({
   allowNegativeInventory: z.boolean(),
