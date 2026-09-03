@@ -21,11 +21,13 @@ export default async function EmployeeDetailsPage({ params }: { params: { id: st
   const employeeId = decodeURIComponent(params.id);
 
   // Fetch employee details
-  let { data: employeeRaw, error } = await supabase
+  let employeeRaw: any = null;
+  const { data: serverEmployee, error } = await supabase
     .from("employees")
     .select("*, branch:branches(name), role:roles(name)")
     .eq("id", employeeId)
     .maybeSingle();
+  employeeRaw = serverEmployee;
 
   if (error) {
     console.error("Employee fetch error with server client:", error);

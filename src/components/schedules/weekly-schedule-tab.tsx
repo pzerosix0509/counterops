@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { X, Plus, ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -95,7 +95,7 @@ export function WeeklyScheduleTab({
 
         {shifts.length === 0 ? (
           <div className="py-16 text-center text-sm text-muted-foreground">
-            Chưa có ca nào được kích hoạt. Hãy tạo ca ở tab "Cài đặt Ca".
+            Chưa có ca nào được kích hoạt. Hãy tạo ca ở tab &quot;Cài đặt Ca&quot;.
           </div>
         ) : (
           <div className="overflow-x-auto">

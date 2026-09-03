@@ -1,9 +1,9 @@
-﻿"use client";
+"use client";
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { CalendarIcon, DollarSign } from "lucide-react";
+import { DollarSign } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,11 +14,11 @@ import { saveSalaryProfile, type SalaryProfile } from "@/server/actions/payroll"
 
 interface Props {
   employeeId: string;
-  organizationId: string;
+  organizationId?: string;
   initialProfile: SalaryProfile | null;
 }
 
-export function SalaryProfileTab({ employeeId, organizationId, initialProfile }: Props) {
+export function SalaryProfileTab({ employeeId, organizationId: _organizationId, initialProfile }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
 

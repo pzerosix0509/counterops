@@ -1,6 +1,6 @@
-﻿"use client";
+"use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -44,7 +44,7 @@ export function ShiftTemplatesTab({ organizationId, shifts, onEdit, onAdd, onDel
         toast.success("Đã xóa ca làm việc thành công.");
         onDelete(shiftId);
       }
-    } catch (err) {
+    } catch {
       toast.error("Đã xảy ra lỗi khi xóa ca làm việc.");
     } finally {
       setPendingId(null);
@@ -68,7 +68,7 @@ export function ShiftTemplatesTab({ organizationId, shifts, onEdit, onAdd, onDel
       <CardContent>
         {shifts.length === 0 ? (
           <div className="py-12 text-center text-sm text-muted-foreground">
-            Chưa có ca nào được tạo. Nhấn "Thêm ca làm việc" để bắt đầu.
+            Chưa có ca nào được tạo. Nhấn &quot;Thêm ca làm việc&quot; để bắt đầu.
           </div>
         ) : (
           <Table>

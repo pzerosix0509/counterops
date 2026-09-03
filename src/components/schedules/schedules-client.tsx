@@ -1,10 +1,6 @@
 "use client";
 
 import { useState, useTransition, useCallback } from "react";
-import { useRouter } from "next/navigation";
-import { Plus, ChevronLeft, ChevronRight } from "lucide-react";
-import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ShiftTemplatesTab } from "./shift-templates-tab";
 import { WeeklyScheduleTab } from "./weekly-schedule-tab";
@@ -64,10 +60,6 @@ function addDays(dateStr: string, n: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-function formatTimeHHMM(t: string) {
-  return t?.slice(0, 5) ?? t;
-}
-
 export function SchedulesClient({
   organizationId,
   branchId,
@@ -76,7 +68,6 @@ export function SchedulesClient({
   initialStartDate,
   employees,
 }: Props) {
-  const router = useRouter();
   const [shifts, setShifts] = useState<Shift[]>(initialShifts);
   const [schedules, setSchedules] = useState<Schedule[]>(initialSchedules);
   const [startDate, setStartDate] = useState(initialStartDate);
@@ -119,7 +110,7 @@ export function SchedulesClient({
   function handleShiftSaved(shift: Shift) {
     setShifts((prev) => {
       const exists = prev.findIndex((s) => s.id === shift.id);
-      let next = [...prev];
+      const next = [...prev];
       if (exists >= 0) {
         next[exists] = shift;
       } else {

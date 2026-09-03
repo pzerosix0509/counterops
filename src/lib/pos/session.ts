@@ -16,6 +16,7 @@ export interface PosSessionData {
   step: PosStep;
   maxStep: PosStep;
   orderId: string | null;
+  channelId?: string | null;
   orderType: "dine_in" | "takeaway";
   tableId: string | null;
   cart: PosCartItem[];
@@ -53,6 +54,7 @@ export function createEmptySession(defaultOrderType: "dine_in" | "takeaway"): Po
     step: "service",
     maxStep: "service",
     orderId: null,
+    channelId: null,
     orderType: defaultOrderType,
     tableId: null,
     cart: [],
