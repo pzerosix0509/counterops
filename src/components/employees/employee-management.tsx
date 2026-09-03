@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -317,18 +317,17 @@ export function EmployeeManagement({
               )}
               <TableCell>
                 <div className="flex flex-wrap justify-end gap-1">
-                  {/* ── View / Edit ── */}
-                  <Button variant="ghost" size="sm" onClick={() => openEdit(employee)}>
-                    {isResigned ? (
-                      <>
-                        <Eye className="mr-1 h-3.5 w-3.5" /> Xem
-                      </>
-                    ) : (
-                      <>
-                        <Pencil className="mr-1 h-3.5 w-3.5" /> Sửa
-                      </>
-                    )}
+                                    {/* View Details */}
+                  <Button variant="ghost" size="sm" onClick={() => router.push(`/employees/${employee.id}`)}>
+                    <Eye className="mr-1 h-3.5 w-3.5" /> Chi tiết
                   </Button>
+
+                  {/* Edit */}
+                  {!isResigned && (
+                    <Button variant="ghost" size="sm" onClick={() => openEdit(employee)}>
+                      <Pencil className="mr-1 h-3.5 w-3.5" /> Sửa
+                    </Button>
+                  )}
 
                   {!isResigned && (
                     <>

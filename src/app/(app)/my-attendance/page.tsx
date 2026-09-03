@@ -1,8 +1,9 @@
-import { requireActiveContext } from "@/lib/auth/permissions";
+﻿import { requireActiveContext } from "@/lib/auth/permissions";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { PersonalAttendanceClient } from "@/components/attendance/personal-attendance-client";
 
 export const metadata = { title: "Chấm công của tôi" };
+
 function timeToMinutes(t: string): number {
   const [h, m] = t.split(":").map(Number);
   return h * 60 + m;
@@ -56,7 +57,6 @@ export default async function MyAttendancePage() {
   const context = await requireActiveContext();
   const admin = createSupabaseAdminClient();
 
-  // 1. Find employee record linked to this user
   const { data: employee } = await admin
     .from("employees")
     .select("id, full_name, employee_code")
@@ -70,11 +70,13 @@ export default async function MyAttendancePage() {
       <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 px-6 text-center">
         <p className="text-lg font-medium">Tài khoản chưa được thiết lập</p>
         <p className="text-sm text-muted-foreground max-w-sm">
+          Tài khoản của bạn chưa được gắn với hồ sơ nhân sự nào tại chi nhánh này.
           Vui lòng liên hệ Quản lý để được hỗ trợ.
         </p>
       </div>
+    );
+  }
 
-  // 2. Today date in local timezone
   const todayDate = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Ho_Chi_Minh",
     year: "numeric",
@@ -82,7 +84,6 @@ export default async function MyAttendancePage() {
     day: "2-digit",
   }).format(new Date());
 
-  // 3. Current time in minutes for schedule selection
   const nowTimeParts = new Intl.DateTimeFormat("en-GB", {
     timeZone: "Asia/Ho_Chi_Minh",
     hour: "2-digit",
@@ -91,7 +92,6 @@ export default async function MyAttendancePage() {
   }).format(new Date()).split(":");
   const nowMinutes = parseInt(nowTimeParts[0], 10) * 60 + parseInt(nowTimeParts[1], 10);
 
-  // 4. Fetch today's schedules for this employee
   const { data: schedulesRaw, error: schedError } = await admin
     .from("employee_schedules")
     .select("id, shift:shifts!inner(name, start_time, end_time)")
@@ -111,7 +111,6 @@ export default async function MyAttendancePage() {
 
   const bestSchedule = pickBestSchedule(typedSchedules, nowMinutes);
 
-  // 5. Fetch active log
   const { data: activeLogRaw } = await admin
     .from("attendance_logs")
     .select("id, check_in_time")
