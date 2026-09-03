@@ -111,7 +111,13 @@ export async function handleGrabOrderWebhook(
     }
 
     // Create order in database
-    const orderNumber = newOrderNumber(1, new Date()); // Simple sequence
+    const { count } = await admin
+      .from("orders")
+      .select("id", { count: "exact", head: true })
+      .eq("branch_id", branchId);
+    
+    const seq = (count ?? 0) + 1;
+    const orderNumber = newOrderNumber(seq, new Date());
     const orderToCreate = {
       organization_id: organizationId,
       branch_id: branchId,

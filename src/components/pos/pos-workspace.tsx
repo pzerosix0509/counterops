@@ -314,7 +314,7 @@ export function PosWorkspace(props: Props) {
               <label className="text-xs font-medium">Kênh bán</label>
               <Select value={channelId ?? ""} onValueChange={setChannelId}>
                 <SelectTrigger>
-                  <SelectValue placeholder="GrabFood, ShopeeFood..." />
+                  <SelectValue placeholder="Grab (Mock), ShopeeFood..." />
                 </SelectTrigger>
                 <SelectContent>
                   {takeawayChannels.map((channel) => (
@@ -325,7 +325,7 @@ export function PosWorkspace(props: Props) {
                 </SelectContent>
               </Select>
               {takeawayChannels.length === 0 ? (
-                <p className="text-xs text-muted-foreground">Chưa có kênh mang đi. Hãy thêm GrabFood, ShopeeFood... trong dữ liệu kênh bán.</p>
+                <p className="text-xs text-muted-foreground">Chưa có kênh mang đi. Hãy thêm Grab (Mock), ShopeeFood... trong dữ liệu kênh bán.</p>
               ) : null}
             </div>
           ) : null}

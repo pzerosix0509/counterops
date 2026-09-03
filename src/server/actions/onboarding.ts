@@ -1,4 +1,4 @@
-﻿"use server";
+"use server";
 
 import { onboardingSchema } from "@/lib/validation/schemas";
 import { actionFail, actionOk, type ActionResult } from "@/lib/utils/action-result";
@@ -80,7 +80,7 @@ export async function createOrganizationWithFirstBranch(
   const defaultChannels = [
     { organization_id: org.id, name: "Tại quán", type: "direct" },
     { organization_id: org.id, name: "Mang đi", type: "direct" },
-    { organization_id: org.id, name: "GrabFood", type: "delivery" },
+    { organization_id: org.id, name: "Grab (Mock)", type: "delivery" },
     { organization_id: org.id, name: "ShopeeFood", type: "delivery" },
     { organization_id: org.id, name: "BeFood", type: "delivery" },
     { organization_id: org.id, name: "Online", type: "online" },

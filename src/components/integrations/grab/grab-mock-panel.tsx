@@ -134,7 +134,7 @@ export function GrabMockPanel({ organizationId, branchId, salesChannelId }: Grab
         <div className="flex items-center justify-between">
           <div>
             <CardTitle>Grab Delivery (Mock)</CardTitle>
-            <CardDescription>Mô phỏng tích hợp GrabFood cho mục đích đồ án</CardDescription>
+            <CardDescription>Mô phỏng tích hợp Grab cho mục đích đồ án</CardDescription>
           </div>
           <Badge variant="secondary">Mock/Demo</Badge>
         </div>
@@ -210,7 +210,7 @@ export function GrabMockPanel({ organizationId, branchId, salesChannelId }: Grab
             <strong>Ghi chú:</strong> Đây là môi trường mô phỏng (Mock) cho mục đích demo đồ án.
           </p>
           <p>
-            Không có kết nối thực tế đến GrabFood. Toàn bộ dữ liệu xử lý nội bộ trong hệ thống.
+            Không có kết nối thực tế đến Grab. Toàn bộ dữ liệu xử lý nội bộ trong hệ thống.
           </p>
         </div>
       </CardContent>
