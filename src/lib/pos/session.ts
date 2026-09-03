@@ -76,7 +76,7 @@ export function inferStepFromSession(session: Pick<PosSessionData, "orderType" |
 
   if (hasCustomer || hasFees) return "checkout";
   if (hasItems) return "items";
-  if (session.orderType === "dine_in" && session.tableId) return "table";
+  if (session.orderType === "dine_in" && session.tableId) return "items";
   return "service";
 }
 

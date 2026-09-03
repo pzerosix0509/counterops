@@ -17,8 +17,8 @@ describe("inferStepFromSession", () => {
     expect(inferStepFromSession(base)).toBe("service");
   });
 
-  it("returns table when dine_in with table selected", () => {
-    expect(inferStepFromSession({ ...base, tableId: "t1" })).toBe("table");
+  it("returns items when dine_in with table selected", () => {
+    expect(inferStepFromSession({ ...base, tableId: "t1" })).toBe("items");
   });
 
   it("returns items when cart has items", () => {
