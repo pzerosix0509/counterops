@@ -1,4 +1,4 @@
-﻿import { requireActiveContext, canManageTables, getActiveMembership } from "@/lib/auth/permissions";
+﻿import { requireActiveContext, canManageTablesStructure, canUpdateTableStatus, getActiveMembership } from "@/lib/auth/permissions";
 import { listAreas, listTables } from "@/server/queries/tables";
 import { TablesManager } from "@/components/tables/tables-manager";
 
@@ -21,7 +21,8 @@ export default async function TablesPage() {
       <TablesManager
         organizationId={ctx.organizationId}
         branchId={ctx.branchId}
-        canManage={canManageTables.includes(active.role)}
+        canManageStructure={canManageTablesStructure.includes(active.role)}
+        canUpdateStatus={canUpdateTableStatus.includes(active.role)}
         areas={areas}
         tables={tables}
       />

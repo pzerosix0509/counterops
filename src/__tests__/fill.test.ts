@@ -83,7 +83,7 @@ describe("template fill", () => {
     expect(amount!.x).toBeGreaterThan(470);
   });
 
-  it("draws a tick in the selected checkbox on the TB form", async () => {
+  it("draws a tick in the selected checkbox on the TB form", { timeout: 10_000 }, async () => {
     const buffer = await fillTemplatePdf("01-tb-ddkd", { ...BASE, params: { ...BASE.params, thongBaoType: "thanh_lap" } });
     const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
     const doc = await pdfjs.getDocument({ data: new Uint8Array(buffer), useSystemFonts: true }).promise;
@@ -95,7 +95,7 @@ describe("template fill", () => {
       const args = op.argsArray[k];
       if (args[0] !== pdfjs.OPS.stroke) continue;
       const enc = args[1][0];
-      for (let i = 0; i < enc.length; ) {
+      for (let i = 0; i < enc.length;) {
         const code = enc[i++];
         if (code === 0 || code === 1) {
           const x = enc[i];

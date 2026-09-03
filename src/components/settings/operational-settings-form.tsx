@@ -117,18 +117,6 @@ export function OperationalSettingsForm({
     });
   }
 
-  const activeTakeawayChannels = channelDrafts.filter((channel) =>
-    channel.isActive && !["tai quan", "mang di", "online"].includes(
-      channel.name
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .replace(/đ/g, "d")
-        .replace(/Đ/g, "d")
-        .toLowerCase()
-        .trim()
-    )
-  );
-
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
@@ -191,21 +179,6 @@ export function OperationalSettingsForm({
               >
                 <option value="dine_in">Tại quán</option>
                 <option value="takeaway">Mang đi</option>
-              </select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Kênh mang đi mặc định</Label>
-              <select
-                className="h-9 w-full rounded-md border bg-background px-3 text-sm"
-                value={draft.defaultTakeawayChannelId ?? ""}
-                onChange={(event) => updateDraft("defaultTakeawayChannelId", event.target.value || null)}
-              >
-                <option value="">Tự chọn kênh đầu tiên</option>
-                {activeTakeawayChannels.map((channel) => (
-                  <option key={channel.id ?? channel.name} value={channel.id ?? ""} disabled={!channel.id}>
-                    {channel.name}
-                  </option>
-                ))}
               </select>
             </div>
             <div className="space-y-1.5">

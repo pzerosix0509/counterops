@@ -39,7 +39,7 @@ const NAV_GROUPS: (NavItem | NavGroup)[] = [
   { href: "/dashboard", label: "Tổng quan", icon: LayoutDashboard, allowed: ["owner", "admin", "manager"] },
   { href: "/pos", label: "Bán hàng", icon: ShoppingCart, allowed: ["owner", "admin", "manager", "cashier", "reception", "staff"] },
   { href: "/kitchen", label: "Bếp", icon: ChefHat, allowed: ["owner", "admin", "manager", "kitchen"] },
-  { href: "/tables", label: "Bàn / phòng", icon: Table2, allowed: ["owner", "admin", "manager", "cashier", "reception"] },
+  { href: "/tables", label: "Bàn / phòng", icon: Table2, allowed: ["owner", "admin", "manager", "cashier", "reception", "staff"] },
   { href: "/menu", label: "Thực đơn", icon: UtensilsCrossed, allowed: ["owner", "admin", "manager", "cashier", "reception", "kitchen"] },
   {
     label: "Nhân sự",
@@ -48,12 +48,13 @@ const NAV_GROUPS: (NavItem | NavGroup)[] = [
       { href: "/schedules", label: "Ca làm việc", icon: CalendarDays, allowed: ["owner", "admin", "manager"] },
       { href: "/attendance", label: "Chấm công", icon: ClipboardList, allowed: ["owner", "admin", "manager"] },
       { href: "/my-attendance", label: "Chấm công của tôi", icon: UserCheck, allowed: ["owner", "admin", "manager", "cashier", "reception", "kitchen", "staff"] },
-    ]
+    ],
   },
-  { href: "/inventory", label: "Kho hàng", icon: Boxes, allowed: ["owner", "admin", "manager"] },
-  { href: "/analytics", label: "Phân tích", icon: Sparkles, allowed: ["owner", "admin", "manager"] },
-  { href: "/reports", label: "Báo cáo", icon: FileBarChart, allowed: ["owner", "admin", "manager"] },
-  { href: "/ai", label: "AI trợ lý", icon: Bot, allowed: ["owner", "admin", "manager"] },
+  { href: "/inventory", label: "Kho hàng", icon: Boxes, allowed: ["owner", "admin", "manager", "cashier"] },
+  { href: "/customers", label: "Khách hàng", icon: Users, allowed: ["owner", "admin", "manager", "cashier"] },
+  { href: "/analytics", label: "Phân tích", icon: Sparkles, allowed: ["owner", "admin", "manager", "cashier"] },
+  { href: "/reports", label: "Báo cáo", icon: FileBarChart, allowed: ["owner", "admin", "manager", "cashier"] },
+  { href: "/ai", label: "AI trợ lý", icon: Bot, allowed: ["owner", "admin", "manager", "cashier"] },
   { href: "/settings", label: "Cài đặt", icon: Settings, allowed: ["owner", "admin", "manager"] },
 ];
 
@@ -79,7 +80,7 @@ function NavLink({ item, pathname }: { item: NavItem; pathname: string }) {
 function CollapsibleNavGroup({ group, role, pathname }: { group: NavGroup; role: MembershipRole; pathname: string }) {
   const [open, setOpen] = useState(true);
   const items = group.items.filter((it) => it.allowed.includes(role));
-  
+
   if (items.length === 0) return null;
 
   return (

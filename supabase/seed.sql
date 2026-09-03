@@ -108,9 +108,6 @@ begin
   from (values
     ('Tại quán'::text,    'direct'::text),
     ('Mang đi'::text,     'direct'::text),
-    ('GrabFood'::text,    'delivery'::text),
-    ('ShopeeFood'::text,  'delivery'::text),
-    ('BeFood'::text,      'delivery'::text),
     ('Online'::text,      'online'::text)
   ) as c(name, type)
   where not exists (

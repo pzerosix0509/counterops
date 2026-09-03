@@ -3,6 +3,7 @@ import {
   loginSchema,
   productSchema,
   inventoryItemSchema,
+  inventoryItemUpdateSchema,
 } from "@/lib/validation/schemas";
 
 describe("login — loginSchema", () => {
@@ -121,5 +122,20 @@ describe("inventory — inventoryItemSchema", () => {
       costPrice: -1,
     });
     expect(negativeCost.success).toBe(false);
+  });
+});
+
+describe("inventory — inventoryItemUpdateSchema", () => {
+  it("requires id and omits initialQuantity", () => {
+    const result = inventoryItemUpdateSchema.safeParse({
+      id: "00000000-0000-4000-8000-000000000001",
+      name: "Sữa tươi",
+      canBeIngredient: true,
+      canBeSold: false,
+      unit: "ml",
+      costPrice: 50,
+      lowStockThreshold: 10,
+    });
+    expect(result.success).toBe(true);
   });
 });
