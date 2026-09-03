@@ -42,27 +42,91 @@ function addDays(dateStr: string, days: number): string {
 }
 
 /**
- * Group timeseries rows (which may be hourly/weekly) into daily totals.
+ * Group timeseries rows (which may be hourly/weekly) into daily totals,
+ * respecting the organization's timezone and filling any gaps between
+ * min and max date so that daily points remain strictly contiguous.
  */
 export function aggregateToDailyPoints(
   rows: Array<{ period_start: string; net_revenue: number; total_orders: number }>,
+  timezone = "Asia/Ho_Chi_Minh",
 ): DailyDataPoint[] {
+  if (rows.length === 0) return [];
+
   const byDate = new Map<string, { revenue: number; orders: number }>();
   for (const row of rows) {
-    const day = row.period_start.slice(0, 10);
+    let day: string;
+    try {
+      day = new Intl.DateTimeFormat("en-CA", {
+        timeZone: timezone,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }).format(new Date(row.period_start));
+    } catch {
+      day = row.period_start.slice(0, 10);
+    }
     const existing = byDate.get(day) ?? { revenue: 0, orders: 0 };
     byDate.set(day, {
-      revenue: existing.revenue + row.net_revenue,
-      orders: existing.orders + row.total_orders,
+      revenue: existing.revenue + Number(row.net_revenue ?? 0),
+      orders: existing.orders + Number(row.total_orders ?? 0),
     });
   }
-  return Array.from(byDate.entries())
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([date, totals]) => ({ date, ...totals }));
+
+  const sortedDates = Array.from(byDate.keys()).sort();
+  if (sortedDates.length === 0) return [];
+
+  // Lấp đầy các ngày bị khuyết (0 đơn) giữa ngày đầu và ngày cuối
+  const firstDate = sortedDates[0]!;
+  const lastDate = sortedDates.at(-1)!;
+  const result: DailyDataPoint[] = [];
+  let curr = firstDate;
+  while (curr <= lastDate) {
+    const totals = byDate.get(curr) ?? { revenue: 0, orders: 0 };
+    result.push({ date: curr, ...totals });
+    curr = addDays(curr, 1);
+  }
+
+  return result;
 }
 
 /**
- * Compute a weighted moving average forecast for the next `horizonDays` days.
+ * Compute Day-of-Week (DOW) seasonality factors.
+ * For F&B, weekends (Friday/Saturday/Sunday) often have higher traffic than weekdays.
+ * We calculate the mean revenue for each DOW (0 = Sunday, 1 = Monday, ..., 6 = Saturday)
+ * and compare against the series mean to obtain a multiplier.
+ */
+export function computeDowSeasonality(points: DailyDataPoint[]): number[] {
+  if (points.length < MIN_DAYS_REQUIRED) {
+    return new Array(7).fill(1);
+  }
+
+  const dowSums = new Array<number>(7).fill(0);
+  const dowCounts = new Array<number>(7).fill(0);
+  let totalRevenue = 0;
+
+  for (const point of points) {
+    // Treat date (YYYY-MM-DD) as UTC noon to safely extract day-of-week without timezone jitter
+    const dow = new Date(`${point.date}T12:00:00Z`).getUTCDay();
+    dowSums[dow] += point.revenue;
+    dowCounts[dow] += 1;
+    totalRevenue += point.revenue;
+  }
+
+  const seriesAvg = totalRevenue / points.length;
+  if (seriesAvg <= 0) return new Array(7).fill(1);
+
+  return dowSums.map((sum, dow) => {
+    if (dowCounts[dow] === 0) return 1;
+    const dowAvg = sum / dowCounts[dow];
+    const factor = dowAvg / seriesAvg;
+    // Giới hạn biên độ factor trong khoảng [0.5, 2.0] để tránh biến dạng cực đoan
+    return Math.max(0.5, Math.min(2.0, factor));
+  });
+}
+
+/**
+ * Compute a weighted moving average forecast for the next `horizonDays` days
+ * with Day-of-Week seasonality adjustments.
  * Returns insufficient_data: true if fewer than MIN_DAYS_REQUIRED training days.
  */
 export function computeForecast(
@@ -86,17 +150,26 @@ export function computeForecast(
   const forecastRevenue = weightedMovingAverage(revenues);
   const forecastOrders = weightedMovingAverage(orders);
   const revenueStd = stddev(revenues);
-  // 1.5 sigma bounds for a reasonable confidence interval
-  const margin = revenueStd * 1.5;
+  const dowFactors = computeDowSeasonality(dailyPoints);
 
   const lastDate = dailyPoints.at(-1)!.date;
-  const points: AiForecastPoint[] = Array.from({ length: horizonDays }, (_, index) => ({
-    period_start: addDays(lastDate, index + 1),
-    forecasted_revenue: Math.round(forecastRevenue),
-    forecasted_orders: Math.round(forecastOrders),
-    lower_bound: Math.round(Math.max(0, forecastRevenue - margin)),
-    upper_bound: Math.round(forecastRevenue + margin),
-  }));
+  const points: AiForecastPoint[] = Array.from({ length: horizonDays }, (_, index) => {
+    const period_start = addDays(lastDate, index + 1);
+    const dow = new Date(`${period_start}T12:00:00Z`).getUTCDay();
+    const factor = dowFactors[dow] ?? 1;
+    const forecastedRevenue = Math.round(forecastRevenue * factor);
+    const forecastedOrders = Math.round(Math.max(0, forecastOrders * factor));
+    // 1.5 sigma bounds scaled with the day-of-week factor
+    const margin = revenueStd * 1.5 * factor;
+
+    return {
+      period_start,
+      forecasted_revenue: forecastedRevenue,
+      forecasted_orders: forecastedOrders,
+      lower_bound: Math.round(Math.max(0, forecastedRevenue - margin)),
+      upper_bound: Math.round(forecastedRevenue + margin),
+    };
+  });
 
   return {
     horizon_days: horizonDays,

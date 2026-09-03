@@ -251,13 +251,13 @@ export function inferAiDateRange(
 
   if (q.includes("thang toi") || q.includes("next month")) {
     // Future month: không có dữ liệu tương lai — dùng 30 ngày lịch sử làm training window
-    const from = new Date(todayStart.getTime() - 29 * 86_400_000);
+    const from = new Date(todayStart.getTime() - 30 * 86_400_000);
     return { from: from.toISOString(), to: todayEnd.toISOString(), label: "30 ngày qua" };
   }
 
   if (q.includes("tuan toi") || q.includes("next week")) {
     // Future week: dùng 14 ngày lịch sử (≥ MIN_DAYS_REQUIRED)
-    const from = new Date(todayStart.getTime() - 13 * 86_400_000);
+    const from = new Date(todayStart.getTime() - 14 * 86_400_000);
     return { from: from.toISOString(), to: todayEnd.toISOString(), label: "14 ngày qua" };
   }
 
@@ -297,8 +297,10 @@ export function inferAiDateRange(
       label: months === 1 ? "1 tháng qua" : `${months} tháng qua`,
     };
   }
+  const isFuture = q.includes("toi") || q.includes("sap toi") || q.includes("next") || q.includes("tuong lai") || q.includes("du doan") || q.includes("du bao");
   const days = Math.min(Math.max(Number(explicitDays?.[1] ?? 7), 1), 366);
-  const from = new Date(todayStart.getTime() - (days - 1) * 86_400_000);
+  const trainingDays = isFuture ? Math.max(days, 14) : days;
+  const from = new Date(todayStart.getTime() - (trainingDays - (isFuture ? 0 : 1)) * 86_400_000);
   return {
     from: from.toISOString(),
     to: todayEnd.toISOString(),
@@ -565,6 +567,19 @@ function wantsDemandForecast(question: string) {
   return hasPhrase(q, ["nguyen lieu", "nhu cau", "dat hang", "demand"]);
 }
 
+export function extractForecastHorizon(question: string): number {
+  const q = normalizeIntentText(question);
+  if (q.includes("thang toi") || q.includes("next month")) return 30;
+  if (q.includes("tuan toi") || q.includes("next week")) return 14;
+  const match = q.match(/(\d{1,3})\s*ngay/);
+  if (match) {
+    const days = Number(match[1]);
+    if (days >= 7 && days <= 90) return days;
+    if (days > 0 && days < 7) return 7;
+  }
+  return 30;
+}
+
 export function buildAiPlan(
   question: string,
   mode: "chat" | "dashboard",
@@ -680,7 +695,7 @@ function buildToolsForPlan(
         inventory_risk: { status: "attention" },
         search_documents: { query: question, limit: 6 },
         search_web: { query: question, limit: 5 },
-        forecast_revenue: { ...common, horizon_days: 30 },
+        forecast_revenue: { ...common, horizon_days: extractForecastHorizon(question) },
         forecast_demand: { ...common, horizon_days: 14 },
         rfm_summary: {},
         sentiment_summary: common,

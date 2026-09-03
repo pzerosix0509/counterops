@@ -202,14 +202,28 @@ export function assessAiEvidence(
   );
 
   const WEIGHTS = { query: 0.3, dataCompleteness: 0.25, consistency: 0.25, analysisFit: 0.2 };
-  const weighted = (
-    components.query * WEIGHTS.query
-    + components.dataCompleteness * WEIGHTS.dataCompleteness
-    + components.consistency * WEIGHTS.consistency
-    + components.analysisFit * WEIGHTS.analysisFit
-  );
+  let weighted: number;
+  if (components.forecastReliability != null) {
+    weighted = (
+      components.query * 0.25
+      + components.dataCompleteness * 0.2
+      + components.consistency * 0.2
+      + components.analysisFit * 0.15
+      + components.forecastReliability * 0.2
+    );
+  } else {
+    weighted = (
+      components.query * WEIGHTS.query
+      + components.dataCompleteness * WEIGHTS.dataCompleteness
+      + components.consistency * WEIGHTS.consistency
+      + components.analysisFit * WEIGHTS.analysisFit
+    );
+  }
   const finalScore = roundScore(weighted);
   const reasons = qualityIssues.map((issue) => issue.message);
+  if (analytics.forecastRevenue && analytics.forecastRevenue.backtest === null && !analytics.forecastRevenue.insufficient_data) {
+    reasons.push("Dữ liệu lịch sử chưa đủ 21 ngày để chạy backtest đối chứng.");
+  }
   if (reasons.length === 0) reasons.push("Các nguồn dữ liệu cần thiết đã được truy vấn thành công.");
 
   return {
@@ -278,10 +292,15 @@ function computeConfidenceComponents(
   if (forecast) {
     if (forecast.insufficient_data) {
       forecastReliability = 0.2;
+    } else if (forecast.backtest?.wmape != null) {
+      const wmape = forecast.backtest.wmape;
+      if (wmape <= 0.2) forecastReliability = 0.9;
+      else if (wmape <= 0.35) forecastReliability = 0.75;
+      else forecastReliability = 0.5;
     } else if (forecast.horizon_days > 30) {
       forecastReliability = 0.6;
     } else {
-      forecastReliability = 0.8;
+      forecastReliability = 0.75;
     }
   }
 
