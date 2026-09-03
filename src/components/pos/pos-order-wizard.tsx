@@ -16,7 +16,7 @@ import { createOrUpdateOrder, payOrder } from "@/server/actions/orders";
 import { calculateDiscountAmount, calculatePercentageAmount } from "@/lib/calculations/orders";
 import { formatVND } from "@/lib/date/ranges";
 import { STEP_LABELS } from "@/lib/pos/table-status";
-import { stepIndex, type PosSessionData, type PosStep } from "@/lib/pos/session";
+import { stepIndex, maxStepReached, type PosSessionData, type PosStep } from "@/lib/pos/session";
 import { cn } from "@/lib/utils/format";
 import { notifyError, notifySuccess } from "@/hooks/use-notify";
 import type { PosProduct } from "@/lib/pos/product";
@@ -106,7 +106,11 @@ export function PosOrderWizard(props: Props) {
       onResumeOpenOrder(openOrder.orderId);
       return;
     }
-    onSessionChange({ tableId });
+    onSessionChange({
+      tableId,
+      step: "items",
+      maxStep: maxStepReached(steps, session.maxStep, "items"),
+    });
   }
 
   const normalizeChannelName = (name: string) =>
@@ -395,46 +399,48 @@ export function PosOrderWizard(props: Props) {
           ) : null}
 
           {session.step === "items" ? (
-            <div className="space-y-3">
-              <Button onClick={() => setMenuOpen(true)}>
+            <div className="flex flex-col gap-3">
+              <Button className="shrink-0" onClick={() => setMenuOpen(true)}>
                 <UtensilsCrossed className="h-4 w-4" />
                 Thực đơn
               </Button>
               {session.cart.length === 0 ? (
                 <EmptyState title="Chưa có món nào" description="Bấm Thực đơn để thêm món." />
               ) : (
-                <ul className="divide-y">
-                  {session.cart.map((item, idx) => (
-                    <li key={item.productId + idx} className="space-y-1 py-2 text-sm">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1">
-                          <p className="font-medium">{item.productName}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {formatVND(item.unitPrice)} x {item.quantity}
-                          </p>
-                          {item.note ? <p className="text-xs italic text-muted-foreground">Ghi chú: {item.note}</p> : null}
+                <div className="max-h-[min(50vh,24rem)] overflow-y-auto rounded-md border bg-muted/20">
+                  <ul className="divide-y">
+                    {session.cart.map((item, idx) => (
+                      <li key={item.productId + idx} className="space-y-1 px-3 py-2 text-sm">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1">
+                            <p className="font-medium">{item.productName}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {formatVND(item.unitPrice)} x {item.quantity}
+                            </p>
+                            {item.note ? <p className="text-xs italic text-muted-foreground">Ghi chú: {item.note}</p> : null}
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => changeQty(idx, -1)}>
+                              <Minus className="h-3 w-3" />
+                            </Button>
+                            <span className="w-6 text-center">{item.quantity}</span>
+                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => changeQty(idx, 1)}>
+                              <Plus className="h-3 w-3" />
+                            </Button>
+                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => removeItem(idx)}>
+                              <X className="h-3 w-3" />
+                            </Button>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-1">
-                          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => changeQty(idx, -1)}>
-                            <Minus className="h-3 w-3" />
-                          </Button>
-                          <span className="w-6 text-center">{item.quantity}</span>
-                          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => changeQty(idx, 1)}>
-                            <Plus className="h-3 w-3" />
-                          </Button>
-                          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => removeItem(idx)}>
-                            <X className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      </div>
-                      <button type="button" className="text-xs text-primary underline-offset-2 hover:underline" onClick={() => openNote(idx)}>
-                        {item.note ? "Sửa ghi chú" : "Thêm ghi chú"}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
+                        <button type="button" className="text-xs text-primary underline-offset-2 hover:underline" onClick={() => openNote(idx)}>
+                          {item.note ? "Sửa ghi chú" : "Thêm ghi chú"}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               )}
-              <div className="flex justify-between border-t pt-2 text-sm font-semibold">
+              <div className="flex shrink-0 justify-between border-t pt-2 text-sm font-semibold">
                 <span>Tạm tính</span>
                 <span>{formatVND(subtotal)}</span>
               </div>

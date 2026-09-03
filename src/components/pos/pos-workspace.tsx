@@ -161,8 +161,8 @@ export function PosWorkspace(props: Props) {
     const base = createFreshSession(settings.defaultOrderType, branchId, {
       orderType: "dine_in",
       tableId: table.id,
-      step: "table",
-      maxStep: "table",
+      step: "items",
+      maxStep: "items",
     });
     replaceSession(base);
     setView("wizard");

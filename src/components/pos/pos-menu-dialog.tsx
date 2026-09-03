@@ -81,11 +81,11 @@ export function PosMenuDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[90vh] max-w-2xl flex-col">
-        <DialogHeader>
+      <DialogContent className="flex max-h-[90vh] max-w-2xl flex-col gap-3 overflow-hidden p-6">
+        <DialogHeader className="shrink-0">
           <DialogTitle>Thực đơn</DialogTitle>
         </DialogHeader>
-        <div className="relative">
+        <div className="relative shrink-0">
           <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
             className="h-8 pl-7 text-xs"
@@ -94,7 +94,7 @@ export function PosMenuDialog({
             onChange={(event) => setSearch(event.target.value)}
           />
         </div>
-        <div className="flex flex-wrap gap-1">
+        <div className="flex shrink-0 flex-wrap gap-1">
           <Button size="sm" variant={activeCategory === "all" ? "default" : "outline"} onClick={() => setActiveCategory("all")}>
             Tất cả
           </Button>
@@ -114,7 +114,7 @@ export function PosMenuDialog({
         </div>
 
         {selected ? (
-          <div className="rounded-md border bg-muted/30 p-3 space-y-3">
+          <div className="shrink-0 space-y-3 rounded-md border bg-muted/30 p-3">
             <div className="flex items-start justify-between gap-2">
               <div>
                 <p className="font-medium">{selected.name}</p>
@@ -169,7 +169,7 @@ export function PosMenuDialog({
           </div>
         ) : null}
 
-        <div className="flex-1 overflow-auto">
+        <div className="min-h-0 flex-1 overflow-y-auto rounded-md border bg-muted/10 p-2">
           {filteredProducts.length === 0 ? (
             <EmptyState title="Không có món phù hợp" description="Thử đổi nhóm hoặc từ khóa khác." />
           ) : (
@@ -222,7 +222,7 @@ export function PosMenuDialog({
             </div>
           )}
         </div>
-        <DialogFooter>
+        <DialogFooter className="shrink-0">
           <Button onClick={() => onOpenChange(false)}>Xong</Button>
         </DialogFooter>
       </DialogContent>
