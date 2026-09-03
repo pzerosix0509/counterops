@@ -54,9 +54,14 @@ describe("entity ambiguity detection", () => {
 
 describe("clarification in plan", () => {
   it("sets clarification for genuinely ambiguous questions", () => {
-    // "giá" → web_search (0.9) vs metric_lookup (0.84) — gap 0.06 < 0.15 và top < 0.8? top=0.9 ≥ 0.8 nên không clarify
+    const plan = buildAiPlan("Giá hôm nay thế nào?", "chat", new Date("2026-07-01T12:00:00+07:00"));
+    expect(plan.clarification).toBeDefined();
+    expect(plan.clarification!.reason).toBe("intent");
+  });
+
+  it("does not set clarification for clear web price questions", () => {
     const plan = buildAiPlan("Giá vàng hôm nay bao nhiêu?", "chat", new Date("2026-07-01T12:00:00+07:00"));
-    expect(plan.clarification).toBeUndefined(); // web_search tự tin 0.9
+    expect(plan.clarification).toBeUndefined(); // web_search tự tin 0.95
   });
 
   it("does not set clarification for clear analytics questions", () => {
