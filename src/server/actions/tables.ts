@@ -64,6 +64,94 @@ export async function createTable(organizationId: string, input: unknown): Promi
   return actionOk({ id: data.id });
 }
 
+export async function deleteTable(organizationId: string, tableId: string): Promise<ActionResult<{ id: string }>> {
+  const m = await requireRole(organizationId, canManageTablesStructure);
+  const admin = createSupabaseAdminClient();
+  const { data: table } = await admin
+    .from("dining_tables")
+    .select("id, name, status, branch_id")
+    .eq("id", tableId)
+    .eq("organization_id", m.organization.id)
+    .maybeSingle();
+  if (!table) return actionFail("NOT_FOUND", "Không tìm thấy bàn");
+
+  if (table.status !== "disabled") {
+    return actionFail("CONFLICT", "Chỉ có thể xóa bàn khi trạng thái là Tạm khoá.");
+  }
+
+  const { data: openOrder } = await admin
+    .from("orders")
+    .select("id")
+    .eq("table_id", tableId)
+    .neq("status", "paid")
+    .neq("status", "cancelled")
+    .neq("status", "refunded")
+    .limit(1)
+    .maybeSingle();
+  if (openOrder) {
+    return actionFail("CONFLICT", "Bàn còn đơn đang mở, không thể xóa.");
+  }
+
+  const { error } = await admin
+    .from("dining_tables")
+    .delete()
+    .eq("id", tableId)
+    .eq("organization_id", m.organization.id);
+  if (error) return actionFail("INTERNAL_ERROR", "Không xóa được bàn: " + error.message);
+
+  await admin.from("audit_logs").insert({
+    organization_id: m.organization.id,
+    actor_user_id: m.membership.user_id,
+    action: "table.delete",
+    entity_type: "dining_tables",
+    entity_id: tableId,
+    after: { name: table.name, branch_id: table.branch_id },
+  });
+
+  revalidatePath("/tables");
+  return actionOk({ id: tableId });
+}
+
+export async function deleteArea(organizationId: string, areaId: string): Promise<ActionResult<{ id: string }>> {
+  const m = await requireRole(organizationId, canManageTablesStructure);
+  const admin = createSupabaseAdminClient();
+  const { data: area } = await admin
+    .from("areas")
+    .select("id, name, branch_id")
+    .eq("id", areaId)
+    .eq("organization_id", m.organization.id)
+    .maybeSingle();
+  if (!area) return actionFail("NOT_FOUND", "Không tìm thấy khu vực");
+
+  const { data: tables } = await admin
+    .from("dining_tables")
+    .select("id")
+    .eq("area_id", areaId)
+    .eq("organization_id", m.organization.id);
+  if (tables && tables.length > 0) {
+    return actionFail("CONFLICT", "Khu vực vẫn còn bàn, hãy di chuyển hoặc xóa bàn trước.");
+  }
+
+  const { error } = await admin
+    .from("areas")
+    .delete()
+    .eq("id", areaId)
+    .eq("organization_id", m.organization.id);
+  if (error) return actionFail("INTERNAL_ERROR", "Không xóa được khu vực: " + error.message);
+
+  await admin.from("audit_logs").insert({
+    organization_id: m.organization.id,
+    actor_user_id: m.membership.user_id,
+    action: "area.delete",
+    entity_type: "areas",
+    entity_id: areaId,
+    after: { name: area.name, branch_id: area.branch_id },
+  });
+
+  revalidatePath("/tables");
+  return actionOk({ id: areaId });
+}
+
 export async function updateTableStatus(organizationId: string, input: z.infer<typeof tableStatusSchema>): Promise<ActionResult<{ id: string; status: string }>> {
   const m = await requireRole(organizationId, canUpdateTableStatus);
   const parsed = tableStatusSchema.safeParse(input);

@@ -1,7 +1,7 @@
 "use client";
 import { useState, useTransition, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Users } from "lucide-react";
+import { Plus, Trash2, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,7 +10,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/common/states";
-import { createArea, createTable, updateTableStatus } from "@/server/actions/tables";
+import { createArea, createTable, deleteArea, deleteTable, updateTableStatus } from "@/server/actions/tables";
+import { notifyError, notifySuccess } from "@/hooks/use-notify";
 import { cn } from "@/lib/utils/format";
 import type { Area, DiningTable, TableStatus } from "@/types/database";
 
@@ -133,6 +134,32 @@ export function TablesManager({
     });
   }
 
+  function onDeleteTable(t: DiningTable) {
+    if (!window.confirm(`Xóa bàn "${t.name}"? Bàn phải ở trạng thái Tạm khoá và không có đơn đang mở.`)) return;
+    startTransition(async () => {
+      const res = await deleteTable(organizationId, t.id);
+      if (!res.ok) {
+        notifyError("Không xóa được bàn", res.error.message);
+        return;
+      }
+      router.refresh();
+      notifySuccess("Đã xóa bàn");
+    });
+  }
+
+  function onDeleteArea(a: Area) {
+    if (!window.confirm(`Xóa khu vực "${a.name}"? Chỉ xóa được khi khu vực không còn bàn.`)) return;
+    startTransition(async () => {
+      const res = await deleteArea(organizationId, a.id);
+      if (!res.ok) {
+        notifyError("Không xóa được khu vực", res.error.message);
+        return;
+      }
+      router.refresh();
+      notifySuccess("Đã xóa khu vực");
+    });
+  }
+
   const filtered = useMemo(() => {
     if (activeArea === "all") return tables;
     return tables.filter((t) => t.area_id === activeArea);
@@ -245,7 +272,20 @@ export function TablesManager({
           {grouped.map((g) => (
             <Card key={g.area?.id ?? "none"}>
               <CardHeader>
-                <CardTitle className="text-sm">{g.area?.name ?? "Chưa phân khu vực"}</CardTitle>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-sm">{g.area?.name ?? "Chưa phân khu vực"}</CardTitle>
+                  {canManageStructure && g.area ? (
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      aria-label={`Xóa khu vực ${g.area.name}`}
+                      onClick={() => onDeleteArea(g.area as Area)}
+                    >
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  ) : null}
+                </div>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
@@ -261,7 +301,21 @@ export function TablesManager({
                       >
                         <div className="flex items-center justify-between">
                           <span className="font-semibold">{t.name}</span>
-                          <Badge variant={STATUS_VARIANT[derivedStatus]}>{STATUS_LABEL[derivedStatus]}</Badge>
+                          <div className="flex items-center gap-1">
+                            <Badge variant={STATUS_VARIANT[derivedStatus]}>{STATUS_LABEL[derivedStatus]}</Badge>
+                            {canManageStructure ? (
+                              <Button
+                                type="button"
+                                size="icon"
+                                variant="ghost"
+                                className="h-6 w-6"
+                                aria-label={`Xóa bàn ${t.name}`}
+                                onClick={() => onDeleteTable(t)}
+                              >
+                                <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                              </Button>
+                            ) : null}
+                          </div>
                         </div>
                         <p className="mt-1 text-xs text-muted-foreground">
                           <Users className="mr-1 inline h-3 w-3" /> {t.seats} ghế

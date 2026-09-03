@@ -17,6 +17,7 @@ import {
   createIngredientFromMenu,
   createProduct,
   deleteCategory,
+  deleteProduct,
   setProductCategory,
   toggleProductActive,
   updateCategory,
@@ -36,6 +37,8 @@ import { formatVND } from "@/lib/date/ranges";
 import { computeBomCost } from "@/lib/calculations/inventory";
 import type { InventoryItem, MenuCategory, MenuType, Product } from "@/types/database";
 import { EmptyState } from "@/components/common/states";
+import { RowContextMenu } from "@/components/common/row-context-menu";
+import { ConfirmDialog } from "@/components/common/confirm-dialog";
 import { notifyError, notifySuccess } from "@/hooks/use-notify";
 import { PRODUCT_IMPORT_COLUMNS } from "@/lib/validation/excel-schemas";
 
@@ -83,6 +86,8 @@ export function MenuManager({
   const [productType, setProductType] = useState<"regular" | "prepared">("regular");
   const [recipeLines, setRecipeLines] = useState<RecipeLine[]>([]);
   const [activeGroupId, setActiveGroupId] = useState<string>("");
+  const [pendingDelete, setPendingDelete] = useState<Product | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const ingredients = useMemo(
     () => inventoryItems.filter((item) => item.can_be_ingredient),
@@ -235,6 +240,28 @@ export function MenuManager({
       }
       router.refresh();
       notifySuccess(current ? "Đã ngừng bán" : "Đã bật bán");
+    });
+  }
+
+  function onDeleteProduct(p: Product) {
+    setPendingDelete(p);
+  }
+
+  function confirmDeleteProduct() {
+    if (!pendingDelete) return;
+    setDeleting(true);
+    startTransition(async () => {
+      const res = await deleteProduct(organizationId, pendingDelete.id);
+      setDeleting(false);
+      setPendingDelete(null);
+      if (!res.ok) {
+        notifyError("Không xóa được món", res.error.message);
+        return;
+      }
+      setOpen(false);
+      setEditing(null);
+      router.refresh();
+      notifySuccess("Đã xóa món");
     });
   }
 
@@ -415,9 +442,23 @@ export function MenuManager({
               <Textarea id="description" name="description" rows={2} defaultValue={editing?.description ?? ""} />
             </div>
             {error ? <p className="text-sm text-destructive">{error}</p> : null}
-            <DialogFooter>
-              <Button type="button" variant="ghost" onClick={() => setOpen(false)}>Huỷ</Button>
-              <Button type="submit" disabled={isPending}>{isPending ? "Đang lưu..." : "Lưu món"}</Button>
+            <DialogFooter className="gap-2 sm:justify-between">
+              {editing ? (
+                <Button
+                  type="button"
+                  variant="destructive"
+                  disabled={isPending}
+                  onClick={() => onDeleteProduct(editing)}
+                >
+                  <Trash2 className="h-4 w-4" /> Xóa món
+                </Button>
+              ) : (
+                <span />
+              )}
+              <div className="flex gap-2">
+                <Button type="button" variant="ghost" onClick={() => setOpen(false)}>Huỷ</Button>
+                <Button type="submit" disabled={isPending}>{isPending ? "Đang lưu..." : "Lưu món"}</Button>
+              </div>
             </DialogFooter>
           </form>
         </DialogContent>
@@ -521,8 +562,31 @@ export function MenuManager({
               <TableBody>
                 {filtered.map((p) => {
                   const group = p.category_id ? categoryMap.get(p.category_id) : null;
+                  const contextItems = canManage
+                    ? [
+                        {
+                          key: "recipe",
+                          label: "Công thức",
+                          icon: ChefHat,
+                          onClick: () => setRecipeProduct(p),
+                        },
+                        {
+                          key: "edit",
+                          label: "Chỉnh sửa",
+                          icon: Pencil,
+                          onClick: () => openEdit(p),
+                        },
+                        {
+                          key: "delete",
+                          label: "Xóa",
+                          icon: Trash2,
+                          destructive: true,
+                          onClick: () => onDeleteProduct(p),
+                        },
+                      ]
+                    : [];
                   return (
-                    <TableRow key={p.id}>
+                    <RowContextMenu key={p.id} as="tr" items={contextItems}>
                       <TableCell className="font-medium">
                         <button type="button" className="text-left hover:underline" onClick={() => canManage && openEdit(p)}>
                           {p.name}
@@ -561,7 +625,7 @@ export function MenuManager({
                       </TableCell>
                       <TableCell className="text-right">
                         {canManage ? (
-                          <div className="flex w-full items-center justify-between gap-1">
+                          <div className="flex w-full items-center justify-end gap-1">
                             <Button
                               type="button"
                               variant="outline"
@@ -576,7 +640,7 @@ export function MenuManager({
                           </div>
                         ) : null}
                       </TableCell>
-                    </TableRow>
+                    </RowContextMenu>
                   );
                 })}
               </TableBody>
@@ -593,6 +657,15 @@ export function MenuManager({
           organizationId={organizationId}
         />
       ) : null}
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        onOpenChange={(open) => { if (!open && !deleting) setPendingDelete(null); }}
+        title={`Xóa món "${pendingDelete?.name ?? ""}"?`}
+        description="Món sẽ ẩn khỏi thực đơn, kho và trang bán hàng."
+        pending={deleting}
+        onConfirm={confirmDeleteProduct}
+      />
     </div>
   );
 }
