@@ -37,6 +37,15 @@ function makeRow(overrides: Partial<KitchenBoardRow> & { orderStatus?: string } 
 }
 
 describe("UC06 — Update Kitchen Status: schema validation", () => {
+  it("UC06.S08 — Sẵn sàng và đã phục vụ là hai bước khác nhau, không kết thúc bàn", () => {
+    // Bếp xong món = ready. Nhân viên mang món = served. Cả hai đều hợp lệ.
+    // Kết thúc bàn không đi qua kitchen_status; bàn trống chỉ từ POS.
+    expect(kitchenStatusSchema.safeParse({ status: "ready" }).success).toBe(true);
+    expect(kitchenStatusSchema.safeParse({ status: "served" }).success).toBe(true);
+    expect(kitchenStatusSchema.safeParse({ status: "ready" }).data).toEqual({ status: "ready" });
+    expect(kitchenStatusSchema.safeParse({ status: "served" }).data).toEqual({ status: "served" });
+  });
+
   it("UC06.S01 — Cập nhật trạng thái món chỉ chấp nhận giá trị hợp lệ", () => {
     // Bước: gửi trạng thái không nằm trong danh sách bếp, ví dụ "in_transit".
     // Kết quả mong đợi: parse thất bại.
