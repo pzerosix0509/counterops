@@ -205,10 +205,24 @@ async function executeForecast(
       p_granularity: "day",
       p_timezone: args.timezone,
     });
-    if (error) throw new Error(error.message);
-    const daily = aggregateToDailyPoints(
+    const tz = String(args.timezone ?? "Asia/Ho_Chi_Minh");
+    const dailyRaw = aggregateToDailyPoints(
       (data ?? []) as Array<{ period_start: string; net_revenue: number; total_orders: number }>,
+      tz,
     );
+    // Nếu điểm cuối cùng là ngày hôm nay (chưa hoàn thành trọn vẹn) và tập dữ liệu vẫn đủ >= 14 ngày khi bỏ hôm nay,
+    // ta loại bỏ ngày dở dang này để tập huấn luyện chỉ gồm các ngày đã kết thúc hoàn chỉnh.
+    const todayStr = new Intl.DateTimeFormat("en-CA", {
+      timeZone: tz,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date());
+
+    const daily = (dailyRaw.length > 14 && dailyRaw.at(-1)?.date === todayStr)
+      ? dailyRaw.slice(0, -1)
+      : dailyRaw;
+
     const forecast = computeForecast(daily, horizonDays);
     // Backtest WMAPE/MASE trên dữ liệu lịch sử (rẻ, chạy ngay) — trả thành thật về độ tin cậy
     const backtest = backtestForecast(daily);
